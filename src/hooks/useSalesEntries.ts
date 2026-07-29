@@ -35,22 +35,22 @@ function mergeByDateProductCustomer(rows: NewSalesEntry[]): NewSalesEntry[] {
 export function useAddSalesEntries() {
   const queryClient = useQueryClient()
   return useMutation({
+    // One RPC call for the whole cart — see the equivalent note in
+    // useProductionEntries.ts: this makes a multi-line save atomic, so a
+    // failure never leaves some lines committed for a retry to double-count.
     mutationFn: async (rows: NewSalesEntry[]) => {
       const merged = mergeByDateProductCustomer(rows)
-      const results = await Promise.all(
-        merged.map((row) =>
-          supabase.rpc('add_sales_quantity', {
-            p_entry_date: row.entry_date,
-            p_pipe_product_id: row.pipe_product_id,
-            p_customer_id: row.customer_id,
-            p_quantity: row.quantity,
-            ...(row.notes ? { p_notes: row.notes } : {}),
-          }),
-        ),
-      )
-      const failed = results.find((r) => r.error)
-      if (failed?.error) throw failed.error
-      return results.map((r) => r.data)
+      const { data, error } = await supabase.rpc('add_sales_quantities_batch', {
+        p_rows: merged.map((row) => ({
+          entry_date: row.entry_date,
+          pipe_product_id: row.pipe_product_id,
+          customer_id: row.customer_id,
+          quantity: row.quantity,
+          notes: row.notes ?? null,
+        })),
+      })
+      if (error) throw error
+      return data
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: RECENT_CUSTOMERS_KEY })

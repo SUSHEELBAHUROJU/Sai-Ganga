@@ -664,6 +664,25 @@ export type Database = {
       }
     }
     Functions: {
+      add_production_quantities_batch: {
+        Args: { p_rows: Json }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          entry_date: string
+          id: string
+          notes: string | null
+          pipe_product_id: string
+          quantity: number
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "production_entries"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       add_production_quantity: {
         Args: {
           p_entry_date: string
@@ -719,6 +738,26 @@ export type Database = {
           to: "recycling_entries"
           isOneToOne: true
           isSetofReturn: false
+        }
+      }
+      add_sales_quantities_batch: {
+        Args: { p_rows: Json }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          customer_id: string | null
+          entry_date: string
+          id: string
+          notes: string | null
+          pipe_product_id: string
+          quantity: number
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "sales_entries"
+          isOneToOne: false
+          isSetofReturn: true
         }
       }
       add_sales_quantity: {

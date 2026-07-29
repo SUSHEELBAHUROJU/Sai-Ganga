@@ -2,7 +2,13 @@
   "permissions": {
     "allow": [
       "Bash(gh auth *)",
-      "Bash(echo \"exit:$?\")"
+      "Bash(echo \"exit:$?\")",
+      "Bash(grep -rn \"\\\\.rpc\\(\\\\|supabase\\\\.raw\\\\|\\\\.sql\\(\\\\|execute_sql\\\\|from\\(\\\\`\" src/hooks/ src/lib/)",
+      "Bash(npx tsc *)",
+      "Bash(npm run *)",
+      "Bash(node verify2.mjs)",
+      "Bash(node verify3.mjs)",
+      "Bash(supabase --version)"
     ]
   }
 }

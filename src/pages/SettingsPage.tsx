@@ -6,6 +6,7 @@ import { ScrapDealersTab } from './settings/ScrapDealersTab'
 import { ScrapTypesTab } from './settings/ScrapTypesTab'
 import { StockSettingsTab } from './settings/StockSettingsTab'
 import { SecurityTab } from './settings/SecurityTab'
+import { BackupTab } from './settings/BackupTab'
 
 const TABS = [
   { key: 'pipe_sizes', label: 'Pipe Sizes' },
@@ -14,6 +15,7 @@ const TABS = [
   { key: 'scrap_dealers', label: 'Scrap Dealers' },
   { key: 'scrap_types', label: 'Scrap Types' },
   { key: 'stock_settings', label: 'Stock Settings' },
+  { key: 'backup', label: 'Backup' },
   { key: 'security', label: 'Security' },
 ] as const
 
@@ -51,6 +53,7 @@ export function SettingsPage() {
       {activeTab === 'scrap_dealers' && <ScrapDealersTab />}
       {activeTab === 'scrap_types' && <ScrapTypesTab />}
       {activeTab === 'stock_settings' && <StockSettingsTab />}
+      {activeTab === 'backup' && <BackupTab />}
       {activeTab === 'security' && <SecurityTab />}
     </div>
   )

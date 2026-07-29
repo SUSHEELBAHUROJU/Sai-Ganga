@@ -54,6 +54,33 @@ export function formatRangeLabel(fromDate: string, toDate: string): string {
   return `${formatShortDate(fromDate)} – ${formatShortDate(toDate)}`
 }
 
+/** Widest custom range Records/Reports will query in one go — a manually
+ * widened range (e.g. years of history) would otherwise fetch an unbounded
+ * number of rows across several parallel queries. */
+export const MAX_QUERY_RANGE_DAYS = 366
+
+export function daysBetween(fromDate: string, toDate: string): number {
+  const from = new Date(`${fromDate}T00:00:00`)
+  const to = new Date(`${toDate}T00:00:00`)
+  return Math.round((to.getTime() - from.getTime()) / 86_400_000)
+}
+
+/** Clamps `toDate` back so the range never exceeds MAX_QUERY_RANGE_DAYS. */
+export function clampRangeEnd(fromDate: string, toDate: string): string {
+  if (daysBetween(fromDate, toDate) <= MAX_QUERY_RANGE_DAYS) return toDate
+  const d = new Date(`${fromDate}T00:00:00`)
+  d.setDate(d.getDate() + MAX_QUERY_RANGE_DAYS)
+  return isoDateFromDate(d)
+}
+
+/** Clamps `fromDate` forward so the range never exceeds MAX_QUERY_RANGE_DAYS. */
+export function clampRangeStart(fromDate: string, toDate: string): string {
+  if (daysBetween(fromDate, toDate) <= MAX_QUERY_RANGE_DAYS) return fromDate
+  const d = new Date(`${toDate}T00:00:00`)
+  d.setDate(d.getDate() - MAX_QUERY_RANGE_DAYS)
+  return isoDateFromDate(d)
+}
+
 /** The `count` days ending yesterday, most recent first. */
 export function recentDatesBefore(today: string, count: number): string[] {
   const dates: string[] = []

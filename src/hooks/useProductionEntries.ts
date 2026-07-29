@@ -56,21 +56,22 @@ function mergeByDateAndProduct(rows: NewProductionEntry[]): NewProductionEntry[]
 export function useAddProductionEntries() {
   const queryClient = useQueryClient()
   return useMutation({
+    // One RPC call for the whole cart, not one-per-line: Postgres rolls the
+    // entire function back if any line fails, so a network drop mid-save
+    // can never leave some lines committed and others not — a retry after a
+    // failure is always safe to resubmit in full, never a double-count.
     mutationFn: async (rows: NewProductionEntry[]) => {
       const merged = mergeByDateAndProduct(rows)
-      const results = await Promise.all(
-        merged.map((row) =>
-          supabase.rpc('add_production_quantity', {
-            p_entry_date: row.entry_date,
-            p_pipe_product_id: row.pipe_product_id,
-            p_quantity: row.quantity,
-            ...(row.notes ? { p_notes: row.notes } : {}),
-          }),
-        ),
-      )
-      const failed = results.find((r) => r.error)
-      if (failed?.error) throw failed.error
-      return results.map((r) => r.data)
+      const { data, error } = await supabase.rpc('add_production_quantities_batch', {
+        p_rows: merged.map((row) => ({
+          entry_date: row.entry_date,
+          pipe_product_id: row.pipe_product_id,
+          quantity: row.quantity,
+          notes: row.notes ?? null,
+        })),
+      })
+      if (error) throw error
+      return data
     },
     onSuccess: (_data, rows) => {
       const dates = new Set(rows.map((r) => r.entry_date))

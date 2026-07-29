@@ -1,6 +1,14 @@
 import { CalendarRange } from 'lucide-react'
 import { Chip } from './Chip'
-import { todayISODate, isoDateDaysAgo, startOfWeek, startOfMonth } from '../lib/date'
+import {
+  todayISODate,
+  isoDateDaysAgo,
+  startOfWeek,
+  startOfMonth,
+  clampRangeEnd,
+  clampRangeStart,
+  MAX_QUERY_RANGE_DAYS,
+} from '../lib/date'
 
 type DateRangeFieldProps = {
   fromDate: string
@@ -32,7 +40,8 @@ export function DateRangeField({ fromDate, toDate, onChange }: DateRangeFieldPro
             max={toDate}
             onChange={(e) => {
               const next = e.target.value || fromDate
-              onChange({ fromDate: next, toDate: next > toDate ? next : toDate })
+              const to = next > toDate ? next : toDate
+              onChange({ fromDate: next, toDate: clampRangeEnd(next, to) })
             }}
             className="w-[8.5rem] bg-transparent text-sm font-medium text-slate-900 outline-none dark:text-slate-100"
           />
@@ -44,7 +53,8 @@ export function DateRangeField({ fromDate, toDate, onChange }: DateRangeFieldPro
             max={today}
             onChange={(e) => {
               const next = e.target.value || toDate
-              onChange({ fromDate: next < fromDate ? next : fromDate, toDate: next })
+              const from = next < fromDate ? next : fromDate
+              onChange({ fromDate: clampRangeStart(from, next), toDate: next })
             }}
             className="w-[8.5rem] bg-transparent text-sm font-medium text-slate-900 outline-none dark:text-slate-100"
           />
@@ -59,6 +69,9 @@ export function DateRangeField({ fromDate, toDate, onChange }: DateRangeFieldPro
           )
         })}
       </div>
+      <p className="text-xs text-slate-400 dark:text-slate-500">
+        Ranges are limited to {MAX_QUERY_RANGE_DAYS} days at a time.
+      </p>
     </div>
   )
 }

@@ -16,7 +16,14 @@ import { RecyclingBalance } from '../components/RecyclingBalance'
 import { AmountKgPcs } from '../components/AmountKgPcs'
 import { EditRecordModal } from './records/EditRecordModal'
 import { useToast } from '../lib/toast'
-import { formatDateLabel, todayISODate, isoDateDaysAgo } from '../lib/date'
+import {
+  formatDateLabel,
+  todayISODate,
+  isoDateDaysAgo,
+  clampRangeEnd,
+  clampRangeStart,
+  MAX_QUERY_RANGE_DAYS,
+} from '../lib/date'
 import { LoadingState, EmptyState } from '../components/States'
 
 const ALL_KINDS = Object.keys(RECORD_KIND_LABEL) as RecordKind[]
@@ -115,7 +122,11 @@ export function RecordsPage() {
               type="date"
               value={fromDate}
               max={toDate}
-              onChange={(e) => setFromDate(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value
+                setFromDate(next)
+                setToDate((prev) => clampRangeEnd(next, prev))
+              }}
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
           </label>
@@ -126,11 +137,18 @@ export function RecordsPage() {
               value={toDate}
               min={fromDate}
               max={today}
-              onChange={(e) => setToDate(e.target.value)}
+              onChange={(e) => {
+                const next = e.target.value
+                setToDate(next)
+                setFromDate((prev) => clampRangeStart(prev, next))
+              }}
               className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
           </label>
         </div>
+        <p className="text-xs text-slate-400 dark:text-slate-500">
+          Ranges are limited to {MAX_QUERY_RANGE_DAYS} days at a time.
+        </p>
 
         <div>
           <span className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">
