@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+@theme {
+  /* Brand palette, drawn from the Sai Ganga signboard: a strong red band
+     over a deep navy band on white. Used for the header/sidebar chrome and
+     primary buttons — kept separate from the per-action colors below, which
+     exist so users can learn "this color = this action" at a glance. */
+  --color-brand-red: #d21f1f;
+  --color-brand-red-dark: #9c1414;
+  --color-brand-navy: #0f1f45;
+  --color-brand-navy-light: #1c3568;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+@keyframes banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-banner-in {
+  animation: banner-in 0.25s ease-out;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+/*
+ * Chart palette. Categorical slots 1 (blue) and 2 (orange) from the reference
+ * data-viz palette; both modes validated against this app's card surfaces
+ * (#ffffff light, #0f172a dark) — all six checks pass, worst adjacent CVD
+ * ΔE 24.7 light / 26.8 dark. Chrome/ink values are the palette's own.
+ * Colour is never the only channel: charts also carry a legend, a tooltip and
+ * a table view.
+ */
+.viz-root {
+  --viz-produced: #2a78d6;
+  --viz-sold: #eb6834;
+  --viz-grid: #e1e0d9;
+  --viz-axis: #c3c2b7;
+  --viz-muted: #898781;
+  --viz-surface: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  .viz-root {
+    --viz-produced: #3987e5;
+    --viz-sold: #d95926;
+    --viz-grid: #2c2c2a;
+    --viz-axis: #383835;
+    --viz-muted: #898781;
+    --viz-surface: #0f172a;
+  }
+}

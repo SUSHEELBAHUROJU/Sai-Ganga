@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(curl -s -o /dev/null -w \"vite:%{http_code}\\\\n\" http://localhost:5173/ --max-time 3)",
+      "Bash(node shot.mjs)",
+      "Bash(npm run *)"
+    ]
+  }
+}
