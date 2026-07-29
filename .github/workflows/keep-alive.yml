@@ -1,0 +1,32 @@
+name: Keep Supabase project alive
+
+# Free-tier Supabase projects auto-pause after 7 days with no API activity,
+# which would silently break the app until someone notices and manually
+# resumes it in the dashboard. This just touches the API every 3 days so
+# that never happens — it doesn't read or change any business data.
+#
+# Requires two repo secrets (Settings -> Secrets and variables -> Actions):
+#   SUPABASE_URL       e.g. https://xxxxxxxx.supabase.co
+#   SUPABASE_ANON_KEY   the project's anon/public key
+
+on:
+  schedule:
+    - cron: '0 6 */3 * *'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST endpoint
+        run: |
+          status=$(curl -s -o /dev/null -w "%{http_code}" \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}")
+          echo "Supabase responded with HTTP $status"
+          # 200/401/404 all mean the project answered — the point is just that
+          # it's awake, not that this specific call succeeds.
+          if [ "$status" = "000" ]; then
+            echo "No response from Supabase — project may be unreachable."
+            exit 1
+          fi

@@ -1,14 +1,20 @@
 import { useState } from 'react'
-import { Lock, ShieldCheck, ShieldOff } from 'lucide-react'
+import { Lock, LogOut, ShieldCheck, ShieldOff, User } from 'lucide-react'
 import { PinKeypad } from '../../components/PinKeypad'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
+import { useAuthSession } from '../../hooks/useAuthSession'
+import { supabase } from '../../lib/supabase'
 import { PIN_LENGTH, isPinSet, setPin, clearPin, verifyPin } from '../../lib/pin'
 import { useToast } from '../../lib/toast'
 
 type Stage = 'current' | 'new' | 'confirm'
 
 export function SecurityTab() {
+  const { session } = useAuthSession()
+  const [signOutOpen, setSignOutOpen] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
+
   const [pinActive, setPinActive] = useState(isPinSet)
   const [modalOpen, setModalOpen] = useState(false)
   const [disableOpen, setDisableOpen] = useState(false)
@@ -83,6 +89,13 @@ export function SecurityTab() {
     showToast('PIN lock disabled')
   }
 
+  async function handleSignOut() {
+    setSigningOut(true)
+    await supabase.auth.signOut()
+    // No need to reset local state — losing the session drops the whole
+    // app back to LoginScreen (see App.tsx), which unmounts this page.
+  }
+
   const stageCopy: Record<Stage, string> = {
     current: 'Enter your current PIN',
     new: pinActive ? 'Enter a new 4-digit PIN' : 'Choose a 4-digit PIN',
@@ -91,6 +104,26 @@ export function SecurityTab() {
 
   return (
     <div className="space-y-5">
+      <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <span className="shrink-0 rounded-full bg-teal-50 p-2.5 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400">
+          <User className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-medium text-slate-900 dark:text-slate-100">Signed in</p>
+          <p className="mt-0.5 truncate text-sm text-slate-500 dark:text-slate-400">
+            {session?.user.email}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setSignOutOpen(true)}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50"
+        >
+          <LogOut className="h-4 w-4" />
+          Sign out
+        </button>
+      </div>
+
       <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
         <span
           className={`shrink-0 rounded-full p-2.5 ${
@@ -138,8 +171,8 @@ export function SecurityTab() {
         <p className="mt-1">
           It keeps the app closed to someone who picks up this device, and it's stored only as a
           scrambled hash — never as the digits you typed. It does not encrypt your records, and it
-          applies to this device only. Full protection needs proper sign-in accounts, which the
-          database is already prepared for.
+          applies to this device only. The real protection for your data is the sign-in above —
+          every record now requires a real account, not just this device's PIN.
         </p>
       </div>
 
@@ -168,6 +201,15 @@ export function SecurityTab() {
         confirmLabel="Turn off"
         onConfirm={handleDisable}
         onCancel={() => setDisableOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={signOutOpen}
+        title="Sign out?"
+        message="You'll need your email and password to sign back in."
+        confirmLabel={signingOut ? 'Signing out…' : 'Sign out'}
+        onConfirm={handleSignOut}
+        onCancel={() => setSignOutOpen(false)}
       />
     </div>
   )
