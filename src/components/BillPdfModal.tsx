@@ -1,10 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Modal } from './Modal'
-import { Download, Printer, MessageCircle, AlertCircle } from 'lucide-react'
+import { Download, Printer, MessageCircle, AlertCircle, Ban } from 'lucide-react'
 import type { BillRow } from '../hooks/useBills'
+import { useVoidBill } from '../hooks/useBills'
 import { useCompanySettings } from '../hooks/useCompanySettings'
 import { generateBillPdfBlob } from '../lib/pdfGenerator'
 import { useToast } from '../lib/toast'
+import { ConfirmDialog } from './ConfirmDialog'
 
 type BillPdfModalProps = {
   open: boolean
@@ -15,6 +17,8 @@ type BillPdfModalProps = {
 export function BillPdfModal({ open, bill, onClose }: BillPdfModalProps) {
   const { data: company } = useCompanySettings()
   const { showToast } = useToast()
+  const voidBill = useVoidBill()
+  const [confirmVoidOpen, setConfirmVoidOpen] = useState(false)
 
   const [pdfData, setPdfData] = useState<{
     blob: Blob
@@ -47,7 +51,6 @@ export function BillPdfModal({ open, bill, onClose }: BillPdfModalProps) {
       const generated = generateBillPdfBlob(bill, companyData)
       setPdfData(generated)
 
-      // Test Web Share API support for files
       if (typeof navigator !== 'undefined' && 'share' in navigator && 'canShare' in navigator) {
         try {
           const testFile = new File(['test'], 'test.pdf', { type: 'application/pdf' })
@@ -83,7 +86,6 @@ export function BillPdfModal({ open, bill, onClose }: BillPdfModalProps) {
   async function handleShareWhatsApp() {
     if (!pdfData) return
 
-    // 1. Try Native Web Share API first (on Mobile Chrome/Safari, opens WhatsApp directly with file attached)
     if (canNativeShare) {
       try {
         await navigator.share({
@@ -98,7 +100,6 @@ export function BillPdfModal({ open, bill, onClose }: BillPdfModalProps) {
       }
     }
 
-    // 2. Desktop Fallback: Trigger download & open WhatsApp Web chat link with instructions
     handleDownload()
 
     const rawPhone = (bill!.customer_phone || '').replace(/[^0-9]/g, '')
@@ -125,47 +126,80 @@ export function BillPdfModal({ open, bill, onClose }: BillPdfModalProps) {
     }
   }
 
+  function handleConfirmVoid() {
+    if (!bill) return
+    voidBill.mutate(bill.id, {
+      onSuccess: () => {
+        showToast(`Bill ${bill.bill_number} marked as VOIDED`)
+        setConfirmVoidOpen(false)
+        onClose()
+      },
+      onError: () => showToast('Failed to void bill', 'error'),
+    })
+  }
+
+  const isVoided = bill.status === 'voided'
+
   return (
-    <Modal title={`Tax Invoice — ${bill.bill_number}`} open={open} onClose={onClose} maxWidthClass="md:max-w-3xl">
-      <div className="space-y-4">
-        {/* Quick Action Toolbar */}
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-100 p-2.5 dark:bg-slate-800">
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleShareWhatsApp}
-              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-95 transition-all"
-            >
-              <MessageCircle className="h-4 w-4" />
-              Share via WhatsApp
-            </button>
+    <>
+      <Modal title={`Tax Invoice — ${bill.bill_number}`} open={open} onClose={onClose} maxWidthClass="md:max-w-3xl">
+        <div className="space-y-4">
+          {isVoided && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-100 p-3 text-xs font-bold text-red-800 dark:bg-red-950/80 dark:text-red-200">
+              <Ban className="h-4 w-4 shrink-0" />
+              <span>THIS BILL HAS BEEN VOIDED / CANCELED. It remains preserved for accounting audit rules.</span>
+            </div>
+          )}
 
-            <button
-              type="button"
-              onClick={handleDownload}
-              className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-700 border border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-            >
-              <Download className="h-4 w-4" />
-              Download PDF
-            </button>
+          {/* Quick Action Toolbar */}
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-100 p-2.5 dark:bg-slate-800">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleShareWhatsApp}
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-95 transition-all"
+              >
+                <MessageCircle className="h-4 w-4" />
+                Share via WhatsApp
+              </button>
 
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-700 border border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-            >
-              <Printer className="h-4 w-4" />
-              Print
-            </button>
+              <button
+                type="button"
+                onClick={handleDownload}
+                className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-700 border border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              >
+                <Download className="h-4 w-4" />
+                Download PDF
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePrint}
+                className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-700 border border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              >
+                <Printer className="h-4 w-4" />
+                Print
+              </button>
+
+              {!isVoided && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmVoidOpen(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-100 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300"
+                >
+                  <Ban className="h-3.5 w-3.5" />
+                  Void Bill
+                </button>
+              )}
+            </div>
+
+            <div className="text-right">
+              <span className="text-xs text-slate-500 dark:text-slate-400">Grand Total</span>
+              <p className="font-mono text-sm font-bold text-teal-600 dark:text-teal-400">
+                ₹{bill.grand_total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </p>
+            </div>
           </div>
-
-          <div className="text-right">
-            <span className="text-xs text-slate-500 dark:text-slate-400">Grand Total</span>
-            <p className="font-mono text-sm font-bold text-teal-600 dark:text-teal-400">
-              ₹{bill.grand_total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-            </p>
-          </div>
-        </div>
 
         {!canNativeShare && (
           <div className="flex items-center gap-2 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
@@ -192,5 +226,16 @@ export function BillPdfModal({ open, bill, onClose }: BillPdfModalProps) {
         )}
       </div>
     </Modal>
+
+    <ConfirmDialog
+      open={confirmVoidOpen}
+      title={`Void Bill ${bill.bill_number}?`}
+      message={`Are you sure you want to void Bill ${bill.bill_number}? The bill number will remain preserved as VOIDED for GST compliance and audit rules.`}
+      confirmLabel="Void Bill"
+      danger
+      onConfirm={handleConfirmVoid}
+      onCancel={() => setConfirmVoidOpen(false)}
+    />
+    </>
   )
 }

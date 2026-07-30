@@ -59,9 +59,40 @@ export function useDeleteRecord() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ kind, id }: { kind: RecordKind; id: string }) => {
-      const { error } = await supabase.from(TABLE_FOR_KIND[kind]).delete().eq('id', id)
-      if (error) throw error
+      if (kind === 'sale') {
+        // Fetch sale entry to check for linked bill
+        const { data: saleRow } = await supabase
+          .from('sales_entries')
+          .select('id, bill_id')
+          .eq('id', id)
+          .single()
+
+        const billId = saleRow?.bill_id
+
+        // Delete sale entry
+        const { error } = await supabase.from('sales_entries').delete().eq('id', id)
+        if (error) throw error
+
+        // If attached to a bill, check if any remaining sales entries exist
+        if (billId) {
+          const { count } = await supabase
+            .from('sales_entries')
+            .select('id', { count: 'exact', head: true })
+            .eq('bill_id', billId)
+
+          if (count === 0) {
+            // Mark bill as voided so sequence remains intact for tax/audit
+            await supabase.from('bills').update({ status: 'voided' }).eq('id', billId)
+          }
+        }
+      } else {
+        const { error } = await supabase.from(TABLE_FOR_KIND[kind]).delete().eq('id', id)
+        if (error) throw error
+      }
     },
-    onSuccess: (_data, { kind }) => invalidateForKind(queryClient, kind),
+    onSuccess: (_data, { kind }) => {
+      invalidateForKind(queryClient, kind)
+      queryClient.invalidateQueries({ queryKey: ['bills'] })
+    },
   })
 }
