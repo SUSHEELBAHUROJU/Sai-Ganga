@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
 import { usePipeProducts } from '../../hooks/usePipeProducts'
 import { useRawMaterialTypes } from '../../hooks/useRawMaterialTypes'
 import { useScrapTypes } from '../../hooks/useScrapTypes'
@@ -72,6 +72,10 @@ export function EditProductionForm({ row, onChange }: EditFormProps<ProductionRe
     )
   }
 
+  useEffect(() => {
+    emit({})
+  }, [])
+
   return (
     <FormShell>
       <DateRow
@@ -128,15 +132,15 @@ export function EditSaleForm({ row, onChange }: EditFormProps<SaleRecordRow>) {
     notes?: string
   }) {
     const date = next.entryDate ?? entryDate
-    const customer = next.customerId ?? customerId
+    const customer = next.customerId !== undefined ? next.customerId : customerId
     const pipe = next.productId ?? productId
     const qty = Number(next.quantity ?? quantity)
     const note = next.notes ?? notes
     onChange(
-      qty > 0 && pipe && customer
+      qty > 0 && pipe
         ? {
             entry_date: date,
-            customer_id: customer,
+            customer_id: customer ? customer.trim() || null : null,
             pipe_product_id: pipe,
             quantity: qty,
             notes: note.trim() || null,
@@ -144,6 +148,10 @@ export function EditSaleForm({ row, onChange }: EditFormProps<SaleRecordRow>) {
         : null,
     )
   }
+
+  useEffect(() => {
+    emit({})
+  }, [])
 
   return (
     <FormShell>
