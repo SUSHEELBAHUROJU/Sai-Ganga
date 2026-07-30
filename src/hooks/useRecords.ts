@@ -88,13 +88,22 @@ export function describeRecord(record: EntryRecord): {
       }
     }
     case 'recycling': {
-      const sourceName = record.row.scrap_types?.name ?? 'Unknown material'
+      const sourceName = record.row.scrap_types?.name ?? ''
+      let granuleProduct = 'Recycled Granules'
+      if (sourceName.toLowerCase().includes('ldpe') || sourceName.toLowerCase().includes('old ldpe')) {
+        granuleProduct = 'Recycled LD Pipe Granules'
+      } else if (sourceName.toLowerCase().includes('drip')) {
+        granuleProduct = 'Recycled Drip Pipe Granules'
+      }
+
+      const bagInfo =
+        record.row.output_entry_mode === 'bag' && record.row.num_bags !== null
+          ? `${formatQty(record.row.num_bags)} × ${formatQty(record.row.output_pack_kg ?? 0)}kg bags`
+          : null
+
       return {
-        title:
-          record.row.output_entry_mode === 'bag' && record.row.num_bags !== null
-            ? `${formatQty(record.row.num_bags)} × ${formatQty(record.row.output_pack_kg ?? 0)}kg bags`
-            : 'Granules produced',
-        subtitle: `From ${sourceName}`,
+        title: granuleProduct,
+        subtitle: bagInfo ? `${bagInfo} • Source: ${sourceName || 'Scrap'}` : sourceName ? `Source: ${sourceName}` : null,
         amount: `${formatQty(record.row.total_output_kg ?? 0)} kg`,
         amountKgPcs: null,
       }
@@ -164,7 +173,7 @@ export function useRecords({ fromDate, toDate, kinds }: RecordsFilter) {
             ? inRange(
                 supabase
                   .from('recycling_entries')
-                  .select('*, scrap_types(name), pipe_products(diameter_inches, weight_kg)'),
+                  .select('*, scrap_types:source_scrap_type_id(name), pipe_products(diameter_inches, weight_kg)'),
               )
             : null,
           wants('raw_material_purchase')
@@ -302,7 +311,15 @@ export function groupRecordsByTransaction(records: EntryRecord[]): [string, Grou
         title = 'Scrap Purchase'
         subtitle = record.row.scrap_dealers?.name ? `Dealer: ${record.row.scrap_dealers.name}` : null
       } else if (record.kind === 'recycling') {
-        title = 'Recycling Production'
+        const sourceName = record.row.scrap_types?.name ?? ''
+        if (sourceName.toLowerCase().includes('ldpe') || sourceName.toLowerCase().includes('old ldpe')) {
+          title = 'Recycled LD Pipe'
+        } else if (sourceName.toLowerCase().includes('drip')) {
+          title = 'Recycled Drip Pipe'
+        } else {
+          title = sourceName ? `Recycled Granules (${sourceName})` : 'Recycling Production'
+        }
+        subtitle = sourceName ? `Source: ${sourceName}` : null
       } else {
         title = 'Factory Waste'
       }
