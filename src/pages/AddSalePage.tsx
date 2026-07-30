@@ -59,6 +59,12 @@ export function AddSalePage() {
     setLines((prev) => prev.filter((l) => l.localId !== localId))
   }
 
+  function handleUpdateQuantity(localId: string, newQuantity: number) {
+    setLines((prev) =>
+      prev.map((l) => (l.localId === localId ? { ...l, quantity: newQuantity } : l)),
+    )
+  }
+
   function handleSave(andCreateBill = false) {
     if (lines.length === 0) return
     if (!customerId) {
@@ -135,11 +141,16 @@ export function AddSalePage() {
             onAdd={handleAddLine}
             getAvailableStock={getAvailableStock}
             accent="sale"
+            disabledProductIds={lines.map((l) => l.pipeProductId)}
           />
         )}
       </div>
 
-      <LineItemsList lines={lines} onRemove={handleRemoveLine} />
+      <LineItemsList
+        lines={lines}
+        onRemove={handleRemoveLine}
+        onUpdateQuantity={handleUpdateQuantity}
+      />
 
       <StickyActionBar>
         <div className="flex w-full items-center gap-2">

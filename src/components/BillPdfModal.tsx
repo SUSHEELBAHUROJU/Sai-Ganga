@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Modal } from './Modal'
-import { Download, Printer, MessageCircle, AlertCircle, Ban } from 'lucide-react'
+import { Download, Printer, MessageCircle, AlertCircle, Ban, Pencil } from 'lucide-react'
 import type { BillRow } from '../hooks/useBills'
 import { useVoidBill } from '../hooks/useBills'
 import { useCompanySettings } from '../hooks/useCompanySettings'
@@ -12,9 +12,10 @@ type BillPdfModalProps = {
   open: boolean
   bill: BillRow | null
   onClose: () => void
+  onEditBill?: (bill: BillRow) => void
 }
 
-export function BillPdfModal({ open, bill, onClose }: BillPdfModalProps) {
+export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalProps) {
   const { data: company } = useCompanySettings()
   const { showToast } = useToast()
   const voidBill = useVoidBill()
@@ -182,14 +183,30 @@ export function BillPdfModal({ open, bill, onClose }: BillPdfModalProps) {
               </button>
 
               {!isVoided && (
-                <button
-                  type="button"
-                  onClick={() => setConfirmVoidOpen(true)}
-                  className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-100 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300"
-                >
-                  <Ban className="h-3.5 w-3.5" />
-                  Void Bill
-                </button>
+                <>
+                  {onEditBill && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose()
+                        onEditBill(bill)
+                      }}
+                      className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Edit Bill
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setConfirmVoidOpen(true)}
+                    className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-100 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300"
+                  >
+                    <Ban className="h-3.5 w-3.5" />
+                    Void Bill
+                  </button>
+                </>
               )}
             </div>
 

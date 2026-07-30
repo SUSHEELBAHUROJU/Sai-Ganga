@@ -1,4 +1,4 @@
-import { X } from 'lucide-react'
+import { X, Minus, Plus } from 'lucide-react'
 import { AmountKgPcs } from './AmountKgPcs'
 import { piecesToKg } from '../lib/format'
 
@@ -12,9 +12,10 @@ export type LineItem = {
 type LineItemsListProps = {
   lines: LineItem[]
   onRemove: (localId: string) => void
+  onUpdateQuantity?: (localId: string, newQuantity: number) => void
 }
 
-export function LineItemsList({ lines, onRemove }: LineItemsListProps) {
+export function LineItemsList({ lines, onRemove, onUpdateQuantity }: LineItemsListProps) {
   if (lines.length === 0) return null
 
   const totalPcs = lines.reduce((sum, l) => sum + l.quantity, 0)
@@ -22,20 +23,57 @@ export function LineItemsList({ lines, onRemove }: LineItemsListProps) {
 
   return (
     <div className="space-y-2">
-      <ul className="space-y-1.5">
+      <ul className="space-y-2">
         {lines.map((line) => (
           <li
             key={line.localId}
-            className="flex items-center justify-between rounded-lg bg-slate-100 px-3 py-2 text-sm dark:bg-slate-800"
+            className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm dark:border-slate-800 dark:bg-slate-900"
           >
-            <span className="font-medium text-slate-800 dark:text-slate-200">{line.label}</span>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-slate-900 dark:text-slate-100 text-sm sm:text-base">
+                {line.label}
+              </span>
+            </div>
+
             <div className="flex items-center gap-3">
+              {/* Stepper if onUpdateQuantity provided */}
+              {onUpdateQuantity ? (
+                <div className="flex items-center gap-1 rounded-lg border border-slate-300 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => onUpdateQuantity(line.localId, Math.max(1, line.quantity - 1))}
+                    className="rounded p-1 text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700"
+                  >
+                    <Minus className="h-3.5 w-3.5" />
+                  </button>
+                  <input
+                    type="number"
+                    min="1"
+                    value={line.quantity}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 1
+                      onUpdateQuantity(line.localId, Math.max(1, val))
+                    }}
+                    className="w-12 text-center font-mono text-sm font-bold text-slate-900 bg-transparent outline-none dark:text-slate-100"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onUpdateQuantity(line.localId, line.quantity + 1)}
+                    className="rounded p-1 text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                  <span className="text-xs text-slate-400 pr-1">pcs</span>
+                </div>
+              ) : null}
+
               <AmountKgPcs kg={piecesToKg(line.quantity, line.weightKg)} pcs={line.quantity} />
+
               <button
                 type="button"
                 aria-label={`Remove ${line.label}`}
                 onClick={() => onRemove(line.localId)}
-                className="text-slate-400 hover:text-red-600"
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -43,6 +81,7 @@ export function LineItemsList({ lines, onRemove }: LineItemsListProps) {
           </li>
         ))}
       </ul>
+
       <p className="text-right text-xs font-medium text-slate-500 dark:text-slate-400">
         {lines.length} line{lines.length === 1 ? '' : 's'} ·{' '}
         <AmountKgPcs kg={totalKg} pcs={totalPcs} /> total
@@ -50,3 +89,4 @@ export function LineItemsList({ lines, onRemove }: LineItemsListProps) {
     </div>
   )
 }
+

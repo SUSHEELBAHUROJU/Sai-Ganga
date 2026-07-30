@@ -18,6 +18,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { AmountKgPcs } from '../components/AmountKgPcs'
 import { EditRecordModal } from './records/EditRecordModal'
 import { CreateBillModal } from '../components/CreateBillModal'
+import { EditBillModal } from '../components/EditBillModal'
 import { BillPdfModal } from '../components/BillPdfModal'
 import { useToast } from '../lib/toast'
 import {
@@ -75,7 +76,9 @@ export function RecordsPage() {
   } | null>(null)
 
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null)
+  const [editingBillId, setEditingBillId] = useState<string | null>(null)
   const { data: activeViewBill } = useBill(selectedBillId)
+  const { data: activeEditBill } = useBill(editingBillId)
 
   const { data: records, isLoading } = useRecords({ fromDate, toDate, kinds })
   const deleteRecord = useDeleteRecord()
@@ -289,17 +292,27 @@ export function RecordsPage() {
                           </span>
                         )}
 
-                        {/* Bill Badge on Sales Group */}
+                        {/* Bill Badges & Edit Bill Action on Sales Group */}
                         {isSale && (
                           saleBill ? (
-                            <button
-                              type="button"
-                              onClick={() => setSelectedBillId(saleBill.id)}
-                              className="inline-flex items-center gap-1 rounded-md bg-teal-100 px-2.5 py-1 font-mono text-xs font-bold text-teal-800 hover:bg-teal-200 dark:bg-teal-950/80 dark:text-teal-300 dark:hover:bg-teal-900"
-                            >
-                              <Receipt className="h-3.5 w-3.5" />
-                              {saleBill.bill_number}
-                            </button>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedBillId(saleBill.id)}
+                                className="inline-flex items-center gap-1 rounded-md bg-teal-100 px-2.5 py-1 font-mono text-xs font-bold text-teal-800 hover:bg-teal-200 dark:bg-teal-950/80 dark:text-teal-300 dark:hover:bg-teal-900"
+                              >
+                                <Receipt className="h-3.5 w-3.5" />
+                                {saleBill.bill_number}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingBillId(saleBill.id)}
+                                className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                Edit Bill
+                              </button>
+                            </div>
                           ) : (
                             <button
                               type="button"
@@ -424,6 +437,13 @@ export function RecordsPage() {
         open={selectedBillId !== null}
         bill={activeViewBill ?? null}
         onClose={() => setSelectedBillId(null)}
+        onEditBill={(b) => setEditingBillId(b.id)}
+      />
+
+      <EditBillModal
+        open={editingBillId !== null}
+        bill={activeEditBill ?? null}
+        onClose={() => setEditingBillId(null)}
       />
 
       <ConfirmDialog

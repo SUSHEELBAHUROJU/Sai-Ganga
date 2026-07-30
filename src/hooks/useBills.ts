@@ -144,6 +144,72 @@ export function useCreateBill() {
   })
 }
 
+export type UpdateBillInput = {
+  id: string
+  bill_date: string
+  customer_id?: string | null
+  customer_name: string
+  customer_address?: string | null
+  customer_phone?: string | null
+  line_items: BillLineItem[]
+  subtotal: number
+  discount?: number
+  tax?: number
+  grand_total: number
+  notes?: string | null
+}
+
+export function useUpdateBill() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: UpdateBillInput): Promise<BillRow> => {
+      const { id, ...patch } = input
+
+      const { data, error } = await supabase
+        .from('bills')
+        .update({
+          ...patch,
+          discount: patch.discount ?? 0,
+          tax: patch.tax ?? 0,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) throw error
+      const updatedBill = data as unknown as BillRow
+
+      // Re-sync sales entries linked to this bill
+      await supabase.from('sales_entries').delete().eq('bill_id', id)
+
+      const salesToInsert = (input.line_items || [])
+        .filter((l) => l.pipe_product_id && l.quantity_pcs && l.quantity_pcs > 0)
+        .map((l) => ({
+          entry_date: input.bill_date,
+          customer_id: input.customer_id || null,
+          pipe_product_id: l.pipe_product_id!,
+          quantity: l.quantity_pcs!,
+          notes: `Billed: ${input.customer_name}`,
+          bill_id: id,
+        }))
+
+      if (salesToInsert.length > 0) {
+        await supabase.from('sales_entries').insert(salesToInsert)
+      }
+
+      return updatedBill
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bills'] })
+      queryClient.invalidateQueries({ queryKey: ['records'] })
+      queryClient.invalidateQueries({ queryKey: ['finished_goods_stock'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}
+
 export function useVoidBill() {
   const queryClient = useQueryClient()
 
@@ -159,6 +225,9 @@ export function useVoidBill() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bills'] })
       queryClient.invalidateQueries({ queryKey: ['records'] })
+      queryClient.invalidateQueries({ queryKey: ['finished_goods_stock'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },
   })
 }
+

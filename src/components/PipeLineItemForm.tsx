@@ -22,6 +22,8 @@ type PipeLineItemFormProps = {
   getAvailableStock?: (pipeProductId: string) => number | null
   /** Screen this form is used on — colors the chips, stepper and Add button to match. */
   accent?: ActionKey
+  /** Pipe product IDs already staged/added */
+  disabledProductIds?: string[]
 }
 
 export function PipeLineItemForm({
@@ -29,6 +31,7 @@ export function PipeLineItemForm({
   onAdd,
   getAvailableStock,
   accent = 'production',
+  disabledProductIds = [],
 }: PipeLineItemFormProps) {
   const style = ACTION_STYLES[accent]
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
@@ -68,6 +71,7 @@ export function PipeLineItemForm({
         value={selectedProductId}
         onChange={setSelectedProductId}
         chipSelectedClass={style.chipSelected}
+        disabledProductIds={disabledProductIds}
       />
 
       {selectedProduct && (

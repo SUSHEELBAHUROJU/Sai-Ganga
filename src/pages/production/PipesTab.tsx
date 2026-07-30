@@ -50,6 +50,12 @@ export function PipesTab({ entryDate }: { entryDate: string }) {
     setLines((prev) => prev.filter((l) => l.localId !== localId))
   }
 
+  function handleUpdateQuantity(localId: string, newQuantity: number) {
+    setLines((prev) =>
+      prev.map((l) => (l.localId === localId ? { ...l, quantity: newQuantity } : l)),
+    )
+  }
+
   function handleSave() {
     if (lines.length === 0) return
     addEntries.mutate(
@@ -74,11 +80,20 @@ export function PipesTab({ entryDate }: { entryDate: string }) {
         {isLoading ? (
           <p className="text-sm text-slate-500">Loading pipe sizes…</p>
         ) : (
-          <PipeLineItemForm pipeProducts={pipeProducts ?? []} onAdd={handleAddLine} accent="production" />
+          <PipeLineItemForm
+            pipeProducts={pipeProducts ?? []}
+            onAdd={handleAddLine}
+            accent="production"
+            disabledProductIds={lines.map((l) => l.pipeProductId)}
+          />
         )}
       </div>
 
-      <LineItemsList lines={lines} onRemove={handleRemoveLine} />
+      <LineItemsList
+        lines={lines}
+        onRemove={handleRemoveLine}
+        onUpdateQuantity={handleUpdateQuantity}
+      />
 
       <StickyActionBar>
         <SaveButton
