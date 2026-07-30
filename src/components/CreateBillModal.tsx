@@ -47,6 +47,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
   const [customerPhone, setCustomerPhone] = useState('')
 
   const [lineItems, setLineItems] = useState<BillLineItem[]>([])
+  const [globalRate, setGlobalRate] = useState<string>('')
   const [discount, setDiscount] = useState<string>('0')
   const [tax, setTax] = useState<string>('0')
   const [notes, setNotes] = useState<string>('')
@@ -64,6 +65,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
       setCustomerName(matchedCust?.name || initialData?.customerName || '')
       setCustomerAddress(matchedCust?.address || '')
       setCustomerPhone(matchedCust?.phone || '')
+      setGlobalRate('')
 
       if (initialData?.lines && initialData.lines.length > 0) {
         setLineItems(
@@ -80,6 +82,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
         setLineItems([
           {
             description: '',
+            quantity_pcs: null,
             weight_kg: 0,
             price_per_kg: 0,
             amount: 0,
@@ -104,14 +107,48 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
     }
   }
 
+  // Handle setting rate for ALL items at once (user requested auto-fill for all products)
+  function handleApplyGlobalRate(rateStr: string) {
+    setGlobalRate(rateStr)
+    const price = parseFloat(rateStr) || 0
+    setLineItems((prev) =>
+      prev.map((item) => {
+        const kg = item.weight_kg || 0
+        return {
+          ...item,
+          price_per_kg: price,
+          amount: Math.round(kg * price * 100) / 100,
+        }
+      }),
+    )
+  }
+
   function handleLineChange(index: number, field: keyof BillLineItem, value: any) {
+    if (field === 'price_per_kg') {
+      // User entered/changed price on line: auto-propagate to ALL lines as requested
+      const price = parseFloat(value) || 0
+      setGlobalRate(value)
+      setLineItems((prev) =>
+        prev.map((item, i) => {
+          const kg = item.weight_kg || 0
+          const itemPrice = i === index ? price : price
+          return {
+            ...item,
+            price_per_kg: itemPrice,
+            amount: Math.round(kg * itemPrice * 100) / 100,
+          }
+        }),
+      )
+      return
+    }
+
     setLineItems((prev) => {
       const copy = [...prev]
       const item = { ...copy[index], [field]: value }
 
-      if (field === 'weight_kg' || field === 'price_per_kg') {
-        const kg = Number(field === 'weight_kg' ? value : item.weight_kg) || 0
-        const price = Number(field === 'price_per_kg' ? value : item.price_per_kg) || 0
+      if (field === 'weight_kg') {
+        const kg = Number(value) || 0
+        const price = item.price_per_kg || 0
         item.amount = Math.round(kg * price * 100) / 100
       }
 
@@ -121,12 +158,14 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
   }
 
   function addLineItem() {
+    const defaultPrice = parseFloat(globalRate) || 0
     setLineItems((prev) => [
       ...prev,
       {
         description: '',
+        quantity_pcs: null,
         weight_kg: 0,
-        price_per_kg: 0,
+        price_per_kg: defaultPrice,
         amount: 0,
       },
     ])
@@ -137,6 +176,9 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
   }
 
   const subtotal = lineItems.reduce((sum, item) => sum + (item.amount || 0), 0)
+  const totalWeight = lineItems.reduce((sum, item) => sum + (item.weight_kg || 0), 0)
+  const totalPcs = lineItems.reduce((sum, item) => sum + (item.quantity_pcs || 0), 0)
+
   const discountVal = Number(discount) || 0
   const taxVal = Number(tax) || 0
   const grandTotal = Math.max(0, subtotal - discountVal + taxVal)
@@ -276,11 +318,37 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
           />
         </div>
 
+        {/* Global Selling Rate Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50 p-3.5 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-900/50">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-amber-900 dark:text-amber-200">
+              Selling Rate / kg:
+            </span>
+            <span className="text-xs text-amber-700 dark:text-amber-300">
+              (Entering rate here updates all product items automatically)
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-semibold text-amber-900 dark:text-amber-200">₹</span>
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              value={globalRate}
+              onChange={(e) => handleApplyGlobalRate(e.target.value)}
+              placeholder="e.g. 70"
+              className="w-28 rounded-lg border border-amber-300 px-3 py-1.5 text-sm font-bold text-slate-900 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 dark:border-amber-700 dark:bg-slate-900 dark:text-slate-100"
+            />
+            <span className="text-xs font-semibold text-amber-800 dark:text-amber-300">/ kg</span>
+          </div>
+        </div>
+
         {/* Line Items Table */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Line Items
+              Line Items ({lineItems.length})
             </h4>
             <button
               type="button"
@@ -294,11 +362,12 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
 
           <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
             <table className="w-full text-left text-xs text-slate-700 dark:text-slate-300">
-              <thead className="bg-slate-50 text-[11px] font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+              <thead className="bg-slate-100 text-[11px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                 <tr>
                   <th className="px-3 py-2">Item Description</th>
-                  <th className="w-24 px-3 py-2">Weight (kg)</th>
-                  <th className="w-28 px-3 py-2">Price / kg (₹)</th>
+                  <th className="w-20 px-3 py-2 text-right">Qty (Pcs)</th>
+                  <th className="w-24 px-3 py-2 text-right">Weight (kg)</th>
+                  <th className="w-28 px-3 py-2 text-right">Rate / kg (₹)</th>
                   <th className="w-28 px-3 py-2 text-right">Amount (₹)</th>
                   <th className="w-10 px-2 py-2"></th>
                 </tr>
@@ -315,7 +384,23 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
                         className="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                       />
                     </td>
-                    <td className="p-2">
+                    <td className="p-2 text-right">
+                      <input
+                        type="number"
+                        min="0"
+                        value={item.quantity_pcs != null ? item.quantity_pcs : ''}
+                        onChange={(e) =>
+                          handleLineChange(
+                            index,
+                            'quantity_pcs',
+                            e.target.value ? parseInt(e.target.value, 10) : null,
+                          )
+                        }
+                        placeholder="pcs"
+                        className="w-full rounded border border-slate-300 px-2 py-1 text-right text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                      />
+                    </td>
+                    <td className="p-2 text-right">
                       <input
                         type="number"
                         min="0"
@@ -325,23 +410,23 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
                           handleLineChange(index, 'weight_kg', parseFloat(e.target.value) || 0)
                         }
                         placeholder="0"
-                        className="w-full rounded border border-slate-300 px-2 py-1 text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                        className="w-full rounded border border-slate-300 px-2 py-1 text-right text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                       />
                     </td>
-                    <td className="p-2">
+                    <td className="p-2 text-right">
                       <input
                         type="number"
                         min="0"
                         step="0.5"
                         value={item.price_per_kg || ''}
                         onChange={(e) =>
-                          handleLineChange(index, 'price_per_kg', parseFloat(e.target.value) || 0)
+                          handleLineChange(index, 'price_per_kg', e.target.value)
                         }
                         placeholder="₹/kg"
-                        className="w-full rounded border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                        className="w-full rounded border border-slate-300 px-2 py-1 text-right text-xs font-bold text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                       />
                     </td>
-                    <td className="p-2 text-right font-mono font-semibold text-slate-900 dark:text-slate-100">
+                    <td className="p-2 text-right font-mono font-bold text-slate-900 dark:text-slate-100">
                       ₹{(item.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="p-2 text-center">
@@ -358,6 +443,18 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
                   </tr>
                 ))}
               </tbody>
+              <tfoot className="bg-slate-50 font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                <tr>
+                  <td className="px-3 py-2">Total</td>
+                  <td className="px-3 py-2 text-right">{totalPcs > 0 ? `${totalPcs} pcs` : '-'}</td>
+                  <td className="px-3 py-2 text-right">{totalWeight.toLocaleString()} kg</td>
+                  <td className="px-3 py-2"></td>
+                  <td className="px-3 py-2 text-right font-mono text-teal-700 dark:text-teal-300">
+                    ₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </td>
+                  <td></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
