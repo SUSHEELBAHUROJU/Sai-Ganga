@@ -12,7 +12,6 @@ import {
 import { useDeleteRecord } from '../hooks/useRecordMutations'
 import { Chip } from '../components/Chip'
 import { ConfirmDialog } from '../components/ConfirmDialog'
-import { RecyclingBalance } from '../components/RecyclingBalance'
 import { AmountKgPcs } from '../components/AmountKgPcs'
 import { EditRecordModal } from './records/EditRecordModal'
 import { useToast } from '../lib/toast'
@@ -232,17 +231,7 @@ export function RecordsPage() {
                           {subtitle}
                         </p>
                       )}
-                      {record.kind === 'recycling' &&
-                        record.row.output_mode === 'granules' &&
-                        record.row.scrap_consumed_kg !== null && (
-                          <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                            <RecyclingBalance
-                              variant="compact"
-                              consumedKg={record.row.scrap_consumed_kg}
-                              producedKg={record.row.total_output_kg ?? 0}
-                            />
-                          </p>
-                        )}
+
                       {record.row.notes && (
                         <p className="mt-0.5 truncate text-xs italic text-slate-400 dark:text-slate-500">
                           {record.row.notes}

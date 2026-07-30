@@ -10,13 +10,11 @@ import type {
   ScrapPurchaseRecordRow,
   FactoryWasteRecordRow,
 } from '../../hooks/useRecords'
-import type { RecyclingOutputMode } from '../../hooks/useRecyclingEntries'
 import type { EntryMode } from '../../hooks/useRawMaterialPurchases'
 import { DateField } from '../../components/DateField'
 import { Chip } from '../../components/Chip'
 import { Field } from '../../components/Field'
 import { PackSizeField } from '../../components/PackSizeField'
-import { RecyclingBalance } from '../../components/RecyclingBalance'
 import {
   GranuleOutputField,
   granuleTotalKg,
@@ -199,58 +197,33 @@ export function EditSaleForm({ row, onChange }: EditFormProps<SaleRecordRow>) {
   )
 }
 
-const OUTPUT_MODE_OPTIONS: { value: RecyclingOutputMode; label: string }[] = [
-  { value: 'granules', label: 'Granules' },
-  { value: 'direct_to_pipe', label: 'Direct to Pipe' },
-]
-
 export function EditRecyclingForm({ row, onChange }: EditFormProps<RecyclingRecordRow>) {
   const { data: scrapTypes } = useScrapTypes()
-  const { data: pipeProducts } = usePipeProducts()
 
   const [entryDate, setEntryDate] = useState(row.entry_date)
   const [sourceScrapTypeId, setSourceScrapTypeId] = useState(row.source_scrap_type_id)
-  const [consumed, setConsumed] = useState(row.scrap_consumed_kg === null ? '' : String(row.scrap_consumed_kg))
-  const [outputMode, setOutputMode] = useState<RecyclingOutputMode>(
-    row.output_mode as RecyclingOutputMode,
-  )
   const [output, setOutput] = useState<GranuleOutput>({
     mode: row.output_entry_mode === 'direct_kg' ? 'direct_kg' : 'bag',
     packKg: row.output_pack_kg ?? 25,
     numBags: row.num_bags === null ? '' : String(row.num_bags),
     directKg: row.output_entry_mode === 'direct_kg' ? String(row.total_output_kg ?? '') : '',
   })
-  const [pipeProductId, setPipeProductId] = useState(row.pipe_product_id ?? '')
-  const [pipeQuantity, setPipeQuantity] = useState(
-    row.pipe_quantity === null ? '' : String(row.pipe_quantity),
-  )
   const [notes, setNotes] = useState(row.notes ?? '')
 
   const selectableScrapTypes = (scrapTypes ?? []).filter(
     (t) => t.is_active || t.id === sourceScrapTypeId,
   )
-  const consumedKg = consumed.trim() === '' ? null : Number(consumed)
-  const producedKg = granuleTotalKg(output)
 
   function emit(next: {
     entryDate?: string
     sourceScrapTypeId?: string
-    consumed?: string
-    outputMode?: RecyclingOutputMode
     output?: GranuleOutput
-    pipeProductId?: string
-    pipeQuantity?: string
     notes?: string
   }) {
     const date = next.entryDate ?? entryDate
     const src = next.sourceScrapTypeId ?? sourceScrapTypeId
-    const consumedText = next.consumed ?? consumed
-    const consumedValue = consumedText.trim() === '' ? null : Number(consumedText)
-    const mode = next.outputMode ?? outputMode
     const out = next.output ?? output
     const producedValue = granuleTotalKg(out)
-    const pipe = next.pipeProductId ?? pipeProductId
-    const qty = Number(next.pipeQuantity ?? pipeQuantity)
     const note = next.notes ?? notes
 
     if (!src) {
@@ -258,42 +231,20 @@ export function EditRecyclingForm({ row, onChange }: EditFormProps<RecyclingReco
       return
     }
 
-    if (mode === 'granules') {
-      const outputValid =
-        out.mode === 'bag' ? Boolean(out.packKg) && Number(out.numBags) > 0 : producedValue > 0
-      onChange(
-        outputValid
-          ? {
-              entry_date: date,
-              source_scrap_type_id: src,
-              scrap_consumed_kg: consumedValue,
-              output_mode: 'granules',
-              output_entry_mode: out.mode,
-              output_pack_kg: out.mode === 'bag' ? out.packKg : null,
-              num_bags: out.mode === 'bag' ? Number(out.numBags) : null,
-              total_output_kg: producedValue,
-              pipe_product_id: null,
-              pipe_quantity: null,
-              notes: note.trim() || null,
-            }
-          : null,
-      )
-      return
-    }
-
+    const outputValid =
+      out.mode === 'bag' ? Boolean(out.packKg) && Number(out.numBags) > 0 : producedValue > 0
     onChange(
-      pipe && qty > 0
+      outputValid
         ? {
             entry_date: date,
             source_scrap_type_id: src,
-            scrap_consumed_kg: consumedValue,
-            output_mode: 'direct_to_pipe',
-            output_entry_mode: null,
-            output_pack_kg: null,
-            num_bags: null,
-            total_output_kg: null,
-            pipe_product_id: pipe,
-            pipe_quantity: qty,
+            output_mode: 'granules',
+            output_entry_mode: out.mode,
+            output_pack_kg: out.mode === 'bag' ? out.packKg : null,
+            num_bags: out.mode === 'bag' ? Number(out.numBags) : null,
+            total_output_kg: producedValue,
+            pipe_product_id: null,
+            pipe_quantity: null,
             notes: note.trim() || null,
           }
         : null,
@@ -327,72 +278,20 @@ export function EditRecyclingForm({ row, onChange }: EditFormProps<RecyclingReco
           ))}
         </div>
       </div>
-      <Field
-        label="Scrap Consumed (kg) — optional"
-        type="number"
-        min="0"
-        inputMode="decimal"
-        value={consumed}
-        onChange={(e) => {
-          setConsumed(e.target.value)
-          emit({ consumed: e.target.value })
-        }}
-      />
       <div className="border-t border-slate-100 pt-4 dark:border-slate-800">
         <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Output
+          Granule Output
         </span>
-        <div className="flex flex-wrap gap-2">
-          {OUTPUT_MODE_OPTIONS.map((opt) => (
-            <Chip
-              key={opt.value}
-              label={opt.label}
-              selected={outputMode === opt.value}
-              onClick={() => {
-                setOutputMode(opt.value)
-                emit({ outputMode: opt.value })
-              }}
-            />
-          ))}
+        <div className="mt-2">
+          <GranuleOutputField
+            value={output}
+            onChange={(v) => {
+              setOutput(v)
+              emit({ output: v })
+            }}
+          />
         </div>
-
-        {outputMode === 'granules' ? (
-          <div className="mt-4">
-            <GranuleOutputField
-              value={output}
-              onChange={(v) => {
-                setOutput(v)
-                emit({ output: v })
-              }}
-            />
-          </div>
-        ) : (
-          <div className="mt-4 space-y-4">
-            <PipeProductPicker
-              pipeProducts={pipeProducts ?? []}
-              value={pipeProductId || null}
-              onChange={(v) => {
-                setPipeProductId(v)
-                emit({ pipeProductId: v })
-              }}
-            />
-            <Field
-              label="Quantity (pcs)"
-              type="number"
-              min="0"
-              inputMode="numeric"
-              value={pipeQuantity}
-              onChange={(e) => {
-                setPipeQuantity(e.target.value)
-                emit({ pipeQuantity: e.target.value })
-              }}
-            />
-          </div>
-        )}
       </div>
-      {outputMode === 'granules' && consumedKg !== null && (
-        <RecyclingBalance consumedKg={consumedKg} producedKg={producedKg} />
-      )}
       <Field
         label="Notes (optional)"
         value={notes}

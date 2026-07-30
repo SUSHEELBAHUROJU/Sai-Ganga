@@ -53,8 +53,7 @@ export function useTodaySummary(date: string) {
         supabase
           .from('recycling_entries')
           .select('total_output_kg')
-          .eq('entry_date', date)
-          .eq('output_mode', 'granules'),
+          .eq('entry_date', date),
       ])
 
       if (production.error) throw production.error

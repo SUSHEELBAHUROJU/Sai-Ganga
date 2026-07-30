@@ -14,14 +14,7 @@ export type DailyReport = {
   salesTotalPcs: number
   salesTotalKg: number
   recyclingOutputKg: number
-  recyclingConsumedKg: number
   recyclingEntryCount: number
-  /** Recycling output that skipped granules and went straight to a pipe
-   * product — kept as its own line, never folded into Production or into
-   * the granules output/consumed figures above. */
-  recyclingDirectToPipe: ProductTotal[]
-  recyclingDirectToPipeTotalPcs: number
-  recyclingDirectToPipeTotalKg: number
   rawPurchases: PurchaseLine[]
   scrapPurchases: PurchaseLine[]
   factoryWasteKg: number
@@ -63,9 +56,7 @@ export function useDailyReport(fromDate: string, toDate: string) {
           inRange(
             supabase
               .from('recycling_entries')
-              .select(
-                'output_mode, scrap_consumed_kg, total_output_kg, pipe_quantity, pipe_products(diameter_inches, weight_kg)',
-              ),
+              .select('total_output_kg'),
           ),
           inRange(
             supabase
@@ -131,28 +122,10 @@ export function useDailyReport(fromDate: string, toDate: string) {
         .sort((a, b) => b.totalKg - a.totalKg)
 
       const recyclingRows = (recycling.data ?? []) as unknown as {
-        output_mode: string
-        scrap_consumed_kg: number | null
         total_output_kg: number | null
-        pipe_quantity: number | null
-        pipe_products: PipeRef
       }[]
-      const granulesRows = recyclingRows.filter((r) => r.output_mode === 'granules')
-      const directToPipeRows = recyclingRows.filter((r) => r.output_mode === 'direct_to_pipe')
       const sum = <T>(rows: T[], pick: (r: T) => number) =>
         rows.reduce((total, r) => total + pick(r), 0)
-
-      const directToPipeMap = new Map<string, ProductTotal>()
-      for (const row of directToPipeRows) {
-        const p = row.pipe_products
-        accumulate(
-          directToPipeMap,
-          p ? formatPipeProductLabel(p.diameter_inches, p.weight_kg) : 'Unknown product',
-          row.pipe_quantity ?? 0,
-          p?.weight_kg ?? 0,
-        )
-      }
-      const recyclingDirectToPipe = toSortedTotals(directToPipeMap)
 
       const productionTotals = toSortedTotals(productionMap)
 
@@ -163,12 +136,8 @@ export function useDailyReport(fromDate: string, toDate: string) {
         salesByCustomer,
         salesTotalPcs: salesByCustomer.reduce((s, c) => s + c.totalPcs, 0),
         salesTotalKg: salesByCustomer.reduce((s, c) => s + c.totalKg, 0),
-        recyclingOutputKg: sum(granulesRows, (r) => r.total_output_kg ?? 0),
-        recyclingConsumedKg: sum(granulesRows, (r) => r.scrap_consumed_kg ?? 0),
-        recyclingEntryCount: granulesRows.length,
-        recyclingDirectToPipe,
-        recyclingDirectToPipeTotalPcs: sum(recyclingDirectToPipe, (v) => v.pcs),
-        recyclingDirectToPipeTotalKg: sum(recyclingDirectToPipe, (v) => v.kg),
+        recyclingOutputKg: sum(recyclingRows, (r) => r.total_output_kg ?? 0),
+        recyclingEntryCount: recyclingRows.length,
         rawPurchases: (
           (rawPurchases.data ?? []) as unknown as {
             total_qty_kg: number

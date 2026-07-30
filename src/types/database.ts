@@ -327,6 +327,7 @@ export type Database = {
           id: string
           is_active: boolean
           is_recycled_output: boolean
+          linked_scrap_type_id: string | null
           name: string
           updated_at: string
         }
@@ -337,6 +338,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_recycled_output?: boolean
+          linked_scrap_type_id?: string | null
           name: string
           updated_at?: string
         }
@@ -347,6 +349,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_recycled_output?: boolean
+          linked_scrap_type_id?: string | null
           name?: string
           updated_at?: string
         }
@@ -365,7 +368,6 @@ export type Database = {
           output_pack_kg: number | null
           pipe_product_id: string | null
           pipe_quantity: number | null
-          scrap_consumed_kg: number | null
           source_scrap_type_id: string
           total_output_kg: number | null
           updated_at: string
@@ -382,7 +384,6 @@ export type Database = {
           output_pack_kg?: number | null
           pipe_product_id?: string | null
           pipe_quantity?: number | null
-          scrap_consumed_kg?: number | null
           source_scrap_type_id: string
           total_output_kg?: number | null
           updated_at?: string
@@ -399,7 +400,6 @@ export type Database = {
           output_pack_kg?: number | null
           pipe_product_id?: string | null
           pipe_quantity?: number | null
-          scrap_consumed_kg?: number | null
           source_scrap_type_id?: string
           total_output_kg?: number | null
           updated_at?: string
@@ -703,39 +703,6 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "production_entries"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
-      add_recycling_direct_to_pipe: {
-        Args: {
-          p_entry_date: string
-          p_notes?: string
-          p_pipe_product_id: string
-          p_pipe_quantity: number
-          p_scrap_consumed_kg?: number
-          p_source_scrap_type_id: string
-        }
-        Returns: {
-          created_at: string
-          created_by: string | null
-          entry_date: string
-          id: string
-          notes: string | null
-          num_bags: number | null
-          output_entry_mode: string | null
-          output_mode: string
-          output_pack_kg: number | null
-          pipe_product_id: string | null
-          pipe_quantity: number | null
-          scrap_consumed_kg: number | null
-          source_scrap_type_id: string
-          total_output_kg: number | null
-          updated_at: string
-        }
-        SetofOptions: {
-          from: "*"
-          to: "recycling_entries"
           isOneToOne: true
           isSetofReturn: false
         }

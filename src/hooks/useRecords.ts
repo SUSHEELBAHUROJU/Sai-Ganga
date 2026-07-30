@@ -86,19 +86,6 @@ export function describeRecord(record: EntryRecord): {
     }
     case 'recycling': {
       const sourceName = record.row.scrap_types?.name ?? 'Unknown material'
-      if (record.row.output_mode === 'direct_to_pipe') {
-        const p = record.row.pipe_products
-        const qty = record.row.pipe_quantity ?? 0
-        const kg = p ? piecesToKg(qty, p.weight_kg) : 0
-        return {
-          title: p
-            ? `Recycled → ${formatPipeProductLabel(p.diameter_inches, p.weight_kg)}`
-            : 'Recycled → Unknown product',
-          subtitle: `From ${sourceName}`,
-          amount: `${formatQty(qty)} pcs`,
-          amountKgPcs: { kg, pcs: qty },
-        }
-      }
       return {
         title:
           record.row.output_entry_mode === 'bag' && record.row.num_bags !== null

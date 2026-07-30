@@ -24,9 +24,6 @@ export type MonthlyReport = {
   soldTotalPcs: number
   soldTotalKg: number
   recyclingOutputKg: number
-  /** Direct-to-pipe recycling — its own figure, never folded into produced. */
-  recyclingDirectToPipeTotalPcs: number
-  recyclingDirectToPipeTotalKg: number
   rawPurchasedKg: number
   rawPurchasedByType: { label: string; quantity: number }[]
   scrapPurchasedKg: number
@@ -60,7 +57,7 @@ export function useMonthlyReport(fromDate: string, toDate: string) {
           inRange(
             supabase
               .from('recycling_entries')
-              .select('output_mode, total_output_kg, pipe_quantity, pipe_products(diameter_inches, weight_kg)'),
+              .select('total_output_kg'),
           ),
           inRange(
             supabase
@@ -129,17 +126,8 @@ export function useMonthlyReport(fromDate: string, toDate: string) {
         rows.reduce((total, r) => total + pick(r), 0)
 
       const recyclingRows = (recycling.data ?? []) as unknown as {
-        output_mode: string
         total_output_kg: number | null
-        pipe_quantity: number | null
-        pipe_products: PipeRef
       }[]
-      const granulesRows = recyclingRows.filter((r) => r.output_mode === 'granules')
-      const directToPipeRows = recyclingRows.filter((r) => r.output_mode === 'direct_to_pipe')
-      const directToPipeTotalPcs = sum(directToPipeRows, (r) => r.pipe_quantity ?? 0)
-      const directToPipeTotalKg = sum(directToPipeRows, (r) =>
-        piecesToKg(r.pipe_quantity ?? 0, r.pipe_products?.weight_kg ?? 0),
-      )
 
       const rawRows = (rawPurchases.data ?? []) as unknown as {
         total_qty_kg: number
@@ -159,9 +147,7 @@ export function useMonthlyReport(fromDate: string, toDate: string) {
         producedTotalKg: sum(productionRows, rowKg),
         soldTotalPcs: sum(salesRows, (r) => r.quantity),
         soldTotalKg: sum(salesRows, rowKg),
-        recyclingOutputKg: sum(granulesRows, (r) => r.total_output_kg ?? 0),
-        recyclingDirectToPipeTotalPcs: directToPipeTotalPcs,
-        recyclingDirectToPipeTotalKg: directToPipeTotalKg,
+        recyclingOutputKg: sum(recyclingRows, (r) => r.total_output_kg ?? 0),
         rawPurchasedKg: sum(rawRows, (r) => r.total_qty_kg),
         rawPurchasedByType: Array.from(rawByType.entries())
           .map(([label, quantity]) => ({ label, quantity }))

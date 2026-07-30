@@ -1,5 +1,4 @@
 import { useDailyReport } from '../../hooks/useDailyReport'
-import { RecyclingBalance } from '../../components/RecyclingBalance'
 import { AmountKgPcs } from '../../components/AmountKgPcs'
 import { formatQty } from '../../lib/format'
 import { LoadingState } from '../../components/States'
@@ -102,31 +101,8 @@ export function DailySummaryTab({ fromDate, toDate }: { fromDate: string; toDate
           </Section>
 
           <Section title="Recycling — Granules" total={`${formatQty(report.recyclingOutputKg)} kg`}>
-            {report.recyclingEntryCount === 0 ? (
+            {report.recyclingEntryCount === 0 && (
               <Empty>No recycling recorded.</Empty>
-            ) : (
-              <RecyclingBalance
-                consumedKg={report.recyclingConsumedKg}
-                producedKg={report.recyclingOutputKg}
-              />
-            )}
-          </Section>
-
-          <Section
-            title="Recycling — Direct to Pipe"
-            total={
-              <AmountKgPcs
-                kg={report.recyclingDirectToPipeTotalKg}
-                pcs={report.recyclingDirectToPipeTotalPcs}
-              />
-            }
-          >
-            {report.recyclingDirectToPipe.length === 0 ? (
-              <Empty>No direct-to-pipe recycling recorded.</Empty>
-            ) : (
-              report.recyclingDirectToPipe.map((p) => (
-                <Row key={p.label} label={p.label} value={<AmountKgPcs kg={p.kg} pcs={p.pcs} />} />
-              ))
             )}
           </Section>
 

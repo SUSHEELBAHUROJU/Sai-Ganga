@@ -24,7 +24,7 @@ export function MonthlyTab({ fromDate, toDate }: { fromDate: string; toDate: str
 
       {report && (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             <StatTile label="Produced">
               <AmountKgPcs kg={report.producedTotalKg} pcs={report.producedTotalPcs} />
             </StatTile>
@@ -35,12 +35,6 @@ export function MonthlyTab({ fromDate, toDate }: { fromDate: string; toDate: str
               <span className="font-semibold text-slate-900 dark:text-slate-100">
                 {formatQty(report.recyclingOutputKg)} kg
               </span>
-            </StatTile>
-            <StatTile label="Recycled → Pipe">
-              <AmountKgPcs
-                kg={report.recyclingDirectToPipeTotalKg}
-                pcs={report.recyclingDirectToPipeTotalPcs}
-              />
             </StatTile>
             <StatTile label="Factory waste">
               <span className="font-semibold text-slate-900 dark:text-slate-100">

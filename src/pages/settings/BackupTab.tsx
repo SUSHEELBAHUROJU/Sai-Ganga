@@ -72,33 +72,22 @@ const EXPORTS: ExportDef[] = [
   {
     key: 'recycling',
     label: 'Recycling Entries',
-    description: 'Granules produced and direct-to-pipe recycling',
+    description: 'Granules produced from recycling',
     table: 'recycling_entries',
-    select: '*, scrap_types(name), pipe_products(diameter_inches, weight_kg)',
+    select: '*, scrap_types(name)',
     columns: [
       'entry_date',
       'source_material',
-      'scrap_consumed_kg',
-      'output_mode',
       'granules_output_kg',
-      'pipe_diameter_inches',
-      'pipe_weight_kg',
-      'pipe_quantity_pcs',
       'notes',
       'created_at',
     ],
     flatten: (row) => {
       const s = nested(row, 'scrap_types')
-      const p = nested(row, 'pipe_products')
       return {
         entry_date: row.entry_date,
         source_material: s?.name ?? '',
-        scrap_consumed_kg: row.scrap_consumed_kg ?? '',
-        output_mode: row.output_mode,
         granules_output_kg: row.total_output_kg ?? '',
-        pipe_diameter_inches: p?.diameter_inches ?? '',
-        pipe_weight_kg: p?.weight_kg ?? '',
-        pipe_quantity_pcs: row.pipe_quantity ?? '',
         notes: row.notes,
         created_at: row.created_at,
       }
