@@ -13,8 +13,8 @@ alter table raw_material_types
 -- Drop the old "only one recycled_output" constraint — we now have two.
 drop index if exists raw_material_types_one_recycled_output;
 
--- Deactivate the old single "Recycled Granules" row.
-update raw_material_types set is_active = false where name = 'Recycled Granules';
+-- Deactivate the old single recycled output row (may be named "Recycled Granules" or "Recycled LD").
+update raw_material_types set is_active = false where is_recycled_output = true;
 
 -- Insert the two new source-specific recycled output types.
 insert into raw_material_types (name, is_recycled_output, linked_scrap_type_id, default_pack_kg)
