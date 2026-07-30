@@ -5,10 +5,11 @@ type ModalProps = {
   title: string
   open: boolean
   onClose: () => void
+  maxWidthClass?: string
   children: ReactNode
 }
 
-export function Modal({ title, open, onClose, children }: ModalProps) {
+export function Modal({ title, open, onClose, maxWidthClass = 'md:max-w-md', children }: ModalProps) {
   useEffect(() => {
     if (!open) return
     const handleKey = (e: KeyboardEvent) => {
@@ -28,7 +29,7 @@ export function Modal({ title, open, onClose, children }: ModalProps) {
         className="absolute inset-0 cursor-default"
         onClick={onClose}
       />
-      <div className="relative z-10 max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl md:max-w-md md:rounded-2xl dark:bg-slate-900">
+      <div className={`relative z-10 max-h-[90vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl ${maxWidthClass} md:rounded-2xl dark:bg-slate-900`}>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</h3>
           <button

@@ -7,11 +7,14 @@ type Tables = Database['public']['Tables']
 
 type PipeRef = { diameter_inches: number; weight_kg: number } | null
 type NameRef = { name: string } | null
+type CustomerRef = { name: string; phone: string | null; address: string | null } | null
+type BillRef = { id: string; bill_number: string; status: 'active' | 'voided' } | null
 
 export type ProductionRecordRow = Tables['production_entries']['Row'] & { pipe_products: PipeRef }
 export type SaleRecordRow = Tables['sales_entries']['Row'] & {
   pipe_products: PipeRef
-  customers: NameRef
+  customers: CustomerRef
+  bills: BillRef
 }
 export type RecyclingRecordRow = Tables['recycling_entries']['Row'] & {
   scrap_types: NameRef
@@ -154,7 +157,7 @@ export function useRecords({ fromDate, toDate, kinds }: RecordsFilter) {
             ? inRange(
                 supabase
                   .from('sales_entries')
-                  .select('*, pipe_products(diameter_inches, weight_kg), customers(name)'),
+                  .select('*, pipe_products(diameter_inches, weight_kg), customers(name, phone, address), bills(id, bill_number, status)'),
               )
             : null,
           wants('recycling')

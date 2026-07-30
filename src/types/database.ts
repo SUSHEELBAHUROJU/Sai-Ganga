@@ -34,6 +34,99 @@ export type Database = {
   }
   public: {
     Tables: {
+      bills: {
+        Row: {
+          id: string
+          bill_number: string
+          bill_date: string
+          customer_id: string | null
+          customer_name: string
+          customer_address: string | null
+          customer_phone: string | null
+          line_items: Json
+          subtotal: number
+          discount: number
+          tax: number
+          grand_total: number
+          status: 'active' | 'voided'
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          bill_number: string
+          bill_date?: string
+          customer_id?: string | null
+          customer_name: string
+          customer_address?: string | null
+          customer_phone?: string | null
+          line_items?: Json
+          subtotal?: number
+          discount?: number
+          tax?: number
+          grand_total?: number
+          status?: 'active' | 'voided'
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          bill_number?: string
+          bill_date?: string
+          customer_id?: string | null
+          customer_name?: string
+          customer_address?: string | null
+          customer_phone?: string | null
+          line_items?: Json
+          subtotal?: number
+          discount?: number
+          tax?: number
+          grand_total?: number
+          status?: 'active' | 'voided'
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      company_settings: {
+        Row: {
+          id: string
+          business_name: string
+          address: string
+          gst_number: string
+          phone: string | null
+          bill_prefix: string
+          next_bill_number: number
+          bill_start_date: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          business_name?: string
+          address?: string
+          gst_number?: string
+          phone?: string | null
+          bill_prefix?: string
+          next_bill_number?: number
+          bill_start_date?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          business_name?: string
+          address?: string
+          gst_number?: string
+          phone?: string | null
+          bill_prefix?: string
+          next_bill_number?: number
+          bill_start_date?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       customers: {
         Row: {
           address: string | null
@@ -437,6 +530,7 @@ export type Database = {
       }
       sales_entries: {
         Row: {
+          bill_id: string | null
           created_at: string
           created_by: string | null
           customer_id: string | null
@@ -448,6 +542,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          bill_id?: string | null
           created_at?: string
           created_by?: string | null
           customer_id?: string | null
@@ -459,6 +554,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          bill_id?: string | null
           created_at?: string
           created_by?: string | null
           customer_id?: string | null
@@ -664,6 +760,10 @@ export type Database = {
       }
     }
     Functions: {
+      generate_next_bill_number: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       add_production_quantities_batch: {
         Args: { p_rows: Json }
         Returns: {

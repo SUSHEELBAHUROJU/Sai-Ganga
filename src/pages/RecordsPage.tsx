@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { History, Pencil, SearchX, Trash2 } from 'lucide-react'
+import { History, Pencil, SearchX, Trash2, Receipt } from 'lucide-react'
 import {
   useRecords,
   groupRecordsByDate,
@@ -8,12 +8,16 @@ import {
   RECORD_KIND_LABEL,
   type EntryRecord,
   type RecordKind,
+  type SaleRecordRow,
 } from '../hooks/useRecords'
 import { useDeleteRecord } from '../hooks/useRecordMutations'
+import { useBill } from '../hooks/useBills'
 import { Chip } from '../components/Chip'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { AmountKgPcs } from '../components/AmountKgPcs'
 import { EditRecordModal } from './records/EditRecordModal'
+import { CreateBillModal } from '../components/CreateBillModal'
+import { BillPdfModal } from '../components/BillPdfModal'
 import { useToast } from '../lib/toast'
 import {
   formatDateLabel,
@@ -23,13 +27,11 @@ import {
   clampRangeStart,
   MAX_QUERY_RANGE_DAYS,
 } from '../lib/date'
+import { formatPipeProductLabel, piecesToKg } from '../lib/format'
 import { LoadingState, EmptyState } from '../components/States'
 
 const ALL_KINDS = Object.keys(RECORD_KIND_LABEL) as RecordKind[]
 
-// Same colors as the Home cards and nav icons — production blue, sale green,
-// recycling teal, purchase orange — so a tag reads by color before the label
-// does, everywhere the concept appears.
 const KIND_BADGE: Record<RecordKind, string> = {
   production: 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
   sale: 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-300',
@@ -54,6 +56,23 @@ export function RecordsPage() {
   const [editing, setEditing] = useState<EntryRecord | null>(null)
   const [deleting, setDeleting] = useState<EntryRecord | null>(null)
 
+  // Billing state
+  const [createBillModalData, setCreateBillModalData] = useState<{
+    saleEntryIds?: string[]
+    entryDate?: string
+    customerId?: string | null
+    customerName?: string
+    lines?: {
+      pipeProductId?: string
+      description: string
+      weightKg: number
+      quantityPcs?: number
+    }[]
+  } | null>(null)
+
+  const [selectedBillId, setSelectedBillId] = useState<string | null>(null)
+  const { data: activeViewBill } = useBill(selectedBillId)
+
   const { data: records, isLoading } = useRecords({ fromDate, toDate, kinds })
   const deleteRecord = useDeleteRecord()
   const { showToast } = useToast()
@@ -69,7 +88,6 @@ export function RecordsPage() {
     setToDate(today)
   }
 
-  /** Tapping a date header isolates that single day. */
   function jumpToDay(date: string) {
     setFromDate(date)
     setToDate(date)
@@ -89,8 +107,28 @@ export function RecordsPage() {
     )
   }
 
+  function handleCreateBillForSale(saleRow: SaleRecordRow) {
+    const p = saleRow.pipe_products
+    const label = p ? formatPipeProductLabel(p.diameter_inches, p.weight_kg) : 'Pipe Product'
+    const kg = p ? piecesToKg(saleRow.quantity, p.weight_kg) : 0
+
+    setCreateBillModalData({
+      saleEntryIds: [saleRow.id],
+      entryDate: saleRow.entry_date,
+      customerId: saleRow.customer_id,
+      customerName: saleRow.customers?.name || '',
+      lines: [
+        {
+          pipeProductId: saleRow.pipe_product_id,
+          description: label,
+          weightKg: kg,
+          quantityPcs: saleRow.quantity,
+        },
+      ],
+    })
+  }
+
   const isSingleDay = fromDate === toDate
-  // Distinguishes "your filters hid everything" from "you haven't logged anything yet".
   const isFiltered = kinds.length > 0 || fromDate !== isoDateDaysAgo(6) || toDate !== today
 
   function resetFilters() {
@@ -210,10 +248,13 @@ export function RecordsPage() {
             <div className="space-y-2">
               {dayRecords.map((record) => {
                 const { title, subtitle, amount, amountKgPcs } = describeRecord(record)
+                const isSale = record.kind === 'sale'
+                const saleBill = isSale ? (record.row as SaleRecordRow).bills : null
+
                 return (
                   <div
                     key={`${record.kind}:${record.row.id}`}
-                    className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -225,7 +266,31 @@ export function RecordsPage() {
                         <span className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
                           {title}
                         </span>
+
+                        {/* Bill Badge on Sales */}
+                        {isSale && (
+                          saleBill ? (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedBillId(saleBill.id)}
+                              className="inline-flex items-center gap-1 rounded-md bg-teal-50 px-2 py-0.5 font-mono text-xs font-semibold text-teal-700 hover:bg-teal-100 dark:bg-teal-950/60 dark:text-teal-300 dark:hover:bg-teal-900/60"
+                            >
+                              <Receipt className="h-3 w-3" />
+                              {saleBill.bill_number}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleCreateBillForSale(record.row as SaleRecordRow)}
+                              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                            >
+                              <Receipt className="h-3 w-3" />
+                              + Create Bill
+                            </button>
+                          )
+                        )}
                       </div>
+
                       {subtitle && (
                         <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
                           {subtitle}
@@ -239,33 +304,35 @@ export function RecordsPage() {
                       )}
                     </div>
 
-                    <span className="shrink-0 text-sm">
-                      {amountKgPcs ? (
-                        <AmountKgPcs kg={amountKgPcs.kg} pcs={amountKgPcs.pcs} />
-                      ) : (
-                        <span className="font-semibold text-slate-900 dark:text-slate-100">
-                          {amount}
-                        </span>
-                      )}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span className="text-sm">
+                        {amountKgPcs ? (
+                          <AmountKgPcs kg={amountKgPcs.kg} pcs={amountKgPcs.pcs} />
+                        ) : (
+                          <span className="font-semibold text-slate-900 dark:text-slate-100">
+                            {amount}
+                          </span>
+                        )}
+                      </span>
 
-                    <div className="flex shrink-0 items-center gap-1">
-                      <button
-                        type="button"
-                        aria-label={`Edit ${RECORD_KIND_LABEL[record.kind]} entry`}
-                        onClick={() => setEditing(record)}
-                        className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Delete ${RECORD_KIND_LABEL[record.kind]} entry`}
-                        onClick={() => setDeleting(record)}
-                        className="rounded-full p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          aria-label={`Edit ${RECORD_KIND_LABEL[record.kind]} entry`}
+                          onClick={() => setEditing(record)}
+                          className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Delete ${RECORD_KIND_LABEL[record.kind]} entry`}
+                          onClick={() => setDeleting(record)}
+                          className="rounded-full p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )
@@ -276,6 +343,18 @@ export function RecordsPage() {
       </div>
 
       <EditRecordModal record={editing} onClose={() => setEditing(null)} />
+
+      <CreateBillModal
+        open={createBillModalData !== null}
+        onClose={() => setCreateBillModalData(null)}
+        initialData={createBillModalData ?? undefined}
+      />
+
+      <BillPdfModal
+        open={selectedBillId !== null}
+        bill={activeViewBill ?? null}
+        onClose={() => setSelectedBillId(null)}
+      />
 
       <ConfirmDialog
         open={deleting !== null}
