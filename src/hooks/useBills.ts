@@ -49,11 +49,6 @@ export function useNextBillNumber() {
   return useQuery({
     queryKey: ['next_bill_number'],
     queryFn: async () => {
-      // First try RPC
-      const { data: rpcData, error: rpcError } = await supabase.rpc('generate_next_bill_number')
-      if (!rpcError && rpcData) return rpcData as string
-
-      // Fallback: manually generate using company settings query
       const { data: settings } = await supabase
         .from('company_settings')
         .select('bill_prefix, next_bill_number')
@@ -64,7 +59,6 @@ export function useNextBillNumber() {
       const num = settings?.next_bill_number ?? 1
       return `${prefix}${String(num).padStart(4, '0')}`
     },
-    staleTime: 0, // Always fetch fresh number
   })
 }
 
@@ -106,12 +100,20 @@ export function useCreateBill() {
 
   return useMutation({
     mutationFn: async (input: CreateBillInput): Promise<BillRow> => {
-      const { sale_entry_ids, ...billData } = input
+      const { sale_entry_ids, bill_number: _providedNum, ...billData } = input
+
+      // Atomically generate the next bill number on actual save
+      let finalBillNumber = _providedNum
+      const { data: rpcBillNo, error: rpcError } = await supabase.rpc('generate_next_bill_number')
+      if (!rpcError && rpcBillNo) {
+        finalBillNumber = rpcBillNo as string
+      }
 
       const { data, error } = await supabase
         .from('bills')
         .insert({
           ...billData,
+          bill_number: finalBillNumber,
           discount: billData.discount ?? 0,
           tax: billData.tax ?? 0,
           status: 'active',
@@ -135,6 +137,7 @@ export function useCreateBill() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bills'] })
+      queryClient.invalidateQueries({ queryKey: ['next_bill_number'] })
       queryClient.invalidateQueries({ queryKey: ['company_settings'] })
       queryClient.invalidateQueries({ queryKey: ['records'] })
     },

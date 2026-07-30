@@ -233,3 +233,111 @@ export function groupRecordsByDate(records: EntryRecord[]): [string, EntryRecord
   }
   return Array.from(groups.entries())
 }
+
+export type GroupedTransaction = {
+  id: string
+  kind: RecordKind
+  date: string
+  title: string
+  subtitle: string | null
+  totalKg: number
+  totalPcs: number
+  bill: BillRef | null
+  items: EntryRecord[]
+}
+
+/** Groups entries into multi-item transactions (Sales, Production runs, Purchases) per date */
+export function groupRecordsByTransaction(records: EntryRecord[]): [string, GroupedTransaction[]][] {
+  const dateMap = new Map<string, GroupedTransaction[]>()
+
+  for (const record of records) {
+    const date = record.row.entry_date
+    if (!dateMap.has(date)) {
+      dateMap.set(date, [])
+    }
+    const dayGroups = dateMap.get(date)!
+
+    // Determine group key for transaction
+    let key = ''
+    if (record.kind === 'sale') {
+      const s = record.row as SaleRecordRow
+      if (s.bill_id) {
+        key = `sale_bill_${s.bill_id}`
+      } else {
+        const custKey = s.customer_id || s.customers?.name || 'cash'
+        const timeBatch = Math.floor(new Date(s.created_at).getTime() / (5 * 60 * 1000))
+        key = `sale_${custKey}_${timeBatch}`
+      }
+    } else if (record.kind === 'production') {
+      const timeBatch = Math.floor(new Date(record.row.created_at).getTime() / (5 * 60 * 1000))
+      key = `prod_${timeBatch}`
+    } else if (record.kind === 'raw_material_purchase') {
+      const supplier = record.row.supplier_name || 'unknown'
+      const timeBatch = Math.floor(new Date(record.row.created_at).getTime() / (5 * 60 * 1000))
+      key = `raw_${supplier}_${timeBatch}`
+    } else if (record.kind === 'scrap_purchase') {
+      const dealer = record.row.scrap_dealer_id || record.row.scrap_dealers?.name || 'unknown'
+      const timeBatch = Math.floor(new Date(record.row.created_at).getTime() / (5 * 60 * 1000))
+      key = `scrap_${dealer}_${timeBatch}`
+    } else {
+      key = `${record.kind}_${record.row.id}`
+    }
+
+    let existingGroup = dayGroups.find((g) => g.id === key)
+    if (!existingGroup) {
+      let title = ''
+      let subtitle: string | null = null
+      let bill: BillRef | null = null
+
+      if (record.kind === 'sale') {
+        const s = record.row as SaleRecordRow
+        title = s.customers?.name || 'Cash Sale'
+        bill = s.bills
+      } else if (record.kind === 'production') {
+        title = 'Pipe Production'
+      } else if (record.kind === 'raw_material_purchase') {
+        title = 'Raw Material Purchase'
+        subtitle = record.row.supplier_name ? `Supplier: ${record.row.supplier_name}` : null
+      } else if (record.kind === 'scrap_purchase') {
+        title = 'Scrap Purchase'
+        subtitle = record.row.scrap_dealers?.name ? `Dealer: ${record.row.scrap_dealers.name}` : null
+      } else if (record.kind === 'recycling') {
+        title = 'Recycling Production'
+      } else {
+        title = 'Factory Waste'
+      }
+
+      existingGroup = {
+        id: key,
+        kind: record.kind,
+        date,
+        title,
+        subtitle,
+        totalKg: 0,
+        totalPcs: 0,
+        bill,
+        items: [],
+      }
+      dayGroups.push(existingGroup)
+    }
+
+    existingGroup.items.push(record)
+
+    // Accumulate total weight and pcs
+    if (record.kind === 'production' || record.kind === 'sale') {
+      const p = record.row.pipe_products
+      const kg = p ? piecesToKg(record.row.quantity, p.weight_kg) : 0
+      existingGroup.totalKg += kg
+      existingGroup.totalPcs += record.row.quantity
+    } else if (record.kind === 'recycling') {
+      existingGroup.totalKg += record.row.total_output_kg ?? 0
+    } else if (record.kind === 'raw_material_purchase') {
+      existingGroup.totalKg += record.row.total_qty_kg ?? 0
+    } else if (record.kind === 'scrap_purchase' || record.kind === 'factory_waste') {
+      existingGroup.totalKg += record.row.quantity_kg ?? 0
+    }
+  }
+
+  return Array.from(dateMap.entries())
+}
+

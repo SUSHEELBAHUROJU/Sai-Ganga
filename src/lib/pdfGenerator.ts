@@ -1,7 +1,7 @@
 import jsPDF from 'jspdf'
 import type { BillRow } from '../hooks/useBills'
 import type { CompanySettings } from '../hooks/useCompanySettings'
-import { formatDateLabel } from './date'
+import { formatInvoiceDate } from './date'
 
 /** Helper to convert numbers to Indian Rupees in words */
 function numberToWordsRupees(amount: number): string {
@@ -102,7 +102,7 @@ export function generateBillPdfDoc(bill: BillRow, company: CompanySettings): jsP
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(9)
   doc.setTextColor(255, 255, 255)
-  doc.text('TAX INVOICE', pageWidth - margin - 16, y - 0.5, { align: 'center' })
+  doc.text('INVOICE', pageWidth - margin - 16, y - 0.5, { align: 'center' })
 
   y += 5
   // Subtitle / Address / GST
@@ -189,7 +189,7 @@ export function generateBillPdfDoc(bill: BillRow, company: CompanySettings): jsP
 
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(...DARK_GRAY)
-  doc.text(`Invoice Date: ${formatDateLabel(bill.bill_date)}`, rightColX, boxY + 9)
+  doc.text(`Invoice Date: ${formatInvoiceDate(bill.bill_date)}`, rightColX, boxY + 9)
 
   if (bill.status === 'voided') {
     doc.setFont('helvetica', 'bold')

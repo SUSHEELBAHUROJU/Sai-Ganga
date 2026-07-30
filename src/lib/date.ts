@@ -109,6 +109,31 @@ export function formatShortDate(dateStr: string): string {
   return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 }
 
+/** e.g. "30-July-2026" — for formal printed invoices. */
+export function formatInvoiceDate(dateStr: string): string {
+  if (!dateStr) return ''
+  const d = new Date(`${dateStr}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return dateStr
+  const day = String(d.getDate()).padStart(2, '0')
+  const monthNames = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ]
+  const month = monthNames[d.getMonth()]
+  const year = d.getFullYear()
+  return `${day}-${month}-${year}`
+}
+
 /** e.g. "Monday, 27 July 2026" — the dashboard header. */
 export function formatFullDate(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00`)
@@ -119,3 +144,4 @@ export function formatFullDate(dateStr: string): string {
     year: 'numeric',
   })
 }
+

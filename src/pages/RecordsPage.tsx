@@ -1,14 +1,15 @@
 import { useState } from 'react'
-import { History, Pencil, SearchX, Trash2, Receipt } from 'lucide-react'
+import { History, Pencil, SearchX, Trash2, Receipt, ChevronDown, ChevronUp, Layers } from 'lucide-react'
 import {
   useRecords,
-  groupRecordsByDate,
+  groupRecordsByTransaction,
   describeRecord,
   describeRecordAmountText,
   RECORD_KIND_LABEL,
   type EntryRecord,
   type RecordKind,
   type SaleRecordRow,
+  type GroupedTransaction,
 } from '../hooks/useRecords'
 import { useDeleteRecord } from '../hooks/useRecordMutations'
 import { useBill } from '../hooks/useBills'
@@ -27,7 +28,7 @@ import {
   clampRangeStart,
   MAX_QUERY_RANGE_DAYS,
 } from '../lib/date'
-import { formatPipeProductLabel, piecesToKg } from '../lib/format'
+import { formatPipeProductLabel, piecesToKg, formatQty } from '../lib/format'
 import { LoadingState, EmptyState } from '../components/States'
 
 const ALL_KINDS = Object.keys(RECORD_KIND_LABEL) as RecordKind[]
@@ -56,6 +57,9 @@ export function RecordsPage() {
   const [editing, setEditing] = useState<EntryRecord | null>(null)
   const [deleting, setDeleting] = useState<EntryRecord | null>(null)
 
+  // Track collapsed groups (true = collapsed)
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
+
   // Billing state
   const [createBillModalData, setCreateBillModalData] = useState<{
     saleEntryIds?: string[]
@@ -77,7 +81,7 @@ export function RecordsPage() {
   const deleteRecord = useDeleteRecord()
   const { showToast } = useToast()
 
-  const groups = groupRecordsByDate(records ?? [])
+  const transactionGroups = groupRecordsByTransaction(records ?? [])
 
   function toggleKind(kind: RecordKind) {
     setKinds((prev) => (prev.includes(kind) ? prev.filter((k) => k !== kind) : [...prev, kind]))
@@ -91,6 +95,10 @@ export function RecordsPage() {
   function jumpToDay(date: string) {
     setFromDate(date)
     setToDate(date)
+  }
+
+  function toggleGroupCollapse(groupId: string) {
+    setCollapsedGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }))
   }
 
   function handleDelete() {
@@ -107,24 +115,28 @@ export function RecordsPage() {
     )
   }
 
-  function handleCreateBillForSale(saleRow: SaleRecordRow) {
-    const p = saleRow.pipe_products
-    const label = p ? formatPipeProductLabel(p.diameter_inches, p.weight_kg) : 'Pipe Product'
-    const kg = p ? piecesToKg(saleRow.quantity, p.weight_kg) : 0
+  function handleCreateBillForGroup(group: GroupedTransaction) {
+    const saleRows = group.items.map((i) => i.row as SaleRecordRow)
+    const saleEntryIds = saleRows.map((s) => s.id)
+    const lines = saleRows.map((s) => {
+      const p = s.pipe_products
+      const label = p ? formatPipeProductLabel(p.diameter_inches, p.weight_kg) : 'Pipe Product'
+      const kg = p ? piecesToKg(s.quantity, p.weight_kg) : 0
+      return {
+        pipeProductId: s.pipe_product_id,
+        description: label,
+        weightKg: kg,
+        quantityPcs: s.quantity,
+      }
+    })
 
+    const firstSale = saleRows[0]
     setCreateBillModalData({
-      saleEntryIds: [saleRow.id],
-      entryDate: saleRow.entry_date,
-      customerId: saleRow.customer_id,
-      customerName: saleRow.customers?.name || '',
-      lines: [
-        {
-          pipeProductId: saleRow.pipe_product_id,
-          description: label,
-          weightKg: kg,
-          quantityPcs: saleRow.quantity,
-        },
-      ],
+      saleEntryIds,
+      entryDate: group.date,
+      customerId: firstSale?.customer_id || null,
+      customerName: firstSale?.customers?.name || group.title || 'Cash Customer',
+      lines,
     })
   }
 
@@ -208,7 +220,7 @@ export function RecordsPage() {
       {isLoading && <LoadingState />}
 
       {!isLoading &&
-        groups.length === 0 &&
+        transactionGroups.length === 0 &&
         (isFiltered ? (
           <EmptyState
             icon={SearchX}
@@ -227,113 +239,171 @@ export function RecordsPage() {
           />
         ))}
 
-      <div className="space-y-5">
-        {groups.map(([date, dayRecords]) => (
+      <div className="space-y-6">
+        {transactionGroups.map(([date, groups]) => (
           <div key={date}>
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400">
+            <div className="mb-2.5 flex items-center justify-between gap-2 border-b border-slate-200 pb-1.5 dark:border-slate-800">
+              <h3 className="text-sm font-bold text-slate-700 dark:text-slate-300">
                 {formatDateLabel(date)}
               </h3>
               {!isSingleDay && (
                 <button
                   type="button"
                   onClick={() => jumpToDay(date)}
-                  className="-mr-2 rounded-lg px-2 py-2 text-xs font-medium text-teal-600 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950/40"
+                  className="-mr-2 rounded-lg px-2 py-1 text-xs font-medium text-teal-600 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950/40"
                 >
                   View this day
                 </button>
               )}
             </div>
 
-            <div className="space-y-2">
-              {dayRecords.map((record) => {
-                const { title, subtitle, amount, amountKgPcs } = describeRecord(record)
-                const isSale = record.kind === 'sale'
-                const saleBill = isSale ? (record.row as SaleRecordRow).bills : null
+            <div className="space-y-3 pt-1">
+              {groups.map((group) => {
+                const isMultiItem = group.items.length > 1
+                const isCollapsed = Boolean(collapsedGroups[group.id])
+                const isSale = group.kind === 'sale'
+                const saleBill = group.bill
 
                 return (
                   <div
-                    key={`${record.kind}:${record.row.id}`}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900"
+                    key={group.id}
+                    className="rounded-xl border border-slate-200 bg-white shadow-sm transition-all dark:border-slate-800 dark:bg-slate-900"
                   >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
+                    {/* Group Card Header */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 sm:p-4">
+                      <div className="flex flex-wrap items-center gap-2.5 min-w-0 flex-1">
                         <span
-                          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${KIND_BADGE[record.kind]}`}
+                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider ${KIND_BADGE[group.kind]}`}
                         >
-                          {RECORD_KIND_LABEL[record.kind]}
-                        </span>
-                        <span className="truncate text-sm font-medium text-slate-900 dark:text-slate-100">
-                          {title}
+                          {RECORD_KIND_LABEL[group.kind]}
                         </span>
 
-                        {/* Bill Badge on Sales */}
+                        <span className="font-semibold text-slate-900 dark:text-slate-100 text-sm sm:text-base">
+                          {group.title}
+                        </span>
+
+                        {isMultiItem && (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                            <Layers className="h-3 w-3" />
+                            {group.items.length} items
+                          </span>
+                        )}
+
+                        {/* Bill Badge on Sales Group */}
                         {isSale && (
                           saleBill ? (
                             <button
                               type="button"
                               onClick={() => setSelectedBillId(saleBill.id)}
-                              className="inline-flex items-center gap-1 rounded-md bg-teal-50 px-2 py-0.5 font-mono text-xs font-semibold text-teal-700 hover:bg-teal-100 dark:bg-teal-950/60 dark:text-teal-300 dark:hover:bg-teal-900/60"
+                              className="inline-flex items-center gap-1 rounded-md bg-teal-100 px-2.5 py-1 font-mono text-xs font-bold text-teal-800 hover:bg-teal-200 dark:bg-teal-950/80 dark:text-teal-300 dark:hover:bg-teal-900"
                             >
-                              <Receipt className="h-3 w-3" />
+                              <Receipt className="h-3.5 w-3.5" />
                               {saleBill.bill_number}
                             </button>
                           ) : (
                             <button
                               type="button"
-                              onClick={() => handleCreateBillForSale(record.row as SaleRecordRow)}
-                              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                              onClick={() => handleCreateBillForGroup(group)}
+                              className="inline-flex items-center gap-1 rounded-md border border-teal-300 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-700 hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/60 dark:text-teal-300"
                             >
-                              <Receipt className="h-3 w-3" />
+                              <Receipt className="h-3.5 w-3.5" />
                               + Create Bill
                             </button>
                           )
                         )}
                       </div>
 
-                      {subtitle && (
-                        <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400">
-                          {subtitle}
-                        </p>
-                      )}
+                      {/* Header Right Side (Total + Expand Toggle) */}
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="text-right">
+                          {group.totalPcs > 0 ? (
+                            <AmountKgPcs kg={group.totalKg} pcs={group.totalPcs} />
+                          ) : (
+                            <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                              {formatQty(group.totalKg)} kg
+                            </span>
+                          )}
+                        </div>
 
-                      {record.row.notes && (
-                        <p className="mt-0.5 truncate text-xs italic text-slate-400 dark:text-slate-500">
-                          {record.row.notes}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex shrink-0 items-center gap-3">
-                      <span className="text-sm">
-                        {amountKgPcs ? (
-                          <AmountKgPcs kg={amountKgPcs.kg} pcs={amountKgPcs.pcs} />
-                        ) : (
-                          <span className="font-semibold text-slate-900 dark:text-slate-100">
-                            {amount}
-                          </span>
+                        {isMultiItem && (
+                          <button
+                            type="button"
+                            onClick={() => toggleGroupCollapse(group.id)}
+                            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+                            aria-label="Toggle group items"
+                          >
+                            {isCollapsed ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronUp className="h-4 w-4" />
+                            )}
+                          </button>
                         )}
-                      </span>
-
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          aria-label={`Edit ${RECORD_KIND_LABEL[record.kind]} entry`}
-                          onClick={() => setEditing(record)}
-                          className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={`Delete ${RECORD_KIND_LABEL[record.kind]} entry`}
-                          onClick={() => setDeleting(record)}
-                          className="rounded-full p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
                       </div>
                     </div>
+
+                    {/* Group Items Detail List */}
+                    {(!isCollapsed || !isMultiItem) && (
+                      <div className="border-t border-slate-100 bg-slate-50/50 p-2 sm:p-3 dark:border-slate-800/80 dark:bg-slate-950/40 rounded-b-xl space-y-1.5">
+                        {group.items.map((item) => {
+                          const { title: itemTitle, subtitle: itemSub, amount, amountKgPcs } = describeRecord(item)
+
+                          return (
+                            <div
+                              key={`${item.kind}:${item.row.id}`}
+                              className="flex items-center justify-between gap-3 rounded-lg border border-slate-200/70 bg-white px-3 py-2 text-xs dark:border-slate-800 dark:bg-slate-900"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <span className="font-medium text-slate-800 dark:text-slate-200">
+                                  {isMultiItem ? itemTitle : group.subtitle || itemTitle}
+                                </span>
+
+                                {isMultiItem && itemSub && (
+                                  <span className="ml-2 text-slate-400 dark:text-slate-500">
+                                    ({itemSub})
+                                  </span>
+                                )}
+
+                                {item.row.notes && (
+                                  <p className="truncate italic text-slate-400 dark:text-slate-500">
+                                    {item.row.notes}
+                                  </p>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                  {amountKgPcs ? (
+                                    <AmountKgPcs kg={amountKgPcs.kg} pcs={amountKgPcs.pcs} />
+                                  ) : (
+                                    amount
+                                  )}
+                                </span>
+
+                                <div className="flex items-center gap-1 ml-2">
+                                  <button
+                                    type="button"
+                                    aria-label={`Edit ${RECORD_KIND_LABEL[item.kind]} entry`}
+                                    onClick={() => setEditing(item)}
+                                    className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label={`Delete ${RECORD_KIND_LABEL[item.kind]} entry`}
+                                    onClick={() => setDeleting(item)}
+                                    className="rounded-full p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -358,13 +428,14 @@ export function RecordsPage() {
 
       <ConfirmDialog
         open={deleting !== null}
-        title="Delete entry?"
+        title={`Delete ${deleting ? RECORD_KIND_LABEL[deleting.kind] : ''}?`}
         message={
           deleting
-            ? `Permanently delete this ${RECORD_KIND_LABEL[deleting.kind].toLowerCase()} entry of ${describeRecordAmountText(deleting)}? Stock will be recalculated without it.`
+            ? `Are you sure you want to delete this ${RECORD_KIND_LABEL[deleting.kind]} entry (${describeRecordAmountText(deleting)})? This will reverse the stock adjustments made by this entry.`
             : ''
         }
         confirmLabel="Delete"
+        danger
         onConfirm={handleDelete}
         onCancel={() => setDeleting(null)}
       />
