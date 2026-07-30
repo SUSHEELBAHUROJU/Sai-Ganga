@@ -86,50 +86,40 @@ export function generateBillPdfDoc(bill: BillRow, company: CompanySettings): jsP
   const BORDER_GRAY = [226, 232, 240] as const // Border Gray #E2E8F0
 
   // ==========================================
-  // 1. TOP HEADER BAND (Gradient-Style Navy & Red)
+  // 1. TOP ACCENT HEADER BAND
   // ==========================================
-  const headerHeight = 13
   doc.setFillColor(...NAVY)
-  doc.rect(margin, y, contentWidth, headerHeight, 'F')
-
-  // Red accent bar below header band
+  doc.rect(margin, y, contentWidth, 3.5, 'F')
   doc.setFillColor(...RED)
-  doc.rect(margin, y + headerHeight, contentWidth, 1.5, 'F')
+  doc.rect(margin, y + 3.5, contentWidth, 1.5, 'F')
 
-  // Company Brand Name inside Top Band (Left side)
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10.5)
-  doc.setTextColor(255, 255, 255)
-  doc.text((company.business_name || 'SAI GANGA POLYMER INDUSTRIES').toUpperCase(), margin + 4, y + 8.5)
-
-  // "TAX INVOICE" Ribbon/Badge Container (Right side)
-  const badgeWidth = 36
-  const badgeHeight = 8.5
-  const badgeX = pageWidth - margin - badgeWidth - 3
-  const badgeY = y + (headerHeight - badgeHeight) / 2
-
-  doc.setFillColor(...RED)
-  doc.rect(badgeX, badgeY, badgeWidth, badgeHeight, 'F')
-  doc.setDrawColor(255, 255, 255)
-  doc.setLineWidth(0.3)
-  doc.rect(badgeX, badgeY, badgeWidth, badgeHeight, 'S')
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
-  doc.setTextColor(255, 255, 255)
-  doc.text('TAX INVOICE', badgeX + badgeWidth / 2, badgeY + 5.8, { align: 'center' })
-
-  y += headerHeight + 6.5
+  y += 11
 
   // ==========================================
-  // COMPANY DETAILS (Below Header Band)
+  // COMPANY BRANDING (DISPLAYED ONCE ONLY)
   // ==========================================
+  const businessName = company.business_name || 'SAI GANGA POLYMER INDUSTRIES'
+
+  // Company Name
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(15)
   doc.setTextColor(...NAVY)
-  doc.text(company.business_name || 'SAI GANGA POLYMER INDUSTRIES', margin, y)
+  doc.text(businessName, margin, y)
 
-  y += 5
+  // "INVOICE" Badge Container on top right (Removed "TAX" prefix)
+  const badgeWidth = 28
+  const badgeHeight = 7.5
+  const badgeX = pageWidth - margin - badgeWidth
+  const badgeY = y - 5.5
+
+  doc.setFillColor(...NAVY)
+  doc.rect(badgeX, badgeY, badgeWidth, badgeHeight, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(255, 255, 255)
+  doc.text('INVOICE', badgeX + badgeWidth / 2, badgeY + 5.2, { align: 'center' })
+
+  y += 5.5
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8.5)
   doc.setTextColor(...MUTED_TEXT)
@@ -421,7 +411,7 @@ export function generateBillPdfDoc(bill: BillRow, company: CompanySettings): jsP
     const lineH = isGrand ? 9.5 : 6.2
 
     if (isGrand) {
-      // Bold Gradient-Like Solid Navy Box for GRAND TOTAL
+      // Bold Solid Navy Box for GRAND TOTAL
       doc.setFillColor(...NAVY)
       doc.rect(summaryX, summaryY, summaryWidth, lineH, 'F')
 
@@ -488,7 +478,7 @@ export function generateBillPdfDoc(bill: BillRow, company: CompanySettings): jsP
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8.5)
   doc.setTextColor(...NAVY)
-  doc.text(`For ${company.business_name || 'SAI GANGA POLYMER INDUSTRIES'}`, sigX, sigY)
+  doc.text(`For ${businessName}`, sigX, sigY)
 
   // Signature line
   doc.setDrawColor(...BORDER_GRAY)
@@ -503,7 +493,6 @@ export function generateBillPdfDoc(bill: BillRow, company: CompanySettings): jsP
   // Footer Divider Bar & Closing Text
   const footerY = 276
 
-  // Gradient-Style Thin Divider Line
   doc.setDrawColor(...NAVY)
   doc.setLineWidth(0.6)
   doc.line(margin, footerY, pageWidth - margin, footerY)
@@ -511,14 +500,14 @@ export function generateBillPdfDoc(bill: BillRow, company: CompanySettings): jsP
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8.5)
   doc.setTextColor(...NAVY)
-  doc.text('Thank you for your business with Sai Ganga Polymer Industries!', pageWidth / 2, footerY + 5, {
+  doc.text('Thank you for your business!', pageWidth / 2, footerY + 5, {
     align: 'center',
   })
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)
   doc.setTextColor(...MUTED_TEXT)
-  doc.text('This is a computer-generated tax invoice.', pageWidth / 2, footerY + 8.5, {
+  doc.text('This is a computer-generated invoice.', pageWidth / 2, footerY + 8.5, {
     align: 'center',
   })
 
