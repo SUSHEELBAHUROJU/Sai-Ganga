@@ -14,6 +14,36 @@ type EditBillModalProps = {
   onClose: () => void
 }
 
+function parseLineItems(rawItems: any): BillLineItem[] {
+  let items = rawItems
+  if (typeof items === 'string') {
+    try {
+      items = JSON.parse(items)
+    } catch {
+      items = []
+    }
+  }
+  if (!Array.isArray(items)) return []
+  return items.map((item) => {
+    const weight_kg = Number(item?.weight_kg) || 0
+    const price_per_kg = Number(item?.price_per_kg) || 0
+    const amount = Number(item?.amount) || Math.round(weight_kg * price_per_kg * 100) / 100
+    return {
+      pipe_product_id: item?.pipe_product_id || null,
+      description: item?.description || 'Pipe Product',
+      quantity_pcs: item?.quantity_pcs != null ? Number(item.quantity_pcs) : null,
+      weight_kg,
+      price_per_kg,
+      amount,
+    }
+  })
+}
+
+function formatINR(val: any): string {
+  const n = Number(val) || 0
+  return n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
 export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
   const { data: customers } = useCustomers()
   const { data: pipeProducts } = usePipeProducts()
@@ -43,21 +73,11 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
       setTax(String(bill.tax ?? 0))
       setNotes(bill.notes || '')
       setGlobalRate('')
-
-      setLineItems(
-        (bill.line_items || []).map((item) => ({
-          pipe_product_id: item.pipe_product_id || null,
-          description: item.description || '',
-          quantity_pcs: item.quantity_pcs ?? null,
-          weight_kg: item.weight_kg || 0,
-          price_per_kg: item.price_per_kg || 0,
-          amount: item.amount || 0,
-        })),
-      )
+      setLineItems(parseLineItems(bill.line_items))
     }
   }, [open, bill])
 
-  if (!bill) return null
+  if (!open || !bill) return null
 
   function handleCustomerSelect(id: string) {
     setSelectedCustomerId(id)
@@ -88,7 +108,7 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
     const product = (pipeProducts ?? []).find((p) => p.id === productId)
     setLineItems((prev) => {
       const next = [...prev]
-      if (product) {
+      if (product && next[index]) {
         const pcs = next[index].quantity_pcs ?? 1
         const weightKg = piecesToKg(pcs, product.weight_kg)
         const price = next[index].price_per_kg || parseFloat(globalRate) || 0
@@ -101,7 +121,7 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
           price_per_kg: price,
           amount: Math.round(weightKg * price * 100) / 100,
         }
-      } else {
+      } else if (next[index]) {
         next[index].pipe_product_id = null
       }
       return next
@@ -112,6 +132,7 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
     const pcs = parseInt(pcsStr) || 0
     setLineItems((prev) => {
       const next = [...prev]
+      if (!next[index]) return prev
       const item = next[index]
       const product = (pipeProducts ?? []).find((p) => p.id === item.pipe_product_id)
 
@@ -135,6 +156,7 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
     const kg = parseFloat(kgStr) || 0
     setLineItems((prev) => {
       const next = [...prev]
+      if (!next[index]) return prev
       const item = next[index]
       const price = item.price_per_kg || parseFloat(globalRate) || 0
       next[index] = {
@@ -150,6 +172,7 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
     const price = parseFloat(priceStr) || 0
     setLineItems((prev) => {
       const next = [...prev]
+      if (!next[index]) return prev
       const item = next[index]
       const kg = item.weight_kg || 0
       next[index] = {
@@ -164,6 +187,7 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
   function handleDescriptionChange(index: number, desc: string) {
     setLineItems((prev) => {
       const next = [...prev]
+      if (!next[index]) return prev
       next[index] = { ...next[index], description: desc }
       return next
     })
@@ -383,7 +407,7 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
 
                   <input
                     type="text"
-                    value={item.description}
+                    value={item.description || ''}
                     onChange={(e) => handleDescriptionChange(idx, e.target.value)}
                     placeholder="Description"
                     className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-700 outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
@@ -434,7 +458,7 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
                 {/* Amount & Trash */}
                 <div className="col-span-2 flex items-center justify-between pl-1">
                   <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
-                    ₹{item.amount.toLocaleString('en-IN')}
+                    ₹{formatINR(item.amount)}
                   </span>
 
                   <button
@@ -456,7 +480,7 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
           <div className="flex justify-between text-xs text-slate-600 dark:text-slate-400 font-medium">
             <span>Subtotal:</span>
             <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
-              ₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              ₹{formatINR(subtotal)}
             </span>
           </div>
 
@@ -489,7 +513,7 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
               Grand Total:
             </span>
             <span className="font-mono text-lg font-bold text-teal-600 dark:text-teal-400">
-              ₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              ₹{formatINR(grandTotal)}
             </span>
           </div>
         </div>

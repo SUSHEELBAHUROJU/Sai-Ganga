@@ -301,7 +301,8 @@ export function groupRecordsByTransaction(records: EntryRecord[]): [string, Grou
       if (record.kind === 'sale') {
         const s = record.row as SaleRecordRow
         title = s.customers?.name || 'Cash Sale'
-        bill = s.bills
+        const rawBill = s.bills as any
+        bill = Array.isArray(rawBill) ? rawBill[0] ?? null : rawBill ?? null
       } else if (record.kind === 'production') {
         title = 'Pipe Production'
       } else if (record.kind === 'raw_material_purchase') {

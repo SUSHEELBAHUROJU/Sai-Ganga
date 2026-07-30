@@ -87,10 +87,10 @@ export function useBill(id?: string | null) {
         .from('bills')
         .select('*')
         .eq('id', id)
-        .single()
+        .maybeSingle()
 
       if (error) throw error
-      return data as unknown as BillRow
+      return (data ?? null) as unknown as BillRow | null
     },
   })
 }
