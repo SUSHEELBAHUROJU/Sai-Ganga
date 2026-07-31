@@ -268,30 +268,30 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="Bill Number">
-            <input
-              type="text"
-              disabled
-              value={bill.bill_number}
-              className="w-full rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-mono font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
-            />
-          </Field>
+          <Field
+            label="Bill Number"
+            type="text"
+            disabled
+            value={bill.bill_number}
+            className="bg-slate-100 font-mono font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+          />
 
-          <Field label="Invoice Date">
-            <input
-              type="date"
-              required
-              value={billDate}
-              onChange={(e) => setBillDate(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            />
-          </Field>
+          <Field
+            label="Invoice Date"
+            type="date"
+            required
+            value={billDate}
+            onChange={(e) => setBillDate(e.target.value)}
+          />
 
-          <Field label="Select Registered Customer">
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+              Select Registered Customer
+            </span>
             <select
               value={selectedCustomerId}
               onChange={(e) => handleCustomerSelect(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             >
               <option value="">-- Custom / Cash Customer --</option>
               {(customers ?? []).map((c) => (
@@ -300,40 +300,34 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
                 </option>
               ))}
             </select>
-          </Field>
+          </label>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="Customer Name" required>
-            <input
-              type="text"
-              required
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              placeholder="e.g. Susheel Polymers"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            />
-          </Field>
+          <Field
+            label="Customer Name"
+            type="text"
+            required
+            value={customerName}
+            onChange={(e) => setCustomerName(e.target.value)}
+            placeholder="e.g. Susheel Polymers"
+          />
 
-          <Field label="Customer Phone">
-            <input
-              type="text"
-              value={customerPhone}
-              onChange={(e) => setCustomerPhone(e.target.value)}
-              placeholder="10-digit number"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            />
-          </Field>
+          <Field
+            label="Customer Phone"
+            type="text"
+            value={customerPhone}
+            onChange={(e) => setCustomerPhone(e.target.value)}
+            placeholder="10-digit number"
+          />
 
-          <Field label="Customer Address">
-            <input
-              type="text"
-              value={customerAddress}
-              onChange={(e) => setCustomerAddress(e.target.value)}
-              placeholder="City, District, State"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            />
-          </Field>
+          <Field
+            label="Customer Address"
+            type="text"
+            value={customerAddress}
+            onChange={(e) => setCustomerAddress(e.target.value)}
+            placeholder="City, District, State"
+          />
         </div>
 
         {/* Global Rate Auto-Fill */}
@@ -485,27 +479,25 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
           </div>
 
           <div className="grid grid-cols-2 gap-3 pt-1 border-t border-slate-200 dark:border-slate-800">
-            <Field label="Discount (₹)">
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={discount}
-                onChange={(e) => setDiscount(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs font-mono text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-              />
-            </Field>
+            <Field
+              label="Discount (₹)"
+              type="number"
+              step="0.01"
+              min="0"
+              value={discount}
+              onChange={(e) => setDiscount(e.target.value)}
+              className="font-mono text-xs"
+            />
 
-            <Field label="Tax / GST (₹)">
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={tax}
-                onChange={(e) => setTax(e.target.value)}
-                className="w-full rounded-lg border border-slate-300 px-2 py-1 text-xs font-mono text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-              />
-            </Field>
+            <Field
+              label="Tax / GST (₹)"
+              type="number"
+              step="0.01"
+              min="0"
+              value={tax}
+              onChange={(e) => setTax(e.target.value)}
+              className="font-mono text-xs"
+            />
           </div>
 
           <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-slate-800">
@@ -518,15 +510,13 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
           </div>
         </div>
 
-        <Field label="Notes / Terms on Bill">
-          <input
-            type="text"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="e.g. Payment due in 15 days"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-          />
-        </Field>
+        <Field
+          label="Notes / Terms on Bill"
+          type="text"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="e.g. Payment due in 15 days"
+        />
 
         <div className="flex justify-end gap-2 pt-2">
           <button
