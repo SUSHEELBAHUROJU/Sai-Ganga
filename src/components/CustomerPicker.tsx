@@ -12,6 +12,11 @@ type CustomerPickerProps = {
   onChange: (customerId: string) => void
 }
 
+// A chip-per-customer list is fine for a few dozen customers but falls apart
+// as the list grows — cap how many render at once and point the user at
+// search instead of dumping hundreds of chips into the page.
+const DISPLAY_CAP = 10
+
 export function CustomerPicker({ value, onChange }: CustomerPickerProps) {
   const { data: customers } = useCustomers()
   const { data: recentIds } = useRecentCustomerIds()
@@ -42,6 +47,10 @@ export function CustomerPicker({ value, onChange }: CustomerPickerProps) {
 
   const recentIdSet = new Set(recentCustomers.map((c) => c.id))
   const restOfList = filtered.filter((c) => !recentIdSet.has(c.id))
+
+  const visibleList = search ? filtered : restOfList
+  const cappedList = visibleList.slice(0, DISPLAY_CAP)
+  const hiddenCount = visibleList.length - cappedList.length
 
   function openAdd() {
     setName(search.trim())
@@ -125,7 +134,7 @@ export function CustomerPicker({ value, onChange }: CustomerPickerProps) {
           </span>
         )}
         <div className="flex flex-wrap gap-2">
-          {(search ? filtered : restOfList).map((c) => (
+          {cappedList.map((c) => (
             <Chip key={c.id} label={c.name} onClick={() => onChange(c.id)} />
           ))}
           <button
@@ -137,6 +146,11 @@ export function CustomerPicker({ value, onChange }: CustomerPickerProps) {
             New Customer
           </button>
         </div>
+        {hiddenCount > 0 && (
+          <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
+            +{hiddenCount} more — keep typing to search for them.
+          </p>
+        )}
       </div>
 
       <Modal title="Add Customer" open={addOpen} onClose={() => setAddOpen(false)}>
