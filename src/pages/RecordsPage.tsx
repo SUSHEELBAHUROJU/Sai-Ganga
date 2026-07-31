@@ -80,11 +80,11 @@ export function RecordsPage() {
   const { data: activeViewBill } = useBill(selectedBillId)
   const { data: activeEditBill } = useBill(editingBillId)
 
-  const { data: records, isLoading } = useRecords({ fromDate, toDate, kinds })
+  const { data: recordsResult, isLoading } = useRecords({ fromDate, toDate, kinds })
   const deleteRecord = useDeleteRecord()
   const { showToast } = useToast()
 
-  const transactionGroups = groupRecordsByTransaction(records ?? [])
+  const transactionGroups = groupRecordsByTransaction(recordsResult?.records ?? [])
 
   function toggleKind(kind: RecordKind) {
     setKinds((prev) => (prev.includes(kind) ? prev.filter((k) => k !== kind) : [...prev, kind]))
@@ -201,6 +201,12 @@ export function RecordsPage() {
         <p className="text-xs text-slate-400 dark:text-slate-500">
           Ranges are limited to {MAX_QUERY_RANGE_DAYS} days at a time.
         </p>
+        {recordsResult?.truncated && (
+          <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+            This range has a lot of activity — showing the most recent 1000 entries per type. Narrow
+            the date range or type filter to see everything.
+          </p>
+        )}
 
         <div>
           <span className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">

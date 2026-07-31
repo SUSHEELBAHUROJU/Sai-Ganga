@@ -38,6 +38,8 @@ export function useAddSalesEntries() {
     // One RPC call for the whole cart — see the equivalent note in
     // useProductionEntries.ts: this makes a multi-line save atomic, so a
     // failure never leaves some lines committed for a retry to double-count.
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
     mutationFn: async (rows: NewSalesEntry[]) => {
       const merged = mergeByDateProductCustomer(rows)
       const { data, error } = await supabase.rpc('add_sales_quantities_batch', {

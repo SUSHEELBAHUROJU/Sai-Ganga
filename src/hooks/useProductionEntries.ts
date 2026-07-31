@@ -60,6 +60,12 @@ export function useAddProductionEntries() {
     // entire function back if any line fails, so a network drop mid-save
     // can never leave some lines committed and others not — a retry after a
     // failure is always safe to resubmit in full, never a double-count.
+    // That's also what makes automatic retry safe here specifically — most
+    // other mutations in this app are plain inserts where a blind retry
+    // could double-write, so they rely on the form staying filled in and
+    // the user tapping Save again instead.
+    retry: 2,
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
     mutationFn: async (rows: NewProductionEntry[]) => {
       const merged = mergeByDateAndProduct(rows)
       const { data, error } = await supabase.rpc('add_production_quantities_batch', {

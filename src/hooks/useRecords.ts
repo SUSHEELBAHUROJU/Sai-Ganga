@@ -144,14 +144,36 @@ export type RecordsFilter = {
   kinds: RecordKind[]
 }
 
+// PostgREST caps any unlimited select at max_rows (1000) and silently drops
+// the rest — same risk documented in csvExport.ts. Records already bounds
+// its range to MAX_QUERY_RANGE_DAYS, but a very active date range could
+// still exceed this per table, so cap explicitly (ordered so the newest
+// rows in range survive) and surface it rather than truncating silently.
+const ROW_CAP = 1000
+
+export type RecordsResult = { records: EntryRecord[]; truncated: boolean }
+
 export function useRecords({ fromDate, toDate, kinds }: RecordsFilter) {
   return useQuery({
     queryKey: ['records', fromDate, toDate, [...kinds].sort()],
-    queryFn: async (): Promise<EntryRecord[]> => {
+    queryFn: async (): Promise<RecordsResult> => {
       const wants = (kind: RecordKind) => kinds.length === 0 || kinds.includes(kind)
-      const inRange = <T extends { gte: (c: string, v: string) => T; lte: (c: string, v: string) => T }>(
+      const inRange = <
+        T extends {
+          gte: (c: string, v: string) => T
+          lte: (c: string, v: string) => T
+          order: (c: string, opts: { ascending: boolean }) => T
+          limit: (n: number) => T
+        },
+      >(
         q: T,
-      ) => q.gte('entry_date', fromDate).lte('entry_date', toDate)
+      ) =>
+        q
+          .gte('entry_date', fromDate)
+          .lte('entry_date', toDate)
+          .order('entry_date', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(ROW_CAP)
 
       const [production, sales, recycling, rawPurchases, scrapPurchases, factoryWaste] =
         await Promise.all([
@@ -200,6 +222,10 @@ export function useRecords({ fromDate, toDate, kinds }: RecordsFilter) {
         if (result?.error) throw result.error
       }
 
+      const truncated = [production, sales, recycling, rawPurchases, scrapPurchases, factoryWaste].some(
+        (result) => (result?.data?.length ?? 0) >= ROW_CAP,
+      )
+
       const records: EntryRecord[] = [
         ...((production?.data ?? []) as unknown as ProductionRecordRow[]).map(
           (row): EntryRecord => ({ kind: 'production', row }),
@@ -222,12 +248,14 @@ export function useRecords({ fromDate, toDate, kinds }: RecordsFilter) {
       ]
 
       // Most recent day first; within a day, most recently created first.
-      return records.sort((a, b) => {
+      records.sort((a, b) => {
         if (a.row.entry_date !== b.row.entry_date) {
           return a.row.entry_date < b.row.entry_date ? 1 : -1
         }
         return a.row.created_at < b.row.created_at ? 1 : -1
       })
+
+      return { records, truncated }
     },
   })
 }

@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import { isoDateRange } from '../lib/date'
 import { formatPipeProductLabel, piecesToKg } from '../lib/format'
 
 export type ProductMonthTotal = {
@@ -31,130 +30,68 @@ export type MonthlyReport = {
   series: DayPoint[]
 }
 
-type PipeRef = { diameter_inches: number; weight_kg: number } | null
-type DatedQtyRow = { entry_date: string; quantity: number; pipe_products: PipeRef }
-
+/**
+ * Everything here is computed in Postgres (GROUP BY product, GROUP BY day,
+ * scalar SUMs) rather than fetched row-by-row and reduced in JS — this range
+ * can span up to a year (MAX_QUERY_RANGE_DAYS), so the raw-row approach used
+ * to mean downloading a year of entries just to show totals and a chart.
+ */
 export function useMonthlyReport(fromDate: string, toDate: string) {
   return useQuery({
     queryKey: ['reports', 'monthly', fromDate, toDate],
     queryFn: async (): Promise<MonthlyReport> => {
-      const inRange = <T extends { gte: (c: string, v: string) => T; lte: (c: string, v: string) => T }>(
-        q: T,
-      ) => q.gte('entry_date', fromDate).lte('entry_date', toDate)
+      const [production, sales, sums, rawByType, series] = await Promise.all([
+        supabase.rpc('rpc_production_totals_by_product', { p_from: fromDate, p_to: toDate }),
+        supabase.rpc('rpc_sales_totals_by_product', { p_from: fromDate, p_to: toDate }),
+        supabase.rpc('rpc_report_sums', { p_from: fromDate, p_to: toDate }),
+        supabase.rpc('rpc_raw_purchases_by_type', { p_from: fromDate, p_to: toDate }),
+        supabase.rpc('rpc_daily_series', { p_from: fromDate, p_to: toDate }),
+      ])
 
-      const [production, sales, recycling, rawPurchases, scrapPurchases, factoryWaste] =
-        await Promise.all([
-          inRange(
-            supabase
-              .from('production_entries')
-              .select('entry_date, quantity, pipe_products(diameter_inches, weight_kg)'),
-          ),
-          inRange(
-            supabase
-              .from('sales_entries')
-              .select('entry_date, quantity, pipe_products(diameter_inches, weight_kg)'),
-          ),
-          inRange(
-            supabase
-              .from('recycling_entries')
-              .select('total_output_kg'),
-          ),
-          inRange(
-            supabase
-              .from('raw_material_purchases')
-              .select('total_qty_kg, raw_material_types(name)'),
-          ),
-          inRange(supabase.from('scrap_purchases').select('quantity_kg')),
-          inRange(supabase.from('factory_waste_entries').select('quantity_kg')),
-        ])
-
-      for (const result of [
-        production,
-        sales,
-        recycling,
-        rawPurchases,
-        scrapPurchases,
-        factoryWaste,
-      ]) {
+      for (const result of [production, sales, sums, rawByType, series]) {
         if (result.error) throw result.error
       }
 
-      const productionRows = (production.data ?? []) as unknown as DatedQtyRow[]
-      const salesRows = (sales.data ?? []) as unknown as DatedQtyRow[]
-      const rowKg = (row: DatedQtyRow) => piecesToKg(row.quantity, row.pipe_products?.weight_kg ?? 0)
-
-      // Per-product produced vs sold, keyed on the display label so both sides
-      // land in the same row even when only one has activity.
       const byProduct = new Map<string, ProductMonthTotal>()
-      const upsert = (
-        row: DatedQtyRow,
-        pcsField: 'producedPcs' | 'soldPcs',
-        kgField: 'producedKg' | 'soldKg',
-      ) => {
-        const p = row.pipe_products
-        const label = p ? formatPipeProductLabel(p.diameter_inches, p.weight_kg) : 'Unknown product'
-        const entry =
-          byProduct.get(label) ?? { label, producedPcs: 0, producedKg: 0, soldPcs: 0, soldKg: 0 }
-        entry[pcsField] += row.quantity
-        entry[kgField] += rowKg(row)
+      for (const row of production.data ?? []) {
+        const label = formatPipeProductLabel(row.diameter_inches, row.weight_kg)
+        const entry = byProduct.get(label) ?? { label, producedPcs: 0, producedKg: 0, soldPcs: 0, soldKg: 0 }
+        entry.producedPcs += row.total_pcs
+        entry.producedKg += piecesToKg(row.total_pcs, row.weight_kg)
         byProduct.set(label, entry)
       }
-      for (const row of productionRows) upsert(row, 'producedPcs', 'producedKg')
-      for (const row of salesRows) upsert(row, 'soldPcs', 'soldKg')
+      for (const row of sales.data ?? []) {
+        const label = formatPipeProductLabel(row.diameter_inches, row.weight_kg)
+        const entry = byProduct.get(label) ?? { label, producedPcs: 0, producedKg: 0, soldPcs: 0, soldKg: 0 }
+        entry.soldPcs += row.total_pcs
+        entry.soldKg += piecesToKg(row.total_pcs, row.weight_kg)
+        byProduct.set(label, entry)
+      }
 
-      // Daily series across every day of the selected range, zero-filled so
-      // the trend line shows genuine gaps rather than skipping to the next
-      // active day. In kg, like every other production/sales figure in the app.
-      const rangeDates = isoDateRange(fromDate, toDate)
-      const series: DayPoint[] = rangeDates.map((date, i) => ({
+      const reportSums = sums.data?.[0]
+
+      const daySeries: DayPoint[] = (series.data ?? []).map((row, i) => ({
         day: i + 1,
-        date,
-        produced: 0,
-        sold: 0,
+        date: row.entry_date,
+        produced: row.produced_kg,
+        sold: row.sold_kg,
       }))
-      const dateToIndex = new Map(rangeDates.map((date, i) => [date, i]))
-      for (const row of productionRows) {
-        const i = dateToIndex.get(row.entry_date)
-        if (i !== undefined) series[i].produced += rowKg(row)
-      }
-      for (const row of salesRows) {
-        const i = dateToIndex.get(row.entry_date)
-        if (i !== undefined) series[i].sold += rowKg(row)
-      }
 
-      const sum = <T>(rows: T[], pick: (r: T) => number) =>
-        rows.reduce((total, r) => total + pick(r), 0)
-
-      const recyclingRows = (recycling.data ?? []) as unknown as {
-        total_output_kg: number | null
-      }[]
-
-      const rawRows = (rawPurchases.data ?? []) as unknown as {
-        total_qty_kg: number
-        raw_material_types: { name: string } | null
-      }[]
-      const rawByType = new Map<string, number>()
-      for (const row of rawRows) {
-        const label = row.raw_material_types?.name ?? 'Unknown material'
-        rawByType.set(label, (rawByType.get(label) ?? 0) + row.total_qty_kg)
-      }
+      const producedTotals = Array.from(byProduct.values())
+      const rawPurchasedByType = (rawByType.data ?? []).map((r) => ({ label: r.label, quantity: r.quantity }))
 
       return {
-        byProduct: Array.from(byProduct.values()).sort(
-          (a, b) => b.producedKg + b.soldKg - (a.producedKg + a.soldKg),
-        ),
-        producedTotalPcs: sum(productionRows, (r) => r.quantity),
-        producedTotalKg: sum(productionRows, rowKg),
-        soldTotalPcs: sum(salesRows, (r) => r.quantity),
-        soldTotalKg: sum(salesRows, rowKg),
-        recyclingOutputKg: sum(recyclingRows, (r) => r.total_output_kg ?? 0),
-        rawPurchasedKg: sum(rawRows, (r) => r.total_qty_kg),
-        rawPurchasedByType: Array.from(rawByType.entries())
-          .map(([label, quantity]) => ({ label, quantity }))
-          .sort((a, b) => b.quantity - a.quantity),
-        scrapPurchasedKg: sum(scrapPurchases.data ?? [], (r) => r.quantity_kg),
-        factoryWasteKg: sum(factoryWaste.data ?? [], (r) => r.quantity_kg),
-        series,
+        byProduct: producedTotals.sort((a, b) => b.producedKg + b.soldKg - (a.producedKg + a.soldKg)),
+        producedTotalPcs: producedTotals.reduce((s, p) => s + p.producedPcs, 0),
+        producedTotalKg: producedTotals.reduce((s, p) => s + p.producedKg, 0),
+        soldTotalPcs: producedTotals.reduce((s, p) => s + p.soldPcs, 0),
+        soldTotalKg: producedTotals.reduce((s, p) => s + p.soldKg, 0),
+        recyclingOutputKg: reportSums?.recycling_output_kg ?? 0,
+        rawPurchasedKg: reportSums?.raw_purchased_kg ?? 0,
+        rawPurchasedByType,
+        scrapPurchasedKg: reportSums?.scrap_purchased_kg ?? 0,
+        factoryWasteKg: reportSums?.factory_waste_kg ?? 0,
+        series: daySeries,
       }
     },
   })

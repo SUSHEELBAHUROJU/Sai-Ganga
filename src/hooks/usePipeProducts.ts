@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { MASTER_DATA_STALE_TIME } from '../lib/queryClient'
 import type { Database } from '../types/database'
 
 export type PipeProduct = Database['public']['Tables']['pipe_products']['Row']
@@ -9,6 +10,7 @@ const QUERY_KEY = ['pipe_products']
 export function usePipeProducts() {
   return useQuery({
     queryKey: QUERY_KEY,
+    staleTime: MASTER_DATA_STALE_TIME,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('pipe_products')

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { MASTER_DATA_STALE_TIME } from '../lib/queryClient'
 import type { Database } from '../types/database'
 
 export type RawMaterialType = Database['public']['Tables']['raw_material_types']['Row']
@@ -9,6 +10,7 @@ const QUERY_KEY = ['raw_material_types']
 export function useRawMaterialTypes() {
   return useQuery({
     queryKey: QUERY_KEY,
+    staleTime: MASTER_DATA_STALE_TIME,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('raw_material_types')

@@ -36,93 +36,101 @@ export type Database = {
     Tables: {
       bills: {
         Row: {
-          id: string
-          bill_number: string
           bill_date: string
+          bill_number: string
+          created_at: string
+          customer_address: string | null
           customer_id: string | null
           customer_name: string
-          customer_address: string | null
           customer_phone: string | null
-          line_items: Json
-          subtotal: number
           discount: number
-          tax: number
           grand_total: number
-          status: 'active' | 'voided'
+          id: string
+          line_items: Json
           notes: string | null
-          created_at: string
+          status: string
+          subtotal: number
+          tax: number
           updated_at: string
         }
         Insert: {
-          id?: string
-          bill_number: string
           bill_date?: string
+          bill_number: string
+          created_at?: string
+          customer_address?: string | null
           customer_id?: string | null
           customer_name: string
-          customer_address?: string | null
           customer_phone?: string | null
-          line_items?: Json
-          subtotal?: number
           discount?: number
-          tax?: number
           grand_total?: number
-          status?: 'active' | 'voided'
+          id?: string
+          line_items?: Json
           notes?: string | null
-          created_at?: string
+          status?: string
+          subtotal?: number
+          tax?: number
           updated_at?: string
         }
         Update: {
-          id?: string
-          bill_number?: string
           bill_date?: string
+          bill_number?: string
+          created_at?: string
+          customer_address?: string | null
           customer_id?: string | null
           customer_name?: string
-          customer_address?: string | null
           customer_phone?: string | null
-          line_items?: Json
-          subtotal?: number
           discount?: number
-          tax?: number
           grand_total?: number
-          status?: 'active' | 'voided'
+          id?: string
+          line_items?: Json
           notes?: string | null
-          created_at?: string
+          status?: string
+          subtotal?: number
+          tax?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "bills_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       company_settings: {
         Row: {
-          id: string
-          business_name: string
           address: string
-          gst_number: string
-          phone: string | null
           bill_prefix: string
-          next_bill_number: number
           bill_start_date: string
+          business_name: string
+          gst_number: string
+          id: string
+          next_bill_number: number
+          phone: string | null
           updated_at: string
         }
         Insert: {
-          id?: string
-          business_name?: string
           address?: string
-          gst_number?: string
-          phone?: string | null
           bill_prefix?: string
-          next_bill_number?: number
           bill_start_date?: string
+          business_name?: string
+          gst_number?: string
+          id?: string
+          next_bill_number?: number
+          phone?: string | null
           updated_at?: string
         }
         Update: {
-          id?: string
-          business_name?: string
           address?: string
-          gst_number?: string
-          phone?: string | null
           bill_prefix?: string
-          next_bill_number?: number
           bill_start_date?: string
+          business_name?: string
+          gst_number?: string
+          id?: string
+          next_bill_number?: number
+          phone?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -446,7 +454,22 @@ export type Database = {
           name?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "raw_material_types_linked_scrap_type_id_fkey"
+            columns: ["linked_scrap_type_id"]
+            isOneToOne: false
+            referencedRelation: "scrap_stock"
+            referencedColumns: ["scrap_type_id"]
+          },
+          {
+            foreignKeyName: "raw_material_types_linked_scrap_type_id_fkey"
+            columns: ["linked_scrap_type_id"]
+            isOneToOne: false
+            referencedRelation: "scrap_types"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       recycling_entries: {
         Row: {
@@ -566,6 +589,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "sales_entries_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sales_entries_customer_id_fkey"
             columns: ["customer_id"]
@@ -760,10 +790,6 @@ export type Database = {
       }
     }
     Functions: {
-      generate_next_bill_number: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
       add_production_quantities_batch: {
         Args: { p_rows: Json }
         Returns: {
@@ -810,6 +836,7 @@ export type Database = {
       add_sales_quantities_batch: {
         Args: { p_rows: Json }
         Returns: {
+          bill_id: string | null
           created_at: string
           created_by: string | null
           customer_id: string | null
@@ -836,6 +863,7 @@ export type Database = {
           p_quantity: number
         }
         Returns: {
+          bill_id: string | null
           created_at: string
           created_by: string | null
           customer_id: string | null
@@ -852,6 +880,72 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      generate_next_bill_number: { Args: never; Returns: string }
+      rpc_daily_series: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          entry_date: string
+          produced_kg: number
+          sold_kg: number
+        }[]
+      }
+      rpc_production_totals_by_product: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          diameter_inches: number
+          pipe_product_id: string
+          total_pcs: number
+          weight_kg: number
+        }[]
+      }
+      rpc_raw_purchases_by_type: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          label: string
+          quantity: number
+        }[]
+      }
+      rpc_report_sums: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          factory_waste_kg: number
+          raw_purchased_kg: number
+          recycling_entry_count: number
+          recycling_output_kg: number
+          scrap_purchased_kg: number
+        }[]
+      }
+      rpc_sales_totals_by_customer_product: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          customer_id: string
+          customer_name: string
+          diameter_inches: number
+          pipe_product_id: string
+          total_pcs: number
+          weight_kg: number
+        }[]
+      }
+      rpc_sales_totals_by_product: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          diameter_inches: number
+          pipe_product_id: string
+          total_pcs: number
+          weight_kg: number
+        }[]
+      }
+      rpc_today_summary: {
+        Args: { p_date: string }
+        Returns: {
+          produced_kg: number
+          produced_pcs: number
+          purchase_count: number
+          recycling_output_kg: number
+          sold_kg: number
+          sold_pcs: number
+        }[]
       }
     }
     Enums: {

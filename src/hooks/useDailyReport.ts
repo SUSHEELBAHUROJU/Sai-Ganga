@@ -20,151 +20,98 @@ export type DailyReport = {
   factoryWasteKg: number
 }
 
-type PipeRef = { diameter_inches: number; weight_kg: number } | null
-
-function accumulate(map: Map<string, ProductTotal>, label: string, pcs: number, weightKg: number) {
-  const existing = map.get(label) ?? { label, pcs: 0, kg: 0 }
-  existing.pcs += pcs
-  existing.kg += piecesToKg(pcs, weightKg)
-  map.set(label, existing)
+function toSortedTotals(rows: { label: string; pcs: number; kg: number }[]): ProductTotal[] {
+  return [...rows].sort((a, b) => b.kg - a.kg)
 }
 
-function toSortedTotals(map: Map<string, ProductTotal>): ProductTotal[] {
-  return Array.from(map.values()).sort((a, b) => b.kg - a.kg)
-}
-
+/**
+ * Production/sales totals and the recycling/purchase/waste sums are computed
+ * in Postgres (rpc_production_totals_by_product, rpc_sales_totals_by_..., and
+ * rpc_report_sums) rather than downloading every entry row in the range and
+ * summing in JS — over a full 366-day range that's the difference between a
+ * handful of aggregated rows and potentially thousands of raw entries. Raw
+ * material / scrap purchases stay a plain row fetch: the UI lists them
+ * individually (supplier, cost per purchase), so there's nothing to
+ * aggregate away, but only the columns actually shown are selected.
+ */
 export function useDailyReport(fromDate: string, toDate: string) {
   return useQuery({
     queryKey: ['reports', 'daily', fromDate, toDate],
     queryFn: async (): Promise<DailyReport> => {
-      const inRange = <T extends { gte: (c: string, v: string) => T; lte: (c: string, v: string) => T }>(
-        q: T,
-      ) => q.gte('entry_date', fromDate).lte('entry_date', toDate)
+      const [production, sales, sums, rawPurchases, scrapPurchases] = await Promise.all([
+        supabase.rpc('rpc_production_totals_by_product', { p_from: fromDate, p_to: toDate }),
+        supabase.rpc('rpc_sales_totals_by_customer_product', { p_from: fromDate, p_to: toDate }),
+        supabase.rpc('rpc_report_sums', { p_from: fromDate, p_to: toDate }),
+        supabase
+          .from('raw_material_purchases')
+          .select('total_qty_kg, cost, supplier_name, raw_material_types(name)')
+          .gte('entry_date', fromDate)
+          .lte('entry_date', toDate),
+        supabase
+          .from('scrap_purchases')
+          .select('quantity_kg, cost, scrap_dealers(name), scrap_types(name)')
+          .gte('entry_date', fromDate)
+          .lte('entry_date', toDate),
+      ])
 
-      const [production, sales, recycling, rawPurchases, scrapPurchases, factoryWaste] =
-        await Promise.all([
-          inRange(
-            supabase
-              .from('production_entries')
-              .select('quantity, pipe_products(diameter_inches, weight_kg)'),
-          ),
-          inRange(
-            supabase
-              .from('sales_entries')
-              .select('quantity, pipe_products(diameter_inches, weight_kg), customers(name)'),
-          ),
-          inRange(
-            supabase
-              .from('recycling_entries')
-              .select('total_output_kg'),
-          ),
-          inRange(
-            supabase
-              .from('raw_material_purchases')
-              .select('total_qty_kg, cost, supplier_name, raw_material_types(name)'),
-          ),
-          inRange(
-            supabase.from('scrap_purchases').select('quantity_kg, cost, scrap_dealers(name), scrap_types(name)'),
-          ),
-          inRange(supabase.from('factory_waste_entries').select('quantity_kg')),
-        ])
-
-      for (const result of [
-        production,
-        sales,
-        recycling,
-        rawPurchases,
-        scrapPurchases,
-        factoryWaste,
-      ]) {
+      for (const result of [production, sales, sums, rawPurchases, scrapPurchases]) {
         if (result.error) throw result.error
       }
 
-      const productionMap = new Map<string, ProductTotal>()
-      for (const row of (production.data ?? []) as unknown as {
-        quantity: number
-        pipe_products: PipeRef
-      }[]) {
-        const p = row.pipe_products
-        accumulate(
-          productionMap,
-          p ? formatPipeProductLabel(p.diameter_inches, p.weight_kg) : 'Unknown product',
-          row.quantity,
-          p?.weight_kg ?? 0,
-        )
-      }
+      const productionTotals = toSortedTotals(
+        (production.data ?? []).map((r) => ({
+          label: formatPipeProductLabel(r.diameter_inches, r.weight_kg),
+          pcs: r.total_pcs,
+          kg: piecesToKg(r.total_pcs, r.weight_kg),
+        })),
+      )
 
-      // Sales nest product totals under each customer.
-      const salesMap = new Map<string, Map<string, ProductTotal>>()
-      for (const row of (sales.data ?? []) as unknown as {
-        quantity: number
-        pipe_products: PipeRef
-        customers: { name: string } | null
-      }[]) {
-        const customer = row.customers?.name ?? 'No customer'
-        const p = row.pipe_products
-        const label = p ? formatPipeProductLabel(p.diameter_inches, p.weight_kg) : 'Unknown product'
-        const perCustomer = salesMap.get(customer) ?? new Map<string, ProductTotal>()
-        accumulate(perCustomer, label, row.quantity, p?.weight_kg ?? 0)
-        salesMap.set(customer, perCustomer)
+      const salesByCustomerMap = new Map<string, ProductTotal[]>()
+      for (const row of sales.data ?? []) {
+        const list = salesByCustomerMap.get(row.customer_name) ?? []
+        list.push({
+          label: formatPipeProductLabel(row.diameter_inches, row.weight_kg),
+          pcs: row.total_pcs,
+          kg: piecesToKg(row.total_pcs, row.weight_kg),
+        })
+        salesByCustomerMap.set(row.customer_name, list)
       }
-
-      const salesByCustomer: CustomerSaleTotal[] = Array.from(salesMap.entries())
+      const salesByCustomer: CustomerSaleTotal[] = Array.from(salesByCustomerMap.entries())
         .map(([customer, lines]) => {
-          const productLines = toSortedTotals(lines)
+          const sortedLines = toSortedTotals(lines)
           return {
             customer,
-            lines: productLines,
-            totalPcs: productLines.reduce((sum, l) => sum + l.pcs, 0),
-            totalKg: productLines.reduce((sum, l) => sum + l.kg, 0),
+            lines: sortedLines,
+            totalPcs: sortedLines.reduce((sum, l) => sum + l.pcs, 0),
+            totalKg: sortedLines.reduce((sum, l) => sum + l.kg, 0),
           }
         })
         .sort((a, b) => b.totalKg - a.totalKg)
 
-      const recyclingRows = (recycling.data ?? []) as unknown as {
-        total_output_kg: number | null
-      }[]
-      const sum = <T>(rows: T[], pick: (r: T) => number) =>
-        rows.reduce((total, r) => total + pick(r), 0)
-
-      const productionTotals = toSortedTotals(productionMap)
+      const reportSums = sums.data?.[0]
 
       return {
         production: productionTotals,
-        productionTotalPcs: sum(productionTotals, (v) => v.pcs),
-        productionTotalKg: sum(productionTotals, (v) => v.kg),
+        productionTotalPcs: productionTotals.reduce((s, p) => s + p.pcs, 0),
+        productionTotalKg: productionTotals.reduce((s, p) => s + p.kg, 0),
         salesByCustomer,
         salesTotalPcs: salesByCustomer.reduce((s, c) => s + c.totalPcs, 0),
         salesTotalKg: salesByCustomer.reduce((s, c) => s + c.totalKg, 0),
-        recyclingOutputKg: sum(recyclingRows, (r) => r.total_output_kg ?? 0),
-        recyclingEntryCount: recyclingRows.length,
-        rawPurchases: (
-          (rawPurchases.data ?? []) as unknown as {
-            total_qty_kg: number
-            cost: number | null
-            supplier_name: string | null
-            raw_material_types: { name: string } | null
-          }[]
-        ).map((r) => ({
+        recyclingOutputKg: reportSums?.recycling_output_kg ?? 0,
+        recyclingEntryCount: reportSums?.recycling_entry_count ?? 0,
+        rawPurchases: (rawPurchases.data ?? []).map((r) => ({
           label: r.raw_material_types?.name ?? 'Unknown material',
           detail: r.supplier_name,
           quantity: r.total_qty_kg,
           cost: r.cost,
         })),
-        scrapPurchases: (
-          (scrapPurchases.data ?? []) as unknown as {
-            quantity_kg: number
-            cost: number | null
-            scrap_dealers: { name: string } | null
-            scrap_types: { name: string } | null
-          }[]
-        ).map((r) => ({
+        scrapPurchases: (scrapPurchases.data ?? []).map((r) => ({
           label: r.scrap_types?.name ?? 'Unknown scrap type',
           detail: r.scrap_dealers?.name ?? 'No dealer',
           quantity: r.quantity_kg,
           cost: r.cost,
         })),
-        factoryWasteKg: sum(factoryWaste.data ?? [], (r) => r.quantity_kg),
+        factoryWasteKg: reportSums?.factory_waste_kg ?? 0,
       }
     },
   })

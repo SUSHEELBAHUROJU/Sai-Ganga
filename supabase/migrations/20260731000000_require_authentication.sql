@@ -63,7 +63,9 @@ alter default privileges in schema public
 
 grant execute on function add_production_quantity(date, uuid, numeric, text) to authenticated;
 grant execute on function add_sales_quantity(date, uuid, uuid, numeric, text) to authenticated;
-grant execute on function add_recycling_direct_to_pipe(date, uuid, uuid, numeric, numeric, text)
-  to authenticated;
+-- add_recycling_direct_to_pipe(date, uuid, uuid, numeric, numeric, text) is not granted here:
+-- it no longer exists by this point in migration history (dropped by
+-- 20260730100000_recycling_source_specific_stock.sql, which removed
+-- direct-to-pipe recycling mode) — granting on it would fail a fresh replay.
 grant execute on function add_production_quantities_batch(jsonb) to authenticated;
 grant execute on function add_sales_quantities_batch(jsonb) to authenticated;

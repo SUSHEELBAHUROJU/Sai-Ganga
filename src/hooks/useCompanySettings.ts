@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { MASTER_DATA_STALE_TIME } from '../lib/queryClient'
 
 export type CompanySettings = {
   id: string
@@ -18,6 +19,7 @@ export type UpdateCompanySettingsInput = Partial<Omit<CompanySettings, 'id' | 'u
 export function useCompanySettings() {
   return useQuery({
     queryKey: ['company_settings'],
+    staleTime: MASTER_DATA_STALE_TIME,
     queryFn: async (): Promise<CompanySettings> => {
       const { data, error } = await supabase
         .from('company_settings')
