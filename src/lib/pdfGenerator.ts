@@ -1,6 +1,5 @@
 import jsPDF from 'jspdf'
 import type { BillRow } from '../hooks/useBills'
-import type { CompanySettings } from '../hooks/useCompanySettings'
 import { formatInvoiceDate } from './date'
 
 /** Helper to convert numbers to Indian Rupees in words */
@@ -63,7 +62,7 @@ function numberToWordsRupees(amount: number): string {
   return `Rupees ${result.trim()} Only`
 }
 
-export function generateBillPdfDoc(bill: BillRow, company: CompanySettings): jsPDF {
+export function generateBillPdfDoc(bill: BillRow): jsPDF {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -97,8 +96,9 @@ export function generateBillPdfDoc(bill: BillRow, company: CompanySettings): jsP
 
   // ==========================================
   // COMPANY BRANDING (DISPLAYED ONCE ONLY)
+  // Kept plain and simple by design — just the name, no address/GST/phone.
   // ==========================================
-  const businessName = company.business_name || 'SAI GANGA POLYMER INDUSTRIES'
+  const businessName = 'Sai Ganga Pipes'
 
   // Company Name
   doc.setFont('helvetica', 'bold')
@@ -119,33 +119,7 @@ export function generateBillPdfDoc(bill: BillRow, company: CompanySettings): jsP
   doc.setTextColor(255, 255, 255)
   doc.text('INVOICE', badgeX + badgeWidth / 2, badgeY + 5.2, { align: 'center' })
 
-  y += 5.5
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...MUTED_TEXT)
-
-  if (company.address) {
-    const addressLines = doc.splitTextToSize(company.address, 135)
-    doc.text(addressLines, margin, y)
-    y += addressLines.length * 4
-  }
-
-  const gstPhone = [
-    company.gst_number ? `GSTIN: ${company.gst_number}` : '',
-    company.phone ? `Contact: ${company.phone}` : '',
-  ]
-    .filter(Boolean)
-    .join('   |   ')
-
-  if (gstPhone) {
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8.5)
-    doc.setTextColor(...DARK_TEXT)
-    doc.text(gstPhone, margin, y)
-    y += 5.5
-  } else {
-    y += 2
-  }
+  y += 7.5
 
   // Thin Divider Line
   doc.setDrawColor(...BORDER_GRAY)
@@ -193,10 +167,6 @@ export function generateBillPdfDoc(bill: BillRow, company: CompanySettings): jsP
   if (bill.customer_address) {
     const custAddrLines = doc.splitTextToSize(bill.customer_address, 80)
     doc.text(custAddrLines[0], leftCardX + 5, cY)
-    cY += 3.8
-  }
-  if (bill.customer_phone) {
-    doc.text(`Phone: ${bill.customer_phone}`, leftCardX + 5, cY)
   }
 
   // --- RIGHT CARD: Invoice Details ---
@@ -514,13 +484,13 @@ export function generateBillPdfDoc(bill: BillRow, company: CompanySettings): jsP
   return doc
 }
 
-export function generateBillPdfBlob(bill: BillRow, company: CompanySettings): {
+export function generateBillPdfBlob(bill: BillRow): {
   blob: Blob
   file: File
   filename: string
   url: string
 } {
-  const doc = generateBillPdfDoc(bill, company)
+  const doc = generateBillPdfDoc(bill)
   const filename = `Bill_${bill.bill_number.replace(/[^a-zA-Z0-9_-]/g, '')}.pdf`
   const blob = doc.output('blob')
   const file = new File([blob], filename, { type: 'application/pdf' })

@@ -49,7 +49,7 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
 
   useEffect(() => {
     if (open && bill) {
-      const generated = generateBillPdfBlob(bill, companyData)
+      const generated = generateBillPdfBlob(bill)
       setPdfData(generated)
 
       if (typeof navigator !== 'undefined' && 'share' in navigator && 'canShare' in navigator) {
