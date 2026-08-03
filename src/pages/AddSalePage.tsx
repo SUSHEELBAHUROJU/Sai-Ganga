@@ -8,10 +8,10 @@ import { CustomerPicker } from '../components/CustomerPicker'
 import { PipeLineItemForm, type PendingLine } from '../components/PipeLineItemForm'
 import { LineItemsList } from '../components/LineItemsList'
 import { StickyActionBar } from '../components/StickyActionBar'
-import { SaveButton } from '../components/SaveButton'
 import { useEntryDate } from '../hooks/useEntryDate'
 import { useToast } from '../lib/toast'
 import { piecesToKg, formatPipeProductLabel } from '../lib/format'
+import { ACTION_STYLES } from '../lib/actionColors'
 import { CreateBillModal } from '../components/CreateBillModal'
 import { Receipt } from 'lucide-react'
 
@@ -65,7 +65,7 @@ export function AddSalePage() {
     )
   }
 
-  function handleSave(andCreateBill = false) {
+  function handleSave() {
     if (lines.length === 0) return
     if (!customerId) {
       showToast('Select a customer first', 'error')
@@ -99,17 +99,15 @@ export function AddSalePage() {
       onSuccess: (res: any) => {
         showToast('Sale Added!')
 
-        if (andCreateBill) {
-          const savedIds = Array.isArray(res) ? res.map((r: any) => r.id) : []
-          setStagedBillData({
-            saleEntryIds: savedIds,
-            entryDate,
-            customerId,
-            customerName: currentCustomer?.name || '',
-            lines: preparedBillLines,
-          })
-          setBillModalOpen(true)
-        }
+        const savedIds = Array.isArray(res) ? res.map((r: any) => r.id) : []
+        setStagedBillData({
+          saleEntryIds: savedIds,
+          entryDate,
+          customerId,
+          customerName: currentCustomer?.name || '',
+          lines: preparedBillLines,
+        })
+        setBillModalOpen(true)
 
         setLines([])
         setCustomerId('')
@@ -153,25 +151,17 @@ export function AddSalePage() {
       />
 
       <StickyActionBar>
-        <div className="flex w-full items-center gap-2">
-          <SaveButton
-            accent="sale"
-            onClick={() => handleSave(false)}
-            disabled={lines.length === 0}
-            pending={addEntries.isPending}
-            label={`Save Sale${lines.length > 0 ? ` (${lines.length})` : ''}`}
-          />
-
-          <button
-            type="button"
-            disabled={lines.length === 0 || addEntries.isPending}
-            onClick={() => handleSave(true)}
-            className="flex items-center justify-center gap-1.5 rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50 transition-colors shrink-0"
-          >
-            <Receipt className="h-4 w-4" />
-            Save &amp; Create Bill
-          </button>
-        </div>
+        <button
+          type="button"
+          disabled={lines.length === 0 || addEntries.isPending}
+          onClick={handleSave}
+          className={`flex min-h-[50px] w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-bold text-white shadow-md transition-transform active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100 ${ACTION_STYLES.sale.gradient}`}
+        >
+          <Receipt className="h-[18px] w-[18px]" strokeWidth={2.5} />
+          {addEntries.isPending
+            ? 'Saving…'
+            : `Save & Create Bill${lines.length > 0 ? ` (${lines.length})` : ''}`}
+        </button>
       </StickyActionBar>
 
       <CreateBillModal
