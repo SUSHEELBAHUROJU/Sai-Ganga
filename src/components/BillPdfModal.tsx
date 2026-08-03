@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { Modal } from './Modal'
 import { Download, Printer, MessageCircle, AlertCircle, Ban, Pencil, IndianRupee } from 'lucide-react'
 import type { BillRow } from '../hooks/useBills'
 import { useVoidBill } from '../hooks/useBills'
-import { useCompanySettings } from '../hooks/useCompanySettings'
 import { useBillPaymentStatuses, useCustomerLedgerBalances } from '../hooks/useLedger'
 import { generateBillPdfBlob } from '../lib/pdfGenerator'
 import { useToast } from '../lib/toast'
@@ -19,7 +18,6 @@ type BillPdfModalProps = {
 }
 
 export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalProps) {
-  const { data: company } = useCompanySettings()
   const { showToast } = useToast()
   const voidBill = useVoidBill()
   const [confirmVoidOpen, setConfirmVoidOpen] = useState(false)
@@ -40,23 +38,6 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
   } | null>(null)
 
   const [canNativeShare, setCanNativeShare] = useState(false)
-
-  const companyData = useMemo(
-    () =>
-      company || {
-        id: 'default',
-        business_name: 'SAI GANGA POLYMER INDUSTRIES',
-        address:
-          'SY.NO.216, H.NO. 3-245, NH 65, opp. M.S.R. Institute, Durajpalle, Suryapet, Telangana 508213',
-        gst_number: '36ALRPB5625Q2ZG',
-        phone: '',
-        bill_prefix: 'SG-',
-        next_bill_number: 1,
-        bill_start_date: '',
-        updated_at: '',
-      },
-    [company],
-  )
 
   useEffect(() => {
     if (open && bill) {
@@ -80,7 +61,7 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
     } else {
       setPdfData(null)
     }
-  }, [open, bill, companyData])
+  }, [open, bill])
 
   if (!bill) return null
 
@@ -102,7 +83,7 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
       try {
         await navigator.share({
           title: `Bill ${bill!.bill_number}`,
-          text: `Invoice ${bill!.bill_number} from ${companyData.business_name} for ₹${bill!.grand_total.toLocaleString('en-IN')}`,
+          text: `Hello ${bill!.customer_name}, please find attached Invoice ${bill!.bill_number} for ₹${bill!.grand_total.toLocaleString('en-IN')}. Thank you for your business!`,
           files: [pdfData.file],
         })
         showToast('Shared successfully!')
@@ -118,7 +99,7 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
     const phoneWithCode = rawPhone.length === 10 ? `91${rawPhone}` : rawPhone
 
     const message = encodeURIComponent(
-      `Hello ${bill!.customer_name},\n\nPlease find attached Invoice *${bill!.bill_number}* from *${companyData.business_name}* for *₹${bill!.grand_total.toLocaleString('en-IN')}*.\n\nThank you for your business!`,
+      `Hello ${bill!.customer_name},\n\nPlease find attached Invoice *${bill!.bill_number}* for *₹${bill!.grand_total.toLocaleString('en-IN')}*.\n\nThank you for your business!`,
     )
 
     const whatsappUrl = phoneWithCode
