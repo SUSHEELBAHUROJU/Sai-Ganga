@@ -232,7 +232,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
   if (createdBill) {
     return (
       <BillPdfModal
-        open={true}
+        open={open}
         bill={createdBill}
         onClose={() => {
           setCreatedBill(null)

@@ -285,7 +285,7 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
 
         {/* PDF Embedded View / Preview */}
         {pdfData?.url ? (
-          <div className="h-[500px] w-full rounded-xl border border-slate-200 overflow-hidden bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
+          <div className="h-[60vh] w-full rounded-xl border border-slate-200 overflow-hidden bg-slate-50 dark:border-slate-800 dark:bg-slate-900 sm:h-[500px]">
             <iframe
               src={pdfData.url}
               title={`Bill ${bill.bill_number}`}
