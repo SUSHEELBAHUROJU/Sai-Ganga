@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Wallet, ChevronRight } from 'lucide-react'
+import { Wallet, ChevronRight, Search, SearchX } from 'lucide-react'
 import { useCustomerLedgerBalances, type CustomerLedgerBalance } from '../hooks/useLedger'
 import { Chip } from '../components/Chip'
 import { LoadingState, EmptyState } from '../components/States'
@@ -31,6 +31,7 @@ function BalanceTag({ balance }: { balance: number }) {
 export function LedgerPage() {
   const { data: balances, isLoading } = useCustomerLedgerBalances()
   const [sortMode, setSortMode] = useState<SortMode>('due')
+  const [search, setSearch] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerLedgerBalance | null>(null)
 
   const totalReceivables = useMemo(
@@ -45,6 +46,12 @@ export function LedgerPage() {
     }
     return rows.sort((a, b) => a.name.localeCompare(b.name))
   }, [balances, sortMode])
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return sorted
+    return sorted.filter((c) => c.name.toLowerCase().includes(q) || (c.phone ?? '').includes(q))
+  }, [sorted, search])
 
   return (
     <div className="space-y-5 pb-4">
@@ -64,6 +71,17 @@ export function LedgerPage() {
         </div>
       </div>
 
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search customer by name or phone"
+          className="w-full rounded-lg border border-slate-300 py-2.5 pl-9 pr-3 text-base text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+        />
+      </div>
+
       <div className="flex flex-wrap gap-2">
         <Chip label="Highest Due First" selected={sortMode === 'due'} onClick={() => setSortMode('due')} />
         <Chip label="A - Z" selected={sortMode === 'name'} onClick={() => setSortMode('name')} />
@@ -79,8 +97,12 @@ export function LedgerPage() {
         />
       )}
 
+      {!isLoading && sorted.length > 0 && filtered.length === 0 && (
+        <EmptyState icon={SearchX} title="No customers match that search" />
+      )}
+
       <div className="space-y-2">
-        {sorted.map((c) => (
+        {filtered.map((c) => (
           <button
             key={c.customer_id}
             type="button"
