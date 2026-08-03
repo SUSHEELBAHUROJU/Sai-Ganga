@@ -140,6 +140,11 @@ export function useCreateBill() {
       queryClient.invalidateQueries({ queryKey: ['next_bill_number'] })
       queryClient.invalidateQueries({ queryKey: ['company_settings'] })
       queryClient.invalidateQueries({ queryKey: ['records'] })
+      // A new bill creates a ledger "due" via a DB trigger — refresh the
+      // derived balance/status views so it shows up immediately.
+      queryClient.invalidateQueries({ queryKey: ['ledger_balances'] })
+      queryClient.invalidateQueries({ queryKey: ['bill_payment_status'] })
+      queryClient.invalidateQueries({ queryKey: ['ledger_passbook'] })
     },
   })
 }
@@ -206,6 +211,11 @@ export function useUpdateBill() {
       queryClient.invalidateQueries({ queryKey: ['records'] })
       queryClient.invalidateQueries({ queryKey: ['finished_goods_stock'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      // Editing a bill's total/customer changes the linked ledger due — the
+      // sync trigger handles the DB side, this refreshes what the UI reads.
+      queryClient.invalidateQueries({ queryKey: ['ledger_balances'] })
+      queryClient.invalidateQueries({ queryKey: ['bill_payment_status'] })
+      queryClient.invalidateQueries({ queryKey: ['ledger_passbook'] })
     },
   })
 }
@@ -227,6 +237,11 @@ export function useVoidBill() {
       queryClient.invalidateQueries({ queryKey: ['records'] })
       queryClient.invalidateQueries({ queryKey: ['finished_goods_stock'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      // Voiding drops the bill's due from customer_ledger_balance /
+      // bill_payment_status (both filter to status = 'active').
+      queryClient.invalidateQueries({ queryKey: ['ledger_balances'] })
+      queryClient.invalidateQueries({ queryKey: ['bill_payment_status'] })
+      queryClient.invalidateQueries({ queryKey: ['ledger_passbook'] })
     },
   })
 }

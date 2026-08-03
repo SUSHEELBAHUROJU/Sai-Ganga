@@ -1,6 +1,8 @@
 import jsPDF from 'jspdf'
 import type { BillRow } from '../hooks/useBills'
+import type { CustomerLedgerBalance, PassbookEntry } from '../hooks/useLedger'
 import { formatInvoiceDate } from './date'
+import { formatQty } from './format'
 
 /** Helper to convert numbers to Indian Rupees in words */
 function numberToWordsRupees(amount: number): string {
@@ -492,6 +494,135 @@ export function generateBillPdfBlob(bill: BillRow): {
 } {
   const doc = generateBillPdfDoc(bill)
   const filename = `Bill_${bill.bill_number.replace(/[^a-zA-Z0-9_-]/g, '')}.pdf`
+  const blob = doc.output('blob')
+  const file = new File([blob], filename, { type: 'application/pdf' })
+  const url = URL.createObjectURL(blob)
+
+  return { blob, file, filename, url }
+}
+
+/** Plain account-statement PDF for a customer's ledger — kept simple, no address/GST, same as the bill PDF. */
+export function generateLedgerStatementDoc(
+  customer: CustomerLedgerBalance,
+  entries: PassbookEntry[],
+): jsPDF {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+
+  const pageWidth = 210
+  const margin = 14
+  const contentWidth = pageWidth - margin * 2
+  const NAVY = [15, 31, 69] as const
+  const RED = [210, 31, 31] as const
+  const TEAL = [13, 148, 136] as const
+  const DARK_TEXT = [30, 41, 59] as const
+  const MUTED_TEXT = [100, 116, 139] as const
+  const ROW_ALT_BG = [241, 245, 249] as const
+  const BORDER_GRAY = [226, 232, 240] as const
+
+  let y = 14
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(15)
+  doc.setTextColor(...NAVY)
+  doc.text('Sai Ganga Pipes', margin, y)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9)
+  doc.setTextColor(...MUTED_TEXT)
+  doc.text('Account Statement', pageWidth - margin, y, { align: 'right' })
+
+  y += 6
+  doc.setDrawColor(...BORDER_GRAY)
+  doc.setLineWidth(0.4)
+  doc.line(margin, y, pageWidth - margin, y)
+
+  y += 8
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12)
+  doc.setTextColor(...DARK_TEXT)
+  doc.text(customer.name, margin, y)
+  if (customer.phone) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(...MUTED_TEXT)
+    doc.text(customer.phone, margin, y + 5)
+  }
+
+  const balance = customer.balance
+  const balanceLabel = balance > 0 ? 'DUE' : balance < 0 ? 'ADVANCE' : 'SETTLED'
+  const balanceColor: readonly [number, number, number] = balance > 0 ? RED : balance < 0 ? TEAL : DARK_TEXT
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(14)
+  doc.setTextColor(...balanceColor)
+  doc.text(
+    balance === 0 ? 'SETTLED' : `Rs. ${Math.abs(balance).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${balanceLabel}`,
+    pageWidth - margin,
+    y,
+    { align: 'right' },
+  )
+
+  y += 10
+
+  const colX = { date: margin + 2, desc: margin + 28, amount: pageWidth - margin - 45, balance: pageWidth - margin - 2 }
+
+  doc.setFillColor(...NAVY)
+  doc.rect(margin, y, contentWidth, 8, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8)
+  doc.setTextColor(255, 255, 255)
+  doc.text('DATE', colX.date, y + 5.4)
+  doc.text('PARTICULARS', colX.desc, y + 5.4)
+  doc.text('AMOUNT (Rs.)', colX.amount, y + 5.4, { align: 'right' })
+  doc.text('BALANCE (Rs.)', colX.balance, y + 5.4, { align: 'right' })
+  y += 8
+
+  const sortedAsc = [...entries].sort((a, b) => a.entry_date.localeCompare(b.entry_date))
+
+  sortedAsc.forEach((entry, index) => {
+    const rowHeight = 7.5
+    if (index % 2 === 1) {
+      doc.setFillColor(...ROW_ALT_BG)
+      doc.rect(margin, y, contentWidth, rowHeight, 'F')
+    }
+
+    const isDue = entry.type === 'due'
+    const particulars = entry.bill_number ? `Bill ${entry.bill_number}` : isDue ? 'Due' : 'Payment Received'
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.setTextColor(...DARK_TEXT)
+    doc.text(formatInvoiceDate(entry.entry_date), colX.date, y + 5)
+    doc.text(particulars, colX.desc, y + 5)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(isDue ? RED[0] : TEAL[0], isDue ? RED[1] : TEAL[1], isDue ? RED[2] : TEAL[2])
+    doc.text(
+      `${isDue ? '+' : '-'}${formatQty(entry.amount)}`,
+      colX.amount,
+      y + 5,
+      { align: 'right' },
+    )
+
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(...DARK_TEXT)
+    doc.text(formatQty(entry.running_balance), colX.balance, y + 5, { align: 'right' })
+
+    doc.setDrawColor(...BORDER_GRAY)
+    doc.setLineWidth(0.2)
+    doc.line(margin, y + rowHeight, pageWidth - margin, y + rowHeight)
+
+    y += rowHeight
+  })
+
+  return doc
+}
+
+export function generateLedgerStatementBlob(
+  customer: CustomerLedgerBalance,
+  entries: PassbookEntry[],
+): { blob: Blob; file: File; filename: string; url: string } {
+  const doc = generateLedgerStatementDoc(customer, entries)
+  const filename = `Statement_${customer.name.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`
   const blob = doc.output('blob')
   const file = new File([blob], filename, { type: 'application/pdf' })
   const url = URL.createObjectURL(blob)

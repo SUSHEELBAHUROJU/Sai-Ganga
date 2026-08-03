@@ -1,12 +1,15 @@
 import { useState, useEffect, useMemo } from 'react'
 import { Modal } from './Modal'
-import { Download, Printer, MessageCircle, AlertCircle, Ban, Pencil } from 'lucide-react'
+import { Download, Printer, MessageCircle, AlertCircle, Ban, Pencil, IndianRupee } from 'lucide-react'
 import type { BillRow } from '../hooks/useBills'
 import { useVoidBill } from '../hooks/useBills'
 import { useCompanySettings } from '../hooks/useCompanySettings'
+import { useBillPaymentStatuses, useCustomerLedgerBalances } from '../hooks/useLedger'
 import { generateBillPdfBlob } from '../lib/pdfGenerator'
 import { useToast } from '../lib/toast'
+import { formatQty } from '../lib/format'
 import { ConfirmDialog } from './ConfirmDialog'
+import { RecordPaymentModal } from './RecordPaymentModal'
 
 type BillPdfModalProps = {
   open: boolean
@@ -20,6 +23,14 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
   const { showToast } = useToast()
   const voidBill = useVoidBill()
   const [confirmVoidOpen, setConfirmVoidOpen] = useState(false)
+  const [paymentOpen, setPaymentOpen] = useState(false)
+
+  const { data: billStatuses } = useBillPaymentStatuses()
+  const { data: customerBalances } = useCustomerLedgerBalances()
+  const paymentStatus = bill ? billStatuses?.get(bill.id) : undefined
+  const customerLedger = bill?.customer_id
+    ? customerBalances?.find((c) => c.customer_id === bill.customer_id)
+    : undefined
 
   const [pdfData, setPdfData] = useState<{
     blob: Blob
@@ -152,6 +163,51 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
             </div>
           )}
 
+          {!isVoided && bill.customer_id && paymentStatus && (
+            <div
+              className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3.5 ${
+                paymentStatus.payment_status === 'paid'
+                  ? 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30'
+                  : paymentStatus.payment_status === 'partial'
+                    ? 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30'
+                    : 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30'
+              }`}
+            >
+              <div>
+                <p
+                  className={`text-xs font-bold uppercase tracking-wider ${
+                    paymentStatus.payment_status === 'paid'
+                      ? 'text-green-700 dark:text-green-300'
+                      : paymentStatus.payment_status === 'partial'
+                        ? 'text-amber-700 dark:text-amber-300'
+                        : 'text-red-700 dark:text-red-300'
+                  }`}
+                >
+                  {paymentStatus.payment_status === 'paid'
+                    ? 'PAID'
+                    : paymentStatus.payment_status === 'partial'
+                      ? 'PARTIALLY PAID'
+                      : 'DUE'}
+                </p>
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                  Bill Total: ₹{formatQty(bill.grand_total)}
+                  {paymentStatus.payment_status !== 'paid' &&
+                    ` — ₹${formatQty(paymentStatus.due_amount)} due`}
+                </p>
+              </div>
+              {paymentStatus.payment_status !== 'paid' && (
+                <button
+                  type="button"
+                  onClick={() => setPaymentOpen(true)}
+                  className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-green-700"
+                >
+                  <IndianRupee className="h-3.5 w-3.5" />
+                  Record Payment
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Quick Action Toolbar */}
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-100 p-2.5 dark:bg-slate-800">
             <div className="flex flex-wrap items-center gap-2">
@@ -253,6 +309,16 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
       onConfirm={handleConfirmVoid}
       onCancel={() => setConfirmVoidOpen(false)}
     />
+
+    {bill.customer_id && (
+      <RecordPaymentModal
+        open={paymentOpen}
+        onClose={() => setPaymentOpen(false)}
+        customerId={bill.customer_id}
+        customerName={bill.customer_name}
+        outstandingBalance={Math.max(0, customerLedger?.balance ?? bill.grand_total)}
+      />
+    )}
     </>
   )
 }

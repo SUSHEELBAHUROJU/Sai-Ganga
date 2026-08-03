@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { DailySummaryTab } from './reports/DailySummaryTab'
 import { MonthlyTab } from './reports/MonthlyTab'
 import { CurrentStockView } from './reports/CurrentStockView'
+import { ReceivablesTab } from './reports/ReceivablesTab'
 import { DateRangeField } from '../components/DateRangeField'
 import { todayISODate } from '../lib/date'
 
@@ -10,6 +11,7 @@ const TABS = [
   { key: 'daily', label: 'Summary' },
   { key: 'monthly', label: 'Trend' },
   { key: 'stock', label: 'Stock' },
+  { key: 'dues', label: 'Dues' },
 ] as const
 
 type TabKey = (typeof TABS)[number]['key']
@@ -68,6 +70,7 @@ export function ReportsPage() {
       {activeTab === 'daily' && <DailySummaryTab fromDate={fromDate} toDate={toDate} />}
       {activeTab === 'monthly' && <MonthlyTab fromDate={fromDate} toDate={toDate} />}
       {activeTab === 'stock' && <CurrentStockView />}
+      {activeTab === 'dues' && <ReceivablesTab fromDate={fromDate} toDate={toDate} />}
     </div>
   )
 }

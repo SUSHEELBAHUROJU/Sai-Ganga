@@ -13,6 +13,7 @@ import {
 } from '../hooks/useRecords'
 import { useDeleteRecord } from '../hooks/useRecordMutations'
 import { useBill } from '../hooks/useBills'
+import { useBillPaymentStatuses } from '../hooks/useLedger'
 import { Chip } from '../components/Chip'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { AmountKgPcs } from '../components/AmountKgPcs'
@@ -83,6 +84,7 @@ export function RecordsPage() {
   const { data: recordsResult, isLoading } = useRecords({ fromDate, toDate, kinds })
   const deleteRecord = useDeleteRecord()
   const { showToast } = useToast()
+  const { data: billStatuses } = useBillPaymentStatuses()
 
   const transactionGroups = groupRecordsByTransaction(recordsResult?.records ?? [])
 
@@ -310,6 +312,19 @@ export function RecordsPage() {
                                 <Receipt className="h-3.5 w-3.5" />
                                 {saleBill.bill_number}
                               </button>
+                              {saleBill.status === 'active' && billStatuses?.get(saleBill.id) && (
+                                <span
+                                  className={`rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide ${
+                                    billStatuses.get(saleBill.id)!.payment_status === 'paid'
+                                      ? 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-300'
+                                      : billStatuses.get(saleBill.id)!.payment_status === 'partial'
+                                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
+                                        : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300'
+                                  }`}
+                                >
+                                  {billStatuses.get(saleBill.id)!.payment_status}
+                                </span>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => setEditingBillId(saleBill.id)}

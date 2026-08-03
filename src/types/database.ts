@@ -94,6 +94,13 @@ export type Database = {
             foreignKeyName: "bills_customer_id_fkey"
             columns: ["customer_id"]
             isOneToOne: false
+            referencedRelation: "customer_ledger_balance"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "bills_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
             referencedRelation: "customers"
             referencedColumns: ["id"]
           },
@@ -212,6 +219,80 @@ export type Database = {
             columns: ["scrap_type_id"]
             isOneToOne: false
             referencedRelation: "scrap_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ledger_transactions: {
+        Row: {
+          amount: number
+          bill_id: string | null
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          date: string
+          id: string
+          note: string | null
+          payment_app: string | null
+          payment_mode: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          bill_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          date?: string
+          id?: string
+          note?: string | null
+          payment_app?: string | null
+          payment_mode?: string | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          bill_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          date?: string
+          id?: string
+          note?: string | null
+          payment_app?: string | null
+          payment_mode?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ledger_transactions_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bill_payment_status"
+            referencedColumns: ["bill_id"]
+          },
+          {
+            foreignKeyName: "ledger_transactions_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ledger_transactions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer_ledger_balance"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "ledger_transactions_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
             referencedColumns: ["id"]
           },
         ]
@@ -593,8 +674,22 @@ export type Database = {
             foreignKeyName: "sales_entries_bill_id_fkey"
             columns: ["bill_id"]
             isOneToOne: false
+            referencedRelation: "bill_payment_status"
+            referencedColumns: ["bill_id"]
+          },
+          {
+            foreignKeyName: "sales_entries_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
             referencedRelation: "bills"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_entries_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer_ledger_balance"
+            referencedColumns: ["customer_id"]
           },
           {
             foreignKeyName: "sales_entries_customer_id_fkey"
@@ -742,6 +837,43 @@ export type Database = {
       }
     }
     Views: {
+      bill_payment_status: {
+        Row: {
+          bill_id: string | null
+          customer_id: string | null
+          due_amount: number | null
+          grand_total: number | null
+          paid_amount: number | null
+          payment_status: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bills_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customer_ledger_balance"
+            referencedColumns: ["customer_id"]
+          },
+          {
+            foreignKeyName: "bills_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customer_ledger_balance: {
+        Row: {
+          balance: number | null
+          customer_id: string | null
+          name: string | null
+          phone: string | null
+          total_due: number | null
+          total_received: number | null
+        }
+        Relationships: []
+      }
       finished_goods_stock: {
         Row: {
           current_stock: number | null
@@ -882,6 +1014,29 @@ export type Database = {
         }
       }
       generate_next_bill_number: { Args: never; Returns: string }
+      rpc_collections_by_mode: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          cash_total: number
+          combined_total: number
+          online_total: number
+        }[]
+      }
+      rpc_customer_passbook: {
+        Args: { p_customer_id: string }
+        Returns: {
+          amount: number
+          bill_number: string
+          created_at: string
+          entry_date: string
+          id: string
+          note: string
+          payment_app: string
+          payment_mode: string
+          running_balance: number
+          type: string
+        }[]
+      }
       rpc_daily_series: {
         Args: { p_from: string; p_to: string }
         Returns: {

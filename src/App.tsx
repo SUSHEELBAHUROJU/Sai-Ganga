@@ -19,6 +19,7 @@ const RecordPurchasePage = lazy(() =>
   import('./pages/RecordPurchasePage').then((m) => ({ default: m.RecordPurchasePage })),
 )
 const RecordsPage = lazy(() => import('./pages/RecordsPage').then((m) => ({ default: m.RecordsPage })))
+const LedgerPage = lazy(() => import('./pages/LedgerPage').then((m) => ({ default: m.LedgerPage })))
 const ReportsPage = lazy(() => import('./pages/ReportsPage').then((m) => ({ default: m.ReportsPage })))
 const SettingsPage = lazy(() =>
   import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })),
@@ -65,6 +66,7 @@ function App() {
             <Route path="sales/add" element={<AddSalePage />} />
             <Route path="purchases/add" element={<RecordPurchasePage />} />
             <Route path="records" element={<RecordsPage />} />
+            <Route path="ledger" element={<LedgerPage />} />
             <Route path="reports" element={<ReportsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>

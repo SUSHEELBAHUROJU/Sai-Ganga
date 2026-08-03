@@ -93,6 +93,13 @@ export function useDeleteRecord() {
     onSuccess: (_data, { kind }) => {
       invalidateForKind(queryClient, kind)
       queryClient.invalidateQueries({ queryKey: ['bills'] })
+      if (kind === 'sale') {
+        // Deleting a sale can void its bill (last line item removed above),
+        // which drops that bill's due from the ledger views.
+        queryClient.invalidateQueries({ queryKey: ['ledger_balances'] })
+        queryClient.invalidateQueries({ queryKey: ['bill_payment_status'] })
+        queryClient.invalidateQueries({ queryKey: ['ledger_passbook'] })
+      }
     },
   })
 }
