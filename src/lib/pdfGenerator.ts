@@ -563,7 +563,18 @@ export function generateLedgerStatementDoc(
 
   y += 10
 
-  const colX = { date: margin + 2, desc: margin + 28, amount: pageWidth - margin - 45, balance: pageWidth - margin - 2 }
+  // Separate "Order Amount" (a bill, increases what they owe) / "Payment
+  // Received" (decreases it) columns rather than one signed amount — this
+  // goes to the customer, and a lone colored +/- doesn't survive
+  // black-and-white printing, WhatsApp image compression, or colorblindness.
+  // Color is kept as a secondary cue, not the only signal.
+  const colX = {
+    date: margin + 2,
+    desc: margin + 24,
+    gave: pageWidth - margin - 68,
+    got: pageWidth - margin - 34,
+    balance: pageWidth - margin - 2,
+  }
 
   doc.setFillColor(...NAVY)
   doc.rect(margin, y, contentWidth, 8, 'F')
@@ -572,8 +583,11 @@ export function generateLedgerStatementDoc(
   doc.setTextColor(255, 255, 255)
   doc.text('DATE', colX.date, y + 5.4)
   doc.text('PARTICULARS', colX.desc, y + 5.4)
-  doc.text('AMOUNT (Rs.)', colX.amount, y + 5.4, { align: 'right' })
-  doc.text('BALANCE (Rs.)', colX.balance, y + 5.4, { align: 'right' })
+  doc.setFontSize(6.8)
+  doc.text('ORDER AMOUNT', colX.gave, y + 5.4, { align: 'right' })
+  doc.text('PAYMENT RECEIVED', colX.got, y + 5.4, { align: 'right' })
+  doc.setFontSize(8)
+  doc.text('BALANCE', colX.balance, y + 5.4, { align: 'right' })
   y += 8
 
   const sortedAsc = [...entries].sort((a, b) => a.entry_date.localeCompare(b.entry_date))
@@ -586,7 +600,7 @@ export function generateLedgerStatementDoc(
     }
 
     const isDue = entry.type === 'due'
-    const particulars = entry.bill_number ? `Bill ${entry.bill_number}` : isDue ? 'Due' : 'Payment Received'
+    const particulars = entry.bill_number ? `Bill ${entry.bill_number}` : isDue ? 'Due' : 'Payment'
 
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(8)
@@ -595,13 +609,13 @@ export function generateLedgerStatementDoc(
     doc.text(particulars, colX.desc, y + 5)
 
     doc.setFont('helvetica', 'bold')
-    doc.setTextColor(isDue ? RED[0] : TEAL[0], isDue ? RED[1] : TEAL[1], isDue ? RED[2] : TEAL[2])
-    doc.text(
-      `${isDue ? '+' : '-'}${formatQty(entry.amount)}`,
-      colX.amount,
-      y + 5,
-      { align: 'right' },
-    )
+    if (isDue) {
+      doc.setTextColor(...RED)
+      doc.text(formatQty(entry.amount), colX.gave, y + 5, { align: 'right' })
+    } else {
+      doc.setTextColor(...TEAL)
+      doc.text(formatQty(entry.amount), colX.got, y + 5, { align: 'right' })
+    }
 
     doc.setFont('helvetica', 'normal')
     doc.setTextColor(...DARK_TEXT)
@@ -613,6 +627,16 @@ export function generateLedgerStatementDoc(
 
     y += rowHeight
   })
+
+  y += 4
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...MUTED_TEXT)
+  doc.text(
+    'Order Amount = billed to you (increases due) · Payment Received = reduces due',
+    margin,
+    y,
+  )
 
   return doc
 }

@@ -55,10 +55,13 @@ function TransactionRow({
       </div>
       <div className="flex shrink-0 items-center gap-2 text-right">
         <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+            {isDue ? 'Order Amount' : 'Payment Received'}
+          </p>
           <p
             className={`font-mono text-sm font-bold ${isDue ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}
           >
-            {isDue ? '+' : '-'}₹{formatQty(entry.amount)}
+            ₹{formatQty(entry.amount)}
           </p>
           <p className="text-[11px] text-slate-400 dark:text-slate-500">
             Bal: ₹{formatQty(entry.running_balance)}
