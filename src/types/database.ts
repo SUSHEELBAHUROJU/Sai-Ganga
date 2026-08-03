@@ -1014,6 +1014,7 @@ export type Database = {
         }
       }
       generate_next_bill_number: { Args: never; Returns: string }
+      normalize_phone: { Args: { raw: string }; Returns: string }
       rpc_collections_by_mode: {
         Args: { p_from: string; p_to: string }
         Returns: {

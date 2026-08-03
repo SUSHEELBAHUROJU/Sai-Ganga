@@ -1,11 +1,12 @@
-import { useState } from 'react'
-import { Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Pencil, Plus, RotateCcw, Trash2, AlertTriangle } from 'lucide-react'
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query'
 import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field } from '../../components/Field'
 import { useToast } from '../../lib/toast'
 import { LoadingState } from '../../components/States'
+import { normalizePhone } from '../../lib/phone'
 
 export type Contact = {
   id: string
@@ -47,6 +48,17 @@ export function ContactListTab({
   const [address, setAddress] = useState('')
   const [phone, setPhone] = useState('')
 
+  // Warn before saving, with the existing contact's name, rather than only
+  // finding out from a raw DB error after submitting.
+  const duplicateMatch = useMemo(() => {
+    const normalized = normalizePhone(phone)
+    if (!normalized) return null
+    return (
+      (contacts ?? []).find((c) => c.id !== editing?.id && normalizePhone(c.phone ?? '') === normalized) ??
+      null
+    )
+  }, [phone, contacts, editing])
+
   function openAdd() {
     setEditing(null)
     setName('')
@@ -63,9 +75,23 @@ export function ContactListTab({
     setModalOpen(true)
   }
 
+  function describeError(error: unknown, fallback: string): string {
+    // Postgres unique_violation — customers.phone has a normalized-format
+    // unique index so the same number can't be typed in twice under
+    // different formatting. Give a clear message instead of the raw DB error.
+    if (error && typeof error === 'object' && 'code' in error && error.code === '23505') {
+      return `That phone number is already used by another ${entityLabel.toLowerCase()}.`
+    }
+    return fallback
+  }
+
   function handleSave() {
     if (!name.trim()) {
       showToast(`Enter a ${entityLabel.toLowerCase()} name`, 'error')
+      return
+    }
+    if (duplicateMatch) {
+      showToast(`"${duplicateMatch.name}" already has this phone number`, 'error')
       return
     }
     const input: ContactInput = {
@@ -82,7 +108,8 @@ export function ContactListTab({
             showToast(`${entityLabel} updated`)
             setModalOpen(false)
           },
-          onError: () => showToast(`Could not update ${entityLabel.toLowerCase()}`, 'error'),
+          onError: (error) =>
+            showToast(describeError(error, `Could not update ${entityLabel.toLowerCase()}`), 'error'),
         },
       )
     } else {
@@ -91,7 +118,8 @@ export function ContactListTab({
           showToast(`${entityLabel} added`)
           setModalOpen(false)
         },
-        onError: () => showToast(`Could not add ${entityLabel.toLowerCase()}`, 'error'),
+        onError: (error) =>
+          showToast(describeError(error, `Could not add ${entityLabel.toLowerCase()}`), 'error'),
       })
     }
   }
@@ -209,13 +237,21 @@ export function ContactListTab({
       <Modal title={editing ? `Edit ${entityLabel}` : `Add ${entityLabel}`} open={modalOpen} onClose={() => setModalOpen(false)}>
         <div className="space-y-4">
           <Field label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" />
-          <Field
-            label="Phone"
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Phone number"
-          />
+          <div>
+            <Field
+              label="Phone"
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Phone number"
+            />
+            {duplicateMatch && (
+              <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                "{duplicateMatch.name}" already has this phone number
+              </p>
+            )}
+          </div>
           <Field
             label="Address"
             value={address}
@@ -225,7 +261,7 @@ export function ContactListTab({
           <button
             type="button"
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || Boolean(duplicateMatch)}
             className="w-full rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
           >
             {saving ? 'Saving…' : editing ? 'Save Changes' : `Add ${entityLabel}`}

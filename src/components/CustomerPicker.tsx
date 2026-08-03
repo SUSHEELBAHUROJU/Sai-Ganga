@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { Pencil, Plus, Search } from 'lucide-react'
+import { Pencil, Plus, Search, AlertTriangle } from 'lucide-react'
 import { useCustomers, useAddCustomer } from '../hooks/useCustomers'
 import { useRecentCustomerIds } from '../hooks/useSalesEntries'
 import { Chip } from './Chip'
 import { Modal } from './Modal'
 import { Field } from './Field'
 import { useToast } from '../lib/toast'
+import { normalizePhone } from '../lib/phone'
 
 type CustomerPickerProps = {
   value: string | null
@@ -48,6 +49,14 @@ export function CustomerPicker({ value, onChange }: CustomerPickerProps) {
   const recentIdSet = new Set(recentCustomers.map((c) => c.id))
   const restOfList = filtered.filter((c) => !recentIdSet.has(c.id))
 
+  // Checked against the full list (not just active) — the DB constraint
+  // covers inactive customers too, so warn before even hitting the network.
+  const duplicateMatch = useMemo(() => {
+    const normalized = normalizePhone(phone)
+    if (!normalized) return null
+    return (customers ?? []).find((c) => normalizePhone(c.phone ?? '') === normalized) ?? null
+  }, [phone, customers])
+
   const visibleList = search ? filtered : restOfList
   const cappedList = visibleList.slice(0, DISPLAY_CAP)
   const hiddenCount = visibleList.length - cappedList.length
@@ -64,6 +73,10 @@ export function CustomerPicker({ value, onChange }: CustomerPickerProps) {
       showToast('Enter a customer name', 'error')
       return
     }
+    if (duplicateMatch) {
+      showToast(`"${duplicateMatch.name}" already has this phone number`, 'error')
+      return
+    }
     addCustomer.mutate(
       { name: name.trim(), address: address.trim() || null, phone: phone.trim() || null },
       {
@@ -73,7 +86,14 @@ export function CustomerPicker({ value, onChange }: CustomerPickerProps) {
           setAddOpen(false)
           setSearch('')
         },
-        onError: () => showToast('Could not add customer', 'error'),
+        onError: (error: any) => {
+          // Postgres unique_violation — same phone, different formatting.
+          if (error?.code === '23505') {
+            showToast('That phone number already belongs to another customer — search for them above instead', 'error')
+            return
+          }
+          showToast('Could not add customer', 'error')
+        },
       },
     )
   }
@@ -156,13 +176,34 @@ export function CustomerPicker({ value, onChange }: CustomerPickerProps) {
       <Modal title="Add Customer" open={addOpen} onClose={() => setAddOpen(false)}>
         <div className="space-y-4">
           <Field label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" />
-          <Field
-            label="Phone"
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="Phone number (optional)"
-          />
+          <div>
+            <Field
+              label="Phone"
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="Phone number (optional)"
+            />
+            {duplicateMatch && (
+              <div className="mt-1.5 space-y-1">
+                <p className="flex items-center gap-1.5 text-xs font-medium text-red-600 dark:text-red-400">
+                  <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                  "{duplicateMatch.name}" already has this phone number
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onChange(duplicateMatch.id)
+                    setAddOpen(false)
+                    setSearch('')
+                  }}
+                  className="text-xs font-semibold text-teal-600 underline hover:text-teal-700 dark:text-teal-400"
+                >
+                  Use "{duplicateMatch.name}" instead
+                </button>
+              </div>
+            )}
+          </div>
           <Field
             label="Address"
             value={address}
@@ -172,7 +213,7 @@ export function CustomerPicker({ value, onChange }: CustomerPickerProps) {
           <button
             type="button"
             onClick={handleAddCustomer}
-            disabled={addCustomer.isPending}
+            disabled={addCustomer.isPending || Boolean(duplicateMatch)}
             className="w-full rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
           >
             {addCustomer.isPending ? 'Adding…' : 'Add & Select'}
