@@ -1,6 +1,15 @@
 import { useState, useEffect } from 'react'
 import { Modal } from './Modal'
-import { Download, Printer, MessageCircle, AlertCircle, Ban, Pencil, IndianRupee } from 'lucide-react'
+import {
+  Download,
+  Printer,
+  MessageCircle,
+  AlertCircle,
+  Ban,
+  Pencil,
+  IndianRupee,
+  ExternalLink,
+} from 'lucide-react'
 import type { BillRow } from '../hooks/useBills'
 import { useVoidBill } from '../hooks/useBills'
 import { useBillPaymentStatuses, useCustomerLedgerBalances } from '../hooks/useLedger'
@@ -180,7 +189,7 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
                 <button
                   type="button"
                   onClick={() => setPaymentOpen(true)}
-                  className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-green-700"
+                  className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-lg bg-green-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-green-700 sm:w-auto"
                 >
                   <IndianRupee className="h-3.5 w-3.5" />
                   Record Payment
@@ -189,13 +198,14 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
             </div>
           )}
 
-          {/* Quick Action Toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-100 p-2.5 dark:bg-slate-800">
+          {/* Quick Action Toolbar — the grand total leads on a phone so the
+              number is the first thing read, with the actions below it. */}
+          <div className="flex flex-col-reverse gap-2 rounded-xl bg-slate-100 p-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between dark:bg-slate-800">
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={handleShareWhatsApp}
-                className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 active:scale-95 transition-all"
+                className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-emerald-700 active:scale-95 sm:w-auto"
               >
                 <MessageCircle className="h-4 w-4" />
                 Share via WhatsApp
@@ -204,7 +214,7 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
               <button
                 type="button"
                 onClick={handleDownload}
-                className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-700 border border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:flex-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
               >
                 <Download className="h-4 w-4" />
                 Download PDF
@@ -213,7 +223,7 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
               <button
                 type="button"
                 onClick={handlePrint}
-                className="flex items-center gap-1.5 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-700 border border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:flex-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
               >
                 <Printer className="h-4 w-4" />
                 Print
@@ -228,7 +238,7 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
                         onClose()
                         onEditBill(bill)
                       }}
-                      className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                      className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:flex-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
                     >
                       <Pencil className="h-4 w-4" />
                       Edit Bill
@@ -238,7 +248,7 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
                   <button
                     type="button"
                     onClick={() => setConfirmVoidOpen(true)}
-                    className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-100 dark:border-red-900 dark:bg-red-950/60 dark:text-red-300"
+                    className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-100 sm:flex-none dark:border-red-900 dark:bg-red-950/60 dark:text-red-300"
                   >
                     <Ban className="h-3.5 w-3.5" />
                     Void Bill
@@ -247,9 +257,9 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
               )}
             </div>
 
-            <div className="text-right">
+            <div className="flex items-baseline justify-between gap-2 sm:block sm:text-right">
               <span className="text-xs text-slate-500 dark:text-slate-400">Grand Total</span>
-              <p className="font-mono text-sm font-bold text-teal-600 dark:text-teal-400">
+              <p className="font-mono text-base font-bold text-teal-600 sm:text-sm dark:text-teal-400">
                 ₹{bill.grand_total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
               </p>
             </div>
@@ -266,12 +276,29 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
 
         {/* PDF Embedded View / Preview */}
         {pdfData?.url ? (
-          <div className="h-[60vh] w-full rounded-xl border border-slate-200 overflow-hidden bg-slate-50 dark:border-slate-800 dark:bg-slate-900 sm:h-[500px]">
-            <iframe
-              src={pdfData.url}
-              title={`Bill ${bill.bill_number}`}
-              className="h-full w-full border-none"
-            />
+          <div className="space-y-2">
+            {/*
+              iOS Safari (and some Android WebViews) will not render a PDF
+              inside an iframe — it shows a blank box with no hint that
+              anything is wrong. This link is always present so the bill is
+              reachable on those browsers, not only where the embed works.
+            */}
+            <a
+              href={pdfData.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 sm:hidden dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Open bill PDF full screen
+            </a>
+            <div className="h-[45vh] min-h-[240px] w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-50 sm:h-[500px] dark:border-slate-800 dark:bg-slate-900">
+              <iframe
+                src={pdfData.url}
+                title={`Bill ${bill.bill_number}`}
+                className="h-full w-full border-none"
+              />
+            </div>
           </div>
         ) : (
           <div className="flex h-64 items-center justify-center text-sm text-slate-500">

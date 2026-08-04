@@ -13,7 +13,7 @@ export function AddProductionPage() {
 
   return (
     <div className="space-y-6 pb-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Add Production</h2>
         <DateField value={entryDate} onChange={setEntryDate} />
       </div>

@@ -41,11 +41,16 @@ function StockRow({
   children: React.ReactNode
 }) {
   return (
+    // Wraps rather than forcing one line: at the 768px breakpoint these cards
+    // sit three-across next to the sidebar, leaving ~128px of content width —
+    // not enough for a label plus "18.5 kg (12 pcs)" and a Low badge.
     <div
-      className={`flex items-center justify-between gap-2 border-l-4 py-1.5 pl-2.5 ${stockHealthBorderClass(isNegative, isLow)}`}
+      className={`flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 border-l-4 py-1.5 pl-2.5 ${stockHealthBorderClass(isNegative, isLow)}`}
     >
-      <span className="min-w-0 truncate text-sm text-slate-700 dark:text-slate-300">{label}</span>
-      <div className="flex shrink-0 items-center gap-2">
+      <span className="min-w-0 flex-1 truncate text-sm text-slate-700 dark:text-slate-300">
+        {label}
+      </span>
+      <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-2">
         <StockFlag isNegative={isNegative} isLow={isLow} threshold={threshold} />
         {children}
       </div>
@@ -128,7 +133,7 @@ export function DashboardCurrentStock() {
                 {hiddenPipeCount > 0 ? (
                   <Link
                     to="/reports?tab=stock"
-                    className="text-xs font-medium text-teal-600 hover:underline dark:text-teal-400"
+                    className="-my-2 -mr-2 inline-flex min-h-[44px] items-center px-2 text-xs font-medium text-teal-600 hover:underline dark:text-teal-400"
                   >
                     View all
                   </Link>

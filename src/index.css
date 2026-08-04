@@ -13,6 +13,22 @@
 
 :root {
   color-scheme: light dark;
+
+  /*
+   * Height of the fixed mobile bottom nav, including the phone's home-indicator
+   * safe area. Single source of truth for the two things that have to clear it:
+   * `main`'s bottom padding, and where the sticky Save bar parks itself. Zero on
+   * desktop, where the nav is a sidebar instead.
+   */
+  /* 4rem = the nav's measured 62px (border + py-2 + 32px badge + label) with
+     a little slack, so the Save bar clears it rather than kissing it. */
+  --app-bottom-nav-h: calc(4rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 768px) {
+  :root {
+    --app-bottom-nav-h: 0px;
+  }
 }
 
 @keyframes banner-in {
@@ -33,11 +49,28 @@
 html,
 body,
 #root {
-  height: 100%;
+  min-height: 100%;
 }
 
 body {
   margin: 0;
+}
+
+/*
+ * Date inputs are the one control iOS Safari refuses to size like a normal
+ * field — it applies its own intrinsic width and centres the text, which is
+ * what pushed the Add-entry header and the Reports range picker past the
+ * screen edge on a phone. Force them to behave like every other input so
+ * `w-full`/`flex-1` actually constrain them.
+ */
+input[type='date'] {
+  min-width: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
 }
 
 /*

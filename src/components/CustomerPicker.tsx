@@ -112,7 +112,7 @@ export function CustomerPicker({ value, onChange }: CustomerPickerProps) {
         <button
           type="button"
           onClick={() => onChange('')}
-          className="flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 dark:text-green-300 dark:hover:bg-green-900"
+          className="flex min-h-[44px] shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-100 dark:text-green-300 dark:hover:bg-green-900"
         >
           <Pencil className="h-3.5 w-3.5" />
           Change
@@ -160,7 +160,7 @@ export function CustomerPicker({ value, onChange }: CustomerPickerProps) {
           <button
             type="button"
             onClick={openAdd}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-dashed border-teal-500 px-4 py-2 text-sm font-medium text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/40"
+            className="flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border border-dashed border-teal-500 px-4 py-2 text-sm font-medium text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/40"
           >
             <Plus className="h-4 w-4" />
             New Customer
@@ -214,7 +214,7 @@ export function CustomerPicker({ value, onChange }: CustomerPickerProps) {
             type="button"
             onClick={handleAddCustomer}
             disabled={addCustomer.isPending || Boolean(duplicateMatch)}
-            className="w-full rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+            className="min-h-[44px] w-full rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
           >
             {addCustomer.isPending ? 'Adding…' : 'Add & Select'}
           </button>

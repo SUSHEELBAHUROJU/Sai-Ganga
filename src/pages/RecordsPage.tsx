@@ -181,7 +181,7 @@ export function RecordsPage() {
                 setFromDate(next)
                 setToDate((prev) => clampRangeEnd(next, prev))
               }}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              className="min-h-[44px] min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
           </label>
           <label className="text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -196,7 +196,7 @@ export function RecordsPage() {
                 setToDate(next)
                 setFromDate((prev) => clampRangeStart(prev, next))
               }}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              className="min-h-[44px] min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
           </label>
         </div>
@@ -261,7 +261,7 @@ export function RecordsPage() {
                 <button
                   type="button"
                   onClick={() => jumpToDay(date)}
-                  className="-mr-2 rounded-lg px-2 py-1 text-xs font-medium text-teal-600 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950/40"
+                  className="-mr-2 flex min-h-[44px] shrink-0 items-center rounded-lg px-2 text-xs font-medium text-teal-600 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950/40"
                 >
                   View this day
                 </button>
@@ -307,7 +307,7 @@ export function RecordsPage() {
                               <button
                                 type="button"
                                 onClick={() => setSelectedBillId(saleBill.id)}
-                                className="inline-flex items-center gap-1 rounded-md bg-teal-100 px-2.5 py-1 font-mono text-xs font-bold text-teal-800 hover:bg-teal-200 dark:bg-teal-950/80 dark:text-teal-300 dark:hover:bg-teal-900"
+                                className="inline-flex min-h-[44px] items-center gap-1 rounded-md bg-teal-100 px-2.5 py-1 font-mono text-xs font-bold text-teal-800 hover:bg-teal-200 dark:bg-teal-950/80 dark:text-teal-300 dark:hover:bg-teal-900"
                               >
                                 <Receipt className="h-3.5 w-3.5" />
                                 {saleBill.bill_number}
@@ -328,7 +328,7 @@ export function RecordsPage() {
                               <button
                                 type="button"
                                 onClick={() => setEditingBillId(saleBill.id)}
-                                className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                                className="inline-flex min-h-[44px] items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                               >
                                 <Pencil className="h-3.5 w-3.5" />
                                 Edit Bill
@@ -338,7 +338,7 @@ export function RecordsPage() {
                             <button
                               type="button"
                               onClick={() => handleCreateBillForGroup(group)}
-                              className="inline-flex items-center gap-1 rounded-md border border-teal-300 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-700 hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/60 dark:text-teal-300"
+                              className="inline-flex min-h-[44px] items-center gap-1 rounded-md border border-teal-300 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-700 hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/60 dark:text-teal-300"
                             >
                               <Receipt className="h-3.5 w-3.5" />
                               + Create Bill
@@ -363,13 +363,13 @@ export function RecordsPage() {
                           <button
                             type="button"
                             onClick={() => toggleGroupCollapse(group.id)}
-                            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
                             aria-label="Toggle group items"
                           >
                             {isCollapsed ? (
-                              <ChevronDown className="h-4 w-4" />
+                              <ChevronDown className="h-5 w-5" />
                             ) : (
-                              <ChevronUp className="h-4 w-4" />
+                              <ChevronUp className="h-5 w-5" />
                             )}
                           </button>
                         )}
@@ -414,22 +414,22 @@ export function RecordsPage() {
                                   )}
                                 </span>
 
-                                <div className="flex items-center gap-1 ml-2">
+                                <div className="-mr-1 ml-1 flex items-center">
                                   <button
                                     type="button"
                                     aria-label={`Edit ${RECORD_KIND_LABEL[item.kind]} entry`}
                                     onClick={() => setEditing(item)}
-                                    className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+                                    className="flex h-11 w-11 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
                                   >
-                                    <Pencil className="h-3.5 w-3.5" />
+                                    <Pencil className="h-4 w-4" />
                                   </button>
                                   <button
                                     type="button"
                                     aria-label={`Delete ${RECORD_KIND_LABEL[item.kind]} entry`}
                                     onClick={() => setDeleting(item)}
-                                    className="rounded-full p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"
+                                    className="flex h-11 w-11 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"
                                   >
-                                    <Trash2 className="h-3.5 w-3.5" />
+                                    <Trash2 className="h-4 w-4" />
                                   </button>
                                 </div>
                               </div>

@@ -77,7 +77,7 @@ export function ScrapDealerPicker({ value, onChange }: ScrapDealerPickerProps) {
         <button
           type="button"
           onClick={() => onChange('')}
-          className="flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-100 dark:text-orange-300 dark:hover:bg-orange-900"
+          className="flex min-h-[44px] shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-100 dark:text-orange-300 dark:hover:bg-orange-900"
         >
           <Pencil className="h-3.5 w-3.5" />
           Change
@@ -106,7 +106,7 @@ export function ScrapDealerPicker({ value, onChange }: ScrapDealerPickerProps) {
         <button
           type="button"
           onClick={openAdd}
-          className="flex shrink-0 items-center gap-1.5 rounded-full border border-dashed border-teal-500 px-4 py-2 text-sm font-medium text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/40"
+          className="flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full border border-dashed border-teal-500 px-4 py-2 text-sm font-medium text-teal-600 hover:bg-teal-50 dark:hover:bg-teal-950/40"
         >
           <Plus className="h-4 w-4" />
           New Dealer
@@ -138,7 +138,7 @@ export function ScrapDealerPicker({ value, onChange }: ScrapDealerPickerProps) {
             type="button"
             onClick={handleAddDealer}
             disabled={addDealer.isPending}
-            className="w-full rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+            className="min-h-[44px] w-full rounded-lg bg-teal-600 py-2.5 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
           >
             {addDealer.isPending ? 'Adding…' : 'Add & Select'}
           </button>

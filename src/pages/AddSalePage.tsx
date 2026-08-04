@@ -118,7 +118,7 @@ export function AddSalePage() {
 
   return (
     <div className="space-y-6 pb-2">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Add Sale</h2>
         <DateField value={entryDate} onChange={setEntryDate} />
       </div>

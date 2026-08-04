@@ -108,7 +108,7 @@ export function TrendChart({ series, rangeLabel }: TrendChartProps) {
         <button
           type="button"
           onClick={() => setShowTable((v) => !v)}
-          className="flex items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
+          className="flex min-h-[40px] items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800"
         >
           {showTable ? <BarChart3 className="h-3.5 w-3.5" /> : <Table2 className="h-3.5 w-3.5" />}
           {showTable ? 'Chart' : 'Table'}
@@ -122,8 +122,8 @@ export function TrendChart({ series, rangeLabel }: TrendChartProps) {
       )}
 
       {hasData && showTable && (
-        <div className="max-h-72 overflow-y-auto">
-          <table className="w-full text-sm tabular-nums">
+        <div className="-mx-4 max-h-72 overflow-x-auto overflow-y-auto px-4 sm:mx-0 sm:px-0">
+          <table className="w-full min-w-[18rem] text-sm tabular-nums">
             <thead className="sticky top-0 bg-white dark:bg-slate-900">
               <tr className="text-left text-xs text-slate-500 dark:text-slate-400">
                 <th className="py-1.5 font-medium">Date</th>
@@ -179,7 +179,7 @@ export function TrendChart({ series, rangeLabel }: TrendChartProps) {
                     x={PAD.left - 6}
                     y={yFor(value) + 3}
                     textAnchor="end"
-                    fontSize={10}
+                    fontSize={11}
                     fill="var(--viz-muted)"
                     style={{ fontVariantNumeric: 'tabular-nums' }}
                   >
@@ -205,7 +205,7 @@ export function TrendChart({ series, rangeLabel }: TrendChartProps) {
                     x={xFor(day)}
                     y={totalHeight - 8}
                     textAnchor="middle"
-                    fontSize={10}
+                    fontSize={11}
                     fill="var(--viz-muted)"
                     style={{ fontVariantNumeric: 'tabular-nums' }}
                   >

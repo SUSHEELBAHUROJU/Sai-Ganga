@@ -102,12 +102,12 @@ export function RawMaterialsTab() {
   return (
     <div>
       <div className="mb-4 flex items-center justify-between gap-2">
-        <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+        <label className="flex min-h-[44px] items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
           <input
             type="checkbox"
             checked={showInactive}
             onChange={(e) => setShowInactive(e.target.checked)}
-            className="h-4 w-4 rounded border-slate-300"
+            className="h-5 w-5 rounded border-slate-300"
           />
           Show removed types
         </label>
@@ -150,7 +150,7 @@ export function RawMaterialsTab() {
                 type="button"
                 aria-label={`Remove ${t.name}`}
                 onClick={() => setRemoveTarget(t)}
-                className="rounded-full p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"
               >
                 <Trash2 className="h-4 w-4" />
               </button>
@@ -159,7 +159,7 @@ export function RawMaterialsTab() {
                 type="button"
                 aria-label={`Restore ${t.name}`}
                 onClick={() => handleRestore(t)}
-                className="rounded-full p-2 text-slate-400 hover:bg-teal-50 hover:text-teal-600 dark:hover:bg-teal-950/50"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-teal-50 hover:text-teal-600 dark:hover:bg-teal-950/50"
               >
                 <RotateCcw className="h-4 w-4" />
               </button>

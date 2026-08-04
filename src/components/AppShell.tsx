@@ -78,7 +78,19 @@ export function AppShell() {
           <h1 className="text-sm font-bold tracking-wide text-white">Sai Ganga</h1>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 pb-24 md:pb-4">
+        {/*
+          Deliberately NOT a scroll container: `overflow-y-auto` here made
+          `main` a scrollport that never actually scrolled (its height is
+          content-driven), which silently killed every `position: sticky`
+          Save bar inside it and swallowed horizontal overflow into a
+          sideways scroll nobody could see. Letting the document scroll
+          instead is also what mobile browsers optimise for — URL-bar hiding
+          and momentum scrolling both come back.
+        */}
+        <main
+          className="min-w-0 flex-1 p-4"
+          style={{ paddingBottom: 'calc(var(--app-bottom-nav-h) + 1rem)' }}
+        >
           <Outlet />
         </main>
 
@@ -91,14 +103,17 @@ export function AppShell() {
               className="absolute inset-0 bg-slate-900/40"
               onClick={() => setMoreOpen(false)}
             />
-            <div className="absolute inset-x-0 bottom-20 rounded-t-2xl border-t border-slate-200 bg-white p-3 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+            <div
+              className="absolute inset-x-0 max-h-[70vh] overflow-y-auto rounded-t-2xl border-t border-slate-200 bg-white p-3 shadow-xl dark:border-slate-800 dark:bg-slate-900"
+              style={{ bottom: 'var(--app-bottom-nav-h)' }}
+            >
               <div className="mb-2 flex items-center justify-between px-2">
                 <span className="text-sm font-bold text-slate-500 dark:text-slate-400">More</span>
                 <button
                   type="button"
                   aria-label="Close"
                   onClick={() => setMoreOpen(false)}
-                  className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  className="-mr-1 flex h-11 w-11 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -115,14 +130,19 @@ export function AppShell() {
         )}
 
         {/* Bottom nav — mobile: large, colorful, distinct-shape icon badges so
-            each action is recognizable by color/shape alone. */}
-        <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t border-slate-200 bg-white shadow-[0_-2px_8px_rgba(0,0,0,0.04)] md:hidden dark:border-slate-800 dark:bg-slate-900">
+            each action is recognizable by color/shape alone. Its height plus
+            the phone's home-indicator inset is --app-bottom-nav-h, which every
+            page and the sticky Save bar clear. */}
+        <nav
+          className="fixed inset-x-0 bottom-0 z-30 flex border-t border-slate-200 bg-white shadow-[0_-2px_8px_rgba(0,0,0,0.04)] md:hidden dark:border-slate-800 dark:bg-slate-900"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        >
           {PRIMARY_NAV_ITEMS.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
               end={item.path === '/'}
-              className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2"
+              className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2"
             >
               {({ isActive }) => (
                 <>
@@ -134,7 +154,7 @@ export function AppShell() {
                     <item.icon className="h-[18px] w-[18px]" strokeWidth={2.25} />
                   </span>
                   <span
-                    className={`text-[10px] font-bold leading-none ${
+                    className={`max-w-full truncate px-0.5 text-[11px] font-bold leading-none ${
                       isActive ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'
                     }`}
                   >
@@ -148,7 +168,7 @@ export function AppShell() {
             type="button"
             onClick={() => setMoreOpen(true)}
             aria-label="More"
-            className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2"
+            className="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 py-2"
           >
             <span
               className={`flex h-8 w-8 items-center justify-center rounded-xl text-white transition-transform ${
@@ -158,7 +178,7 @@ export function AppShell() {
               <MoreHorizontal className="h-[18px] w-[18px]" strokeWidth={2.25} />
             </span>
             <span
-              className={`text-[10px] font-bold leading-none ${
+              className={`max-w-full truncate px-0.5 text-[11px] font-bold leading-none ${
                 isSecondaryActive ? 'text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'
               }`}
             >

@@ -60,8 +60,11 @@ export function MonthlyTab({ fromDate, toDate }: { fromDate: string; toDate: str
             {report.byProduct.length === 0 ? (
               <p className="text-sm text-slate-400 dark:text-slate-500">No activity in this range.</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              // Scrolls within its own row (bled to the card edge on a phone
+              // so the affordance is visible) rather than widening the page.
+              // min-w keeps the three columns readable instead of crushing them.
+              <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+                <table className="w-full min-w-[22rem] text-sm">
                   <thead>
                     <tr className="text-left text-xs text-slate-500 dark:text-slate-400">
                       <th className="pb-2 font-medium">Product</th>

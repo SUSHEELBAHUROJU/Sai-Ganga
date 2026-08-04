@@ -31,34 +31,38 @@ export function DateRangeField({ fromDate, toDate, onChange }: DateRangeFieldPro
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900">
-          <CalendarRange className="h-4 w-4 shrink-0 text-slate-400" />
-          <input
-            type="date"
-            value={fromDate}
-            max={toDate}
-            onChange={(e) => {
-              const next = e.target.value || fromDate
-              const to = next > toDate ? next : toDate
-              onChange({ fromDate: next, toDate: clampRangeEnd(next, to) })
-            }}
-            className="w-[8.5rem] bg-transparent text-sm font-medium text-slate-900 outline-none dark:text-slate-100"
-          />
-          <span className="text-xs text-slate-400 dark:text-slate-500">to</span>
-          <input
-            type="date"
-            value={toDate}
-            min={fromDate}
-            max={today}
-            onChange={(e) => {
-              const next = e.target.value || toDate
-              const from = next < fromDate ? next : fromDate
-              onChange({ fromDate: clampRangeStart(from, next), toDate: next })
-            }}
-            className="w-[8.5rem] bg-transparent text-sm font-medium text-slate-900 outline-none dark:text-slate-100"
-          />
-        </div>
+      {/* Both inputs flex down instead of holding a fixed 8.5rem each — two
+          fixed date fields plus the icon and "to" were ~350px wide, off the
+          edge of any phone. `basis-28` keeps them side by side on a 320px
+          screen and lets them grow to their natural width from there up. */}
+      <div className="flex w-full min-w-0 flex-wrap items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2.5 sm:w-auto dark:border-slate-700 dark:bg-slate-900">
+        <CalendarRange className="h-4 w-4 shrink-0 text-slate-400" />
+        <input
+          type="date"
+          aria-label="From date"
+          value={fromDate}
+          max={toDate}
+          onChange={(e) => {
+            const next = e.target.value || fromDate
+            const to = next > toDate ? next : toDate
+            onChange({ fromDate: next, toDate: clampRangeEnd(next, to) })
+          }}
+          className="min-w-0 flex-1 basis-28 bg-transparent text-sm font-medium text-slate-900 outline-none sm:w-[8.5rem] sm:flex-none sm:basis-auto dark:text-slate-100"
+        />
+        <span className="shrink-0 text-xs text-slate-400 dark:text-slate-500">to</span>
+        <input
+          type="date"
+          aria-label="To date"
+          value={toDate}
+          min={fromDate}
+          max={today}
+          onChange={(e) => {
+            const next = e.target.value || toDate
+            const from = next < fromDate ? next : fromDate
+            onChange({ fromDate: clampRangeStart(from, next), toDate: next })
+          }}
+          className="min-w-0 flex-1 basis-28 bg-transparent text-sm font-medium text-slate-900 outline-none sm:w-[8.5rem] sm:flex-none sm:basis-auto dark:text-slate-100"
+        />
       </div>
       <div className="flex flex-wrap gap-2">
         {SHORTCUTS.map((s) => {

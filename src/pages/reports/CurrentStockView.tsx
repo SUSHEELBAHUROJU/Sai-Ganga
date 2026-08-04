@@ -24,12 +24,12 @@ export function CurrentStockView() {
       <div>
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400">Finished Goods</h3>
-          <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <label className="flex min-h-[44px] items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
             <input
               type="checkbox"
               checked={showInactivePipes}
               onChange={(e) => setShowInactivePipes(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-slate-300"
+              className="h-5 w-5 rounded border-slate-300"
             />
             Show removed
           </label>
@@ -94,12 +94,12 @@ export function CurrentStockView() {
       <div>
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400">Raw Materials</h3>
-          <label className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+          <label className="flex min-h-[44px] items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
             <input
               type="checkbox"
               checked={showInactiveMaterials}
               onChange={(e) => setShowInactiveMaterials(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-slate-300"
+              className="h-5 w-5 rounded border-slate-300"
             />
             Show removed
           </label>

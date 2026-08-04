@@ -35,35 +35,39 @@ export function LineItemsList({ lines, onRemove, onUpdateQuantity }: LineItemsLi
               </span>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
               {/* Stepper if onUpdateQuantity provided */}
               {onUpdateQuantity ? (
                 <div className="flex items-center gap-1 rounded-lg border border-slate-300 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-800">
                   <button
                     type="button"
+                    aria-label={`One less ${line.label}`}
                     onClick={() => onUpdateQuantity(line.localId, Math.max(1, line.quantity - 1))}
-                    className="rounded p-1 text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700"
+                    className="flex h-10 w-10 items-center justify-center rounded text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700"
                   >
-                    <Minus className="h-3.5 w-3.5" />
+                    <Minus className="h-4 w-4" />
                   </button>
                   <input
                     type="number"
                     min="1"
+                    inputMode="numeric"
+                    aria-label={`Quantity of ${line.label}`}
                     value={line.quantity}
                     onChange={(e) => {
                       const val = parseInt(e.target.value) || 1
                       onUpdateQuantity(line.localId, Math.max(1, val))
                     }}
-                    className="w-12 text-center font-mono text-sm font-bold text-slate-900 bg-transparent outline-none dark:text-slate-100"
+                    className="w-12 bg-transparent text-center font-mono text-sm font-bold text-slate-900 outline-none dark:text-slate-100"
                   />
                   <button
                     type="button"
+                    aria-label={`One more ${line.label}`}
                     onClick={() => onUpdateQuantity(line.localId, line.quantity + 1)}
-                    className="rounded p-1 text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700"
+                    className="flex h-10 w-10 items-center justify-center rounded text-slate-600 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700"
                   >
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus className="h-4 w-4" />
                   </button>
-                  <span className="text-xs text-slate-400 pr-1">pcs</span>
+                  <span className="pr-1 text-xs text-slate-400">pcs</span>
                 </div>
               ) : null}
 
@@ -73,9 +77,9 @@ export function LineItemsList({ lines, onRemove, onUpdateQuantity }: LineItemsLi
                 type="button"
                 aria-label={`Remove ${line.label}`}
                 onClick={() => onRemove(line.localId)}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"
+                className="flex h-11 w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"
               >
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </button>
             </div>
           </li>

@@ -72,48 +72,54 @@ function StockRow({ itemType, itemId, label, unit, initialBalance, initialThresh
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 dark:border-slate-800">
-      <span className="min-w-0 flex-1 truncate font-medium text-slate-900 dark:text-slate-100">{label}</span>
+    // Label on its own line on a phone (it was being squeezed to ~80px by
+    // two fixed-width inputs), then the two fields side by side beneath it.
+    <div className="rounded-lg border border-slate-200 px-4 py-3 sm:flex sm:flex-wrap sm:items-center sm:gap-3 dark:border-slate-800">
+      <span className="mb-2 block min-w-0 truncate font-medium text-slate-900 sm:mb-0 sm:flex-1 dark:text-slate-100">
+        {label}
+      </span>
 
-      <label className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-        Opening ({unit})
-        <input
-          type="number"
-          min="0"
-          inputMode="decimal"
-          value={balance}
-          onChange={(e) => setBalance(e.target.value)}
-          placeholder="0"
-          className="w-20 rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-        />
-      </label>
+      <div className="flex items-end gap-3">
+        <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-slate-500 sm:flex-none sm:flex-row sm:items-center sm:gap-1.5 dark:text-slate-400">
+          Opening ({unit})
+          <input
+            type="number"
+            min="0"
+            inputMode="decimal"
+            value={balance}
+            onChange={(e) => setBalance(e.target.value)}
+            placeholder="0"
+            className="min-h-[44px] w-full min-w-0 rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 sm:w-20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+          />
+        </label>
 
-      <label className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-        Low-stock at
-        <input
-          type="number"
-          min="0"
-          inputMode="decimal"
-          value={threshold}
-          onChange={(e) => setThreshold(e.target.value)}
-          placeholder="Off"
-          className="w-20 rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-        />
-      </label>
+        <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-slate-500 sm:flex-none sm:flex-row sm:items-center sm:gap-1.5 dark:text-slate-400">
+          Low-stock at
+          <input
+            type="number"
+            min="0"
+            inputMode="decimal"
+            value={threshold}
+            onChange={(e) => setThreshold(e.target.value)}
+            placeholder="Off"
+            className="min-h-[44px] w-full min-w-0 rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 sm:w-20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+          />
+        </label>
 
-      <button
-        type="button"
-        onClick={handleSave}
-        disabled={!dirty || saving}
-        aria-label={`Save ${label}`}
-        className={`rounded-full p-2 ${
-          dirty
-            ? 'bg-teal-600 text-white hover:bg-teal-700'
-            : 'bg-slate-100 text-slate-300 dark:bg-slate-800 dark:text-slate-600'
-        }`}
-      >
-        <Check className="h-4 w-4" />
-      </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={!dirty || saving}
+          aria-label={`Save ${label}`}
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${
+            dirty
+              ? 'bg-teal-600 text-white hover:bg-teal-700'
+              : 'bg-slate-100 text-slate-300 dark:bg-slate-800 dark:text-slate-600'
+          }`}
+        >
+          <Check className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   )
 }

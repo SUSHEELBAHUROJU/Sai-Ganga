@@ -21,7 +21,10 @@ export function Chip({
       type={type}
       disabled={disabled}
       onClick={disabled ? undefined : onClick}
-      className={`min-h-[40px] shrink-0 rounded-full border-2 px-4 py-2 text-sm font-semibold transition-colors ${
+      // max-w-full + truncate: a chip carrying a long customer/dealer name
+      // ("Anantha Padmanabha Irrigation Systems") is wider than a 320px
+      // screen on its own, and shrink-0 meant it pushed the page sideways.
+      className={`min-h-[44px] max-w-full shrink-0 truncate rounded-full border-2 px-4 py-2 text-sm font-semibold transition-colors ${
         disabled
           ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed dark:border-slate-800 dark:bg-slate-800 dark:text-slate-500'
           : selected

@@ -117,7 +117,7 @@ export function SecurityTab() {
         <button
           type="button"
           onClick={() => setSignOutOpen(true)}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50"
+          className="flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50"
         >
           <LogOut className="h-4 w-4" />
           Sign out
