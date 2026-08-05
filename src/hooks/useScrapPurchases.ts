@@ -3,7 +3,9 @@ import { supabase } from '../lib/supabase'
 
 export type NewScrapPurchase = {
   entry_date: string
-  scrap_dealer_id: string
+  /** Optional, like a raw-material purchase's supplier — scrap is often bought
+   *  off a walk-in seller nobody wants to add to the dealer list. */
+  scrap_dealer_id: string | null
   scrap_type_id: string
   quantity_kg: number
   cost: number | null

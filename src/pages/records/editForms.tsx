@@ -516,10 +516,10 @@ export function EditScrapPurchaseForm({ row, onChange }: EditFormProps<ScrapPurc
     const costText = next.cost ?? cost
     const note = next.notes ?? notes
     onChange(
-      dealer && scrapType && qty > 0
+      scrapType && qty > 0
         ? {
             entry_date: date,
-            scrap_dealer_id: dealer,
+            scrap_dealer_id: dealer || null,
             scrap_type_id: scrapType,
             quantity_kg: qty,
             cost: costText ? Number(costText) : null,
@@ -540,7 +540,7 @@ export function EditScrapPurchaseForm({ row, onChange }: EditFormProps<ScrapPurc
       />
       <div>
         <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Scrap Dealer
+          Scrap Dealer (optional)
         </span>
         <ScrapDealerPicker
           value={dealerId || null}
