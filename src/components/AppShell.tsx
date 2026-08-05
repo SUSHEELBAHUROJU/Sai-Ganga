@@ -89,7 +89,10 @@ export function AppShell() {
         */}
         <main
           className="min-w-0 flex-1 p-4"
-          style={{ paddingBottom: 'calc(var(--app-bottom-nav-h) + 1rem)' }}
+          style={{
+            paddingBottom:
+              'calc(var(--app-bottom-nav-h) + var(--app-action-bar-h) + 1rem)',
+          }}
         >
           <Outlet />
         </main>

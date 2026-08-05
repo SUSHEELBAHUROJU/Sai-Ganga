@@ -1,4 +1,17 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, type ReactNode } from 'react'
+
+/**
+ * Tracks every mounted action bar's height so `main` can reserve room for the
+ * tallest visible one. A screen can have more than one mounted at a time —
+ * Add Production keeps both tab panels mounted and only hides one with CSS —
+ * and a hidden panel's bar measures 0, so taking the max picks the real one.
+ */
+const barHeights = new Map<symbol, number>()
+
+function publishBarHeight() {
+  const tallest = Math.max(0, ...barHeights.values())
+  document.documentElement.style.setProperty('--app-action-bar-h', `${tallest}px`)
+}
 
 /**
  * Pins the Save button to the bottom of the screen, full-width, so it's
@@ -12,34 +25,44 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
  * Fixed rather than sticky: `position: sticky` only pins while the bar's
  * containing block is on screen, and on most entry screens the bar is the
  * last thing in that block — so it never pinned at all and the Save button
- * sat hundreds of pixels below the fold. The spacer below reserves the bar's
- * real measured height in the flow so it can never cover the last field.
+ * sat hundreds of pixels below the fold.
+ *
+ * Because it's fixed, the room it needs is reserved on `main` via
+ * --app-action-bar-h rather than with a spacer next to the bar: content can
+ * follow the bar in the tree (Add Purchase renders Factory Waste after the
+ * form), and a spacer here would leave that trailing content underneath it.
  */
 export function StickyActionBar({ children }: { children: ReactNode }) {
   const barRef = useRef<HTMLDivElement>(null)
-  const [height, setHeight] = useState(76)
 
   useLayoutEffect(() => {
     const bar = barRef.current
     if (!bar) return
-    const measure = () => setHeight(bar.offsetHeight)
+    const id = Symbol('action-bar')
+
+    const measure = () => {
+      barHeights.set(id, bar.offsetHeight)
+      publishBarHeight()
+    }
     measure()
+
     const observer = new ResizeObserver(measure)
     observer.observe(bar)
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+      barHeights.delete(id)
+      publishBarHeight()
+    }
   }, [])
 
   return (
-    <>
-      <div aria-hidden style={{ height }} />
-      <div
-        ref={barRef}
-        data-sticky-bar
-        className="fixed inset-x-0 z-20 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-sm md:left-64 dark:border-slate-800 dark:bg-slate-900/95"
-        style={{ bottom: 'var(--app-bottom-nav-h)' }}
-      >
-        {children}
-      </div>
-    </>
+    <div
+      ref={barRef}
+      data-sticky-bar
+      className="fixed inset-x-0 z-20 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-sm md:left-64 dark:border-slate-800 dark:bg-slate-900/95"
+      style={{ bottom: 'var(--app-bottom-nav-h)' }}
+    >
+      {children}
+    </div>
   )
 }
