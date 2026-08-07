@@ -5,7 +5,9 @@ import { Plus, Trash2, Receipt } from 'lucide-react'
 import { useCompanySettings } from '../hooks/useCompanySettings'
 import { useNextBillNumber, useCreateBill, type BillLineItem } from '../hooks/useBills'
 import { useCustomers } from '../hooks/useCustomers'
+import { usePipeProducts } from '../hooks/usePipeProducts'
 import { useToast } from '../lib/toast'
+import { piecesToKg } from '../lib/format'
 import { BillPdfModal } from './BillPdfModal'
 import type { BillRow } from '../hooks/useBills'
 
@@ -33,6 +35,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
   const { data: company } = useCompanySettings()
   const { data: nextBillNo, isLoading: loadingNextNum } = useNextBillNumber()
   const { data: customers } = useCustomers()
+  const { data: pipeProducts } = usePipeProducts()
   const createBill = useCreateBill()
   const { showToast } = useToast()
 
@@ -146,8 +149,20 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
       const copy = [...prev]
       const item = { ...copy[index], [field]: value }
 
-      if (field === 'weight_kg') {
-        const kg = Number(value) || 0
+      // Lines staged from a Sale carry pipe_product_id, so a pcs edit can
+      // re-derive weight from the product's per-piece weight — otherwise
+      // pcs changed but weight (and the amount computed from it) silently
+      // kept reflecting the original quantity.
+      if (field === 'quantity_pcs') {
+        const pcs = Number(value) || 0
+        const product = pipeProducts?.find((p) => p.id === item.pipe_product_id)
+        if (product && pcs > 0) {
+          item.weight_kg = piecesToKg(pcs, product.weight_kg)
+        }
+      }
+
+      if (field === 'weight_kg' || field === 'quantity_pcs') {
+        const kg = Number(item.weight_kg) || 0
         const price = item.price_per_kg || 0
         item.amount = Math.round(kg * price * 100) / 100
       }
