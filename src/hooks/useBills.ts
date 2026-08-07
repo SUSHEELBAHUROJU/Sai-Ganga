@@ -246,6 +246,11 @@ export function useVoidBill() {
       // bill_payment_status (both filter to status = 'active').
       queryClient.invalidateQueries({ queryKey: ['ledger_balances'] })
       queryClient.invalidateQueries({ queryKey: ['bill_payment_status'] })
+      // The bill's "sold" pipes go back into finished_goods_stock (see
+      // 20260807000000_void_bill_restores_stock.sql) — Reports' Daily/Trend
+      // totals read the same now-voided-excluding RPCs, so they'd otherwise
+      // keep showing this sale as sold until their own staleTime lapsed.
+      queryClient.invalidateQueries({ queryKey: ['reports'] })
       queryClient.invalidateQueries({ queryKey: ['ledger_passbook'] })
     },
   })
