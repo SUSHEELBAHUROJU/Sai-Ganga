@@ -390,7 +390,13 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
                 key={idx}
                 className="grid grid-cols-2 items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs sm:grid-cols-12 sm:items-center dark:border-slate-800 dark:bg-slate-900"
               >
-                {/* Product Select / Description */}
+                {/*
+                  Product Select / Description — picking a product already
+                  sets description to its label (handlePipeProductSelect), so
+                  a free-text box underneath it just let the two drift apart:
+                  the dropdown says one size, the printed description another.
+                  Only a custom line (no product picked) needs typed text.
+                */}
                 <div className="col-span-2 space-y-1 sm:col-span-4">
                   <select
                     aria-label="Pipe product"
@@ -412,14 +418,16 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
                     })}
                   </select>
 
-                  <input
-                    type="text"
-                    aria-label="Description"
-                    value={item.description || ''}
-                    onChange={(e) => handleDescriptionChange(idx, e.target.value)}
-                    placeholder="Description"
-                    className="min-h-[44px] w-full min-w-0 rounded-md border border-slate-200 px-2 py-2 text-xs text-slate-700 outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
-                  />
+                  {!item.pipe_product_id && (
+                    <input
+                      type="text"
+                      aria-label="Description"
+                      value={item.description || ''}
+                      onChange={(e) => handleDescriptionChange(idx, e.target.value)}
+                      placeholder="Description"
+                      className="min-h-[44px] w-full min-w-0 rounded-md border border-slate-200 px-2 py-2 text-xs text-slate-700 outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
+                    />
+                  )}
                 </div>
 
                 {/* Qty Pcs */}
