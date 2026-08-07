@@ -102,8 +102,8 @@ export function RecordsPage() {
     setToDate(date)
   }
 
-  function toggleGroupCollapse(groupId: string) {
-    setCollapsedGroups((prev) => ({ ...prev, [groupId]: !prev[groupId] }))
+  function toggleGroupCollapse(groupId: string, currentlyCollapsed: boolean) {
+    setCollapsedGroups((prev) => ({ ...prev, [groupId]: !currentlyCollapsed }))
   }
 
   function handleDelete() {
@@ -271,7 +271,11 @@ export function RecordsPage() {
             <div className="space-y-3 pt-1">
               {groups.map((group) => {
                 const isMultiItem = group.items.length > 1
-                const isCollapsed = Boolean(collapsedGroups[group.id])
+                // Multi-item groups default closed — the header total already
+                // says what happened, and the customer/supplier/dealer it's
+                // all under is right there too, so the line-by-line list is
+                // opt-in detail rather than something to scroll past every time.
+                const isCollapsed = isMultiItem ? (collapsedGroups[group.id] ?? true) : false
                 const isSale = group.kind === 'sale'
                 const saleBill = group.bill
 
@@ -362,7 +366,7 @@ export function RecordsPage() {
                         {isMultiItem && (
                           <button
                             type="button"
-                            onClick={() => toggleGroupCollapse(group.id)}
+                            onClick={() => toggleGroupCollapse(group.id, isCollapsed)}
                             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
                             aria-label="Toggle group items"
                           >
@@ -380,7 +384,11 @@ export function RecordsPage() {
                     {(!isCollapsed || !isMultiItem) && (
                       <div className="border-t border-slate-100 bg-slate-50/50 p-2 sm:p-3 dark:border-slate-800/80 dark:bg-slate-950/40 rounded-b-xl space-y-1.5">
                         {group.items.map((item) => {
-                          const { title: itemTitle, subtitle: itemSub, amount, amountKgPcs } = describeRecord(item)
+                          // Not itemSub: every item in a group already shares
+                          // the same customer/supplier/dealer, which the
+                          // group header names once — repeating it on each
+                          // line was pure noise.
+                          const { title: itemTitle, amount, amountKgPcs } = describeRecord(item)
 
                           return (
                             <div
@@ -391,12 +399,6 @@ export function RecordsPage() {
                                 <span className="font-medium text-slate-800 dark:text-slate-200">
                                   {isMultiItem ? itemTitle : group.subtitle || itemTitle}
                                 </span>
-
-                                {isMultiItem && itemSub && (
-                                  <span className="ml-2 text-slate-400 dark:text-slate-500">
-                                    ({itemSub})
-                                  </span>
-                                )}
 
                                 {item.row.notes && (
                                   <p className="truncate italic text-slate-400 dark:text-slate-500">
