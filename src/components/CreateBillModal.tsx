@@ -53,6 +53,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
   const [globalRate, setGlobalRate] = useState<string>('')
   const [discount, setDiscount] = useState<string>('0')
   const [tax, setTax] = useState<string>('0')
+  const [transport, setTransport] = useState<string>('0')
   const [notes, setNotes] = useState<string>('')
 
   const [createdBill, setCreatedBill] = useState<BillRow | null>(null)
@@ -95,6 +96,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
 
       setDiscount('0')
       setTax('0')
+      setTransport('0')
       setNotes('')
     }
   }, [open, initialData, customers])
@@ -152,12 +154,14 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
       // Lines staged from a Sale carry pipe_product_id, so a pcs edit can
       // re-derive weight from the product's per-piece weight — otherwise
       // pcs changed but weight (and the amount computed from it) silently
-      // kept reflecting the original quantity.
+      // kept reflecting the original quantity. Weight is read-only for these
+      // lines, so clearing pcs has to zero it: there'd be no way to correct a
+      // stale figure by hand.
       if (field === 'quantity_pcs') {
         const pcs = Number(value) || 0
         const product = pipeProducts?.find((p) => p.id === item.pipe_product_id)
-        if (product && pcs > 0) {
-          item.weight_kg = piecesToKg(pcs, product.weight_kg)
+        if (product) {
+          item.weight_kg = pcs > 0 ? piecesToKg(pcs, product.weight_kg) : 0
         }
       }
 
@@ -196,7 +200,8 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
 
   const discountVal = Number(discount) || 0
   const taxVal = Number(tax) || 0
-  const grandTotal = Math.max(0, subtotal - discountVal + taxVal)
+  const transportVal = Number(transport) || 0
+  const grandTotal = Math.max(0, subtotal - discountVal + taxVal + transportVal)
 
   function handleSaveBill() {
     if (!customerName.trim()) {
@@ -229,6 +234,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
         subtotal,
         discount: discountVal,
         tax: taxVal,
+        transport_charges: transportVal,
         grand_total: grandTotal,
         notes: notes.trim() || null,
         sale_entry_ids: initialData?.saleEntryIds,
@@ -431,22 +437,35 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
                     />
                   </label>
 
+                  {/*
+                    Weight is derived (pcs x the product's per-piece weight)
+                    for any line tied to a pipe product, so it's shown, not
+                    typed — a hand-edited weight could silently disagree with
+                    the quantity. Ad-hoc lines have no product to derive from,
+                    so those keep a real input.
+                  */}
                   <label className="block min-w-0">
                     <span className="mb-1 block font-medium text-slate-500 sm:hidden dark:text-slate-400">
                       Weight (kg)
                     </span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      inputMode="decimal"
-                      value={item.weight_kg || ''}
-                      onChange={(e) =>
-                        handleLineChange(index, 'weight_kg', parseFloat(e.target.value) || 0)
-                      }
-                      placeholder="0"
-                      className="w-full min-w-0 rounded border border-slate-300 px-2 py-2 text-right text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                    />
+                    {item.pipe_product_id ? (
+                      <span className="flex min-h-[38px] w-full items-center justify-end rounded border border-transparent bg-slate-50 px-2 py-2 text-right font-mono text-xs text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+                        {(item.weight_kg || 0).toLocaleString('en-IN')}
+                      </span>
+                    ) : (
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        inputMode="decimal"
+                        value={item.weight_kg || ''}
+                        onChange={(e) =>
+                          handleLineChange(index, 'weight_kg', parseFloat(e.target.value) || 0)
+                        }
+                        placeholder="0"
+                        className="w-full min-w-0 rounded border border-slate-300 px-2 py-2 text-right text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                      />
+                    )}
                   </label>
 
                   <label className="block min-w-0">
@@ -531,6 +550,19 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
                 min="0"
                 value={tax}
                 onChange={(e) => setTax(e.target.value)}
+                className="min-h-[36px] w-24 rounded border border-slate-300 px-2 py-0.5 text-right text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-slate-600 dark:text-slate-400">Transport (₹)</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={transport}
+                onChange={(e) => setTransport(e.target.value)}
                 className="min-h-[36px] w-24 rounded border border-slate-300 px-2 py-0.5 text-right text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               />
             </div>

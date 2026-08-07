@@ -22,6 +22,7 @@ export type BillRow = {
   subtotal: number
   discount: number
   tax: number
+  transport_charges: number
   grand_total: number
   status: 'active' | 'voided'
   notes: string | null
@@ -40,6 +41,7 @@ export type CreateBillInput = {
   subtotal: number
   discount?: number
   tax?: number
+  transport_charges?: number
   grand_total: number
   notes?: string | null
   sale_entry_ids?: string[]
@@ -116,6 +118,7 @@ export function useCreateBill() {
           bill_number: finalBillNumber,
           discount: billData.discount ?? 0,
           tax: billData.tax ?? 0,
+          transport_charges: billData.transport_charges ?? 0,
           status: 'active',
         })
         .select()
@@ -160,6 +163,7 @@ export type UpdateBillInput = {
   subtotal: number
   discount?: number
   tax?: number
+  transport_charges?: number
   grand_total: number
   notes?: string | null
 }
@@ -177,6 +181,7 @@ export function useUpdateBill() {
           ...patch,
           discount: patch.discount ?? 0,
           tax: patch.tax ?? 0,
+          transport_charges: patch.transport_charges ?? 0,
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)

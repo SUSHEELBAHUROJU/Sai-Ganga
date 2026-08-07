@@ -51,6 +51,7 @@ export type Database = {
           status: string
           subtotal: number
           tax: number
+          transport_charges: number
           updated_at: string
         }
         Insert: {
@@ -69,6 +70,7 @@ export type Database = {
           status?: string
           subtotal?: number
           tax?: number
+          transport_charges?: number
           updated_at?: string
         }
         Update: {
@@ -87,6 +89,7 @@ export type Database = {
           status?: string
           subtotal?: number
           tax?: number
+          transport_charges?: number
           updated_at?: string
         }
         Relationships: [

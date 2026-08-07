@@ -60,6 +60,7 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
   const [globalRate, setGlobalRate] = useState<string>('')
   const [discount, setDiscount] = useState<string>('0')
   const [tax, setTax] = useState<string>('0')
+  const [transport, setTransport] = useState<string>('0')
   const [notes, setNotes] = useState<string>('')
 
   useEffect(() => {
@@ -71,6 +72,7 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
       setCustomerPhone(bill.customer_phone || '')
       setDiscount(String(bill.discount ?? 0))
       setTax(String(bill.tax ?? 0))
+      setTransport(String(bill.transport_charges ?? 0))
       setNotes(bill.notes || '')
       setGlobalRate('')
       setLineItems(parseLineItems(bill.line_items))
@@ -136,9 +138,11 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
       const item = next[index]
       const product = (pipeProducts ?? []).find((p) => p.id === item.pipe_product_id)
 
+      // Weight is read-only for product-linked lines, so clearing pcs has to
+      // zero it — otherwise a stale figure would be uncorrectable by hand.
       let weightKg = item.weight_kg
-      if (product && pcs > 0) {
-        weightKg = piecesToKg(pcs, product.weight_kg)
+      if (product) {
+        weightKg = pcs > 0 ? piecesToKg(pcs, product.weight_kg) : 0
       }
 
       const price = item.price_per_kg || parseFloat(globalRate) || 0
@@ -216,7 +220,8 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
   const subtotal = lineItems.reduce((acc, item) => acc + (item.amount || 0), 0)
   const discountVal = parseFloat(discount) || 0
   const taxVal = parseFloat(tax) || 0
-  const grandTotal = Math.max(0, subtotal - discountVal + taxVal)
+  const transportVal = parseFloat(transport) || 0
+  const grandTotal = Math.max(0, subtotal - discountVal + taxVal + transportVal)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -246,6 +251,7 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
         subtotal,
         discount: discountVal,
         tax: taxVal,
+        transport_charges: transportVal,
         grand_total: grandTotal,
         notes: notes.trim() || null,
       },
@@ -430,21 +436,33 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
                   />
                 </label>
 
-                {/* Weight Kg */}
+                {/*
+                  Weight is derived (pcs x the product's per-piece weight) for
+                  any line with a pipe product selected, so it's shown rather
+                  than typed — a hand-edited weight could silently disagree
+                  with the quantity. Custom lines with no product selected have
+                  nothing to derive from, so those keep a real input.
+                */}
                 <label className="block min-w-0 sm:col-span-2">
                   <span className="mb-0.5 block text-xs text-slate-500 dark:text-slate-400">
                     Weight (kg)
                   </span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    inputMode="decimal"
-                    value={item.weight_kg || ''}
-                    onChange={(e) => handleWeightChange(idx, e.target.value)}
-                    placeholder="Total kg"
-                    className="w-full min-w-0 rounded-md border border-slate-300 px-2 py-2 font-mono text-xs text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                  />
+                  {item.pipe_product_id ? (
+                    <span className="flex min-h-[38px] w-full items-center rounded-md border border-transparent bg-slate-100 px-2 py-2 font-mono text-xs text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+                      {formatINR(item.weight_kg)}
+                    </span>
+                  ) : (
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      inputMode="decimal"
+                      value={item.weight_kg || ''}
+                      onChange={(e) => handleWeightChange(idx, e.target.value)}
+                      placeholder="Total kg"
+                      className="w-full min-w-0 rounded-md border border-slate-300 px-2 py-2 font-mono text-xs text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    />
+                  )}
                 </label>
 
                 {/* Price / Kg */}
@@ -494,7 +512,7 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 pt-1 border-t border-slate-200 dark:border-slate-800">
+          <div className="grid grid-cols-2 gap-3 pt-1 border-t border-slate-200 sm:grid-cols-3 dark:border-slate-800">
             <Field
               label="Discount (₹)"
               type="number"
@@ -512,6 +530,16 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
               min="0"
               value={tax}
               onChange={(e) => setTax(e.target.value)}
+              className="font-mono text-xs"
+            />
+
+            <Field
+              label="Transport (₹)"
+              type="number"
+              step="0.01"
+              min="0"
+              value={transport}
+              onChange={(e) => setTransport(e.target.value)}
               className="font-mono text-xs"
             />
           </div>

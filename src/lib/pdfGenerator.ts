@@ -433,6 +433,13 @@ export function generateBillPdfDoc(bill: BillRow): jsPDF {
     )
   }
 
+  if (bill.transport_charges && bill.transport_charges > 0) {
+    drawSummaryRow(
+      'Transport',
+      `+ Rs. ${bill.transport_charges.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
+    )
+  }
+
   drawSummaryRow(
     'GRAND TOTAL',
     `Rs. ${(bill.grand_total ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
