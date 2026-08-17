@@ -1,493 +1,432 @@
 import jsPDF from 'jspdf'
-import type { BillRow } from '../hooks/useBills'
+import type { BillLineItem, BillRow } from '../hooks/useBills'
 import type { CustomerLedgerBalance, PassbookEntry } from '../hooks/useLedger'
 import { formatInvoiceDate } from './date'
 import { formatQty } from './format'
 
-/** Helper to convert numbers to Indian Rupees in words */
-function numberToWordsRupees(amount: number): string {
-  const words = [
-    'Zero',
-    'One',
-    'Two',
-    'Three',
-    'Four',
-    'Five',
-    'Six',
-    'Seven',
-    'Eight',
-    'Nine',
-    'Ten',
-    'Eleven',
-    'Twelve',
-    'Thirteen',
-    'Fourteen',
-    'Fifteen',
-    'Sixteen',
-    'Seventeen',
-    'Eighteen',
-    'Nineteen',
+/* ==========================================================================
+ * Bill PDF — compact two-copy A4 layout
+ *
+ * One A4 sheet carries two identical invoices, top and bottom half, so the
+ * page can be cut once across the middle and both halves are a complete,
+ * self-contained bill (one for the customer, one for the office).
+ *
+ * This is a purpose-built print template, not the old full-page invoice
+ * scaled down: everything that only made sense on a full sheet is gone
+ * (amount-in-words block, boxed address cards, tall signature area, footer
+ * blurbs) so what's left is the information actually needed on a physical
+ * bill at a readable size.
+ * ========================================================================== */
+
+type Rgb = readonly [number, number, number]
+
+const NAVY: Rgb = [15, 31, 69]
+const RED: Rgb = [210, 31, 31]
+const DARK_TEXT: Rgb = [30, 41, 59]
+const MUTED_TEXT: Rgb = [100, 116, 139]
+const BAND_BG: Rgb = [235, 242, 250]
+const ROW_ALT_BG: Rgb = [243, 246, 250]
+const BORDER_GRAY: Rgb = [214, 222, 233]
+
+const BUSINESS_NAME = 'Sai Ganga Pipes'
+
+const PAGE_W = 210
+const PAGE_H = 297
+const MARGIN_X = 10
+const MARGIN_Y = 8
+/** Blank strip around the cut line so scissors don't clip either copy. */
+const CUT_GUTTER = 7
+const COPY_H = (PAGE_H - MARGIN_Y * 2 - CUT_GUTTER) / 2
+
+/** Vertical cost of everything in a copy that isn't an item row. */
+const HEAD_H = 9.5
+/**
+ * Meta block depth. Grows only when the address actually wraps to a second
+ * line — a fixed two-line allowance would push every bill's table down and
+ * cost a row of items on sheets where the address fits on one line.
+ */
+const META_H_BASE = 13.5
+const META_H_PER_EXTRA_LINE = 4
+const THEAD_H = 5.8
+const QTY_BAND_H = 5.6
+const SUM_ROW_H = 4.6
+const GRAND_H = 8.6
+const FOOT_H = 5.5
+
+/** Width available to the customer name / address column. */
+const META_TEXT_W = 100
+/** Address is capped at two lines; the full address lives in the app. */
+const ADDR_MAX_LINES = 2
+
+/** Rows breathe at MAX; they tighten toward MIN as the item count grows. */
+const ROW_H_MAX = 5.6
+const ROW_H_MIN = 4
+
+const COL = {
+  sl: MARGIN_X + 3,
+  desc: MARGIN_X + 8,
+  qty: MARGIN_X + 98,
+  kg: MARGIN_X + 123,
+  rate: MARGIN_X + 148,
+  amount: PAGE_W - MARGIN_X - 2,
+} as const
+
+const money = (n: number | null | undefined) =>
+  (n ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+const num = (n: number | null | undefined) =>
+  (n ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })
+
+/**
+ * line_items is a jsonb column, so depending on how the row was fetched it can
+ * arrive already parsed or still a string — EditBillModal guards the same way.
+ * A malformed value must not take the whole PDF down.
+ */
+function normalizeLineItems(raw: unknown): BillLineItem[] {
+  let items: unknown = raw
+  if (typeof items === 'string') {
+    try {
+      items = JSON.parse(items)
+    } catch {
+      return []
+    }
+  }
+  return Array.isArray(items) ? (items as BillLineItem[]) : []
+}
+
+type SummaryLine = { label: string; value: string }
+
+function summaryLinesFor(bill: BillRow): SummaryLine[] {
+  const lines: SummaryLine[] = [
+    { label: 'Subtotal', value: `Rs. ${money(bill.subtotal ?? bill.grand_total)}` },
   ]
-  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
+  if ((bill.discount ?? 0) > 0) {
+    lines.push({ label: 'Discount', value: `- Rs. ${money(bill.discount)}` })
+  }
+  if ((bill.tax ?? 0) > 0) {
+    lines.push({ label: 'Tax / GST', value: `+ Rs. ${money(bill.tax)}` })
+  }
+  if ((bill.transport_charges ?? 0) > 0) {
+    lines.push({ label: 'Transport', value: `+ Rs. ${money(bill.transport_charges)}` })
+  }
+  return lines
+}
 
-  function convertTwoDigits(n: number): string {
-    if (n < 20) return words[n]
-    const unit = n % 10
-    return tens[Math.floor(n / 10)] + (unit ? ' ' + words[unit] : '')
+type CopyOptions = {
+  /** Items to print in this copy (a slice, when a bill needs more than one sheet). */
+  items: BillLineItem[]
+  /** Whole-bill quantity totals — shown only on the sheet carrying the totals. */
+  totalPcs: number
+  totalKg: number
+  summary: SummaryLine[]
+  rowH: number
+  /** False on a continuation sheet, where the money totals come later. */
+  showTotals: boolean
+  /** e.g. "Sheet 1 of 2", or null for a single-sheet bill. */
+  sheetLabel: string | null
+  /** Index of this copy's first item within the whole bill, for row numbering. */
+  startIndex: number
+  /** Pre-wrapped address lines and the meta depth they imply — measured once
+   *  so every copy and the row-capacity maths agree on where the table starts. */
+  addrLines: string[]
+  metaH: number
+}
+
+/**
+ * Largest of `sizes` at which `text` fits `maxW` on one line. Used for the
+ * customer name: a long trading name would otherwise be cut mid-word, and
+ * losing "… Pvt Ltd" off a bill is not acceptable. Assumes the caller has
+ * already selected the font family/style.
+ */
+function fitFontSize(doc: jsPDF, text: string, maxW: number, sizes: number[]): number {
+  for (const size of sizes) {
+    doc.setFontSize(size)
+    if (doc.getTextWidth(text) <= maxW) return size
+  }
+  return sizes[sizes.length - 1]
+}
+
+/** Address as it will be drawn: wrapped to the meta column, capped at 2 lines. */
+function wrapAddress(doc: jsPDF, address: string | null): string[] {
+  if (!address?.trim()) return []
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  return (doc.splitTextToSize(address, META_TEXT_W) as string[]).slice(0, ADDR_MAX_LINES)
+}
+
+/** Draws one complete invoice into a half-page starting at `top`. */
+function drawInvoiceCopy(doc: jsPDF, bill: BillRow, top: number, opts: CopyOptions): void {
+  const contentWidth = PAGE_W - MARGIN_X * 2
+  const isVoided = bill.status === 'voided'
+  let y = top
+
+  // ---------------------------------------------------------------- header
+  doc.setFillColor(...NAVY)
+  doc.rect(MARGIN_X, y, contentWidth, 1.4, 'F')
+  doc.setFillColor(...RED)
+  doc.rect(MARGIN_X, y + 1.4, contentWidth, 0.7, 'F')
+
+  y += 6.6
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(12.5)
+  doc.setTextColor(...NAVY)
+  doc.text(BUSINESS_NAME, MARGIN_X, y)
+
+  // A voided bill must be unmistakable on paper, so it takes over the badge.
+  const badgeLabel = isVoided ? 'VOIDED' : 'INVOICE'
+  const badgeW = isVoided ? 24 : 22
+  const badgeH = 6
+  const badgeX = PAGE_W - MARGIN_X - badgeW
+  doc.setFillColor(...(isVoided ? RED : NAVY))
+  doc.rect(badgeX, y - 4.4, badgeW, badgeH, 'F')
+  doc.setFontSize(8)
+  doc.setTextColor(255, 255, 255)
+  doc.text(badgeLabel, badgeX + badgeW / 2, y - 0.2, { align: 'center' })
+
+  // Sits on the title line, left of the badge — the meta block below has no
+  // spare row, and putting it there overlapped the items table header.
+  if (opts.sheetLabel) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.setTextColor(...MUTED_TEXT)
+    doc.text(opts.sheetLabel, badgeX - 3, y - 0.2, { align: 'right' })
   }
 
-  function convertThreeDigits(n: number): string {
-    const hundred = Math.floor(n / 100)
-    const rest = n % 100
-    let str = ''
-    if (hundred > 0) str += words[hundred] + ' Hundred'
-    if (rest > 0) str += (hundred > 0 ? ' ' : '') + convertTwoDigits(rest)
-    return str
+  y += 2.9
+  doc.setDrawColor(...BORDER_GRAY)
+  doc.setLineWidth(0.3)
+  doc.line(MARGIN_X, y, PAGE_W - MARGIN_X, y)
+
+  // ------------------------------------------------------------------ meta
+  // Two plain columns instead of the old bordered cards — same information,
+  // roughly a third of the height.
+  const metaTop = y + 4
+  const rightColX = MARGIN_X + 112
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(6.8)
+  doc.setTextColor(...RED)
+  doc.text('BILL TO', MARGIN_X, metaTop)
+  doc.text('INVOICE DETAILS', rightColX, metaTop)
+
+  const customerName = bill.customer_name || 'Cash Customer'
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(fitFontSize(doc, customerName, META_TEXT_W, [9.5, 9, 8.5, 8, 7.6]))
+  doc.setTextColor(...NAVY)
+  doc.text(doc.splitTextToSize(customerName, META_TEXT_W)[0], MARGIN_X, metaTop + 4.6)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...DARK_TEXT)
+  opts.addrLines.forEach((line, i) => {
+    doc.text(line, MARGIN_X, metaTop + 8.9 + i * 3.3)
+  })
+
+  const metaRow = (label: string, value: string, offsetY: number) => {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.8)
+    doc.setTextColor(...MUTED_TEXT)
+    doc.text(label, rightColX, metaTop + offsetY)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.6)
+    doc.setTextColor(...NAVY)
+    doc.text(value, rightColX + 22, metaTop + offsetY)
   }
 
-  const integerPart = Math.floor(Math.abs(amount))
-  if (integerPart === 0) return 'Rupees Zero Only'
+  metaRow('Invoice No', bill.bill_number, 4.6)
+  metaRow('Date', formatInvoiceDate(bill.bill_date), 8.9)
 
-  let result = ''
-  const crore = Math.floor(integerPart / 10000000)
-  let rem = integerPart % 10000000
-  const lakh = Math.floor(rem / 100000)
-  rem = rem % 100000
-  const thousand = Math.floor(rem / 1000)
-  rem = rem % 1000
+  y = top + HEAD_H + opts.metaH
 
-  if (crore > 0) result += convertThreeDigits(crore) + ' Crore '
-  if (lakh > 0) result += convertThreeDigits(lakh) + ' Lakh '
-  if (thousand > 0) result += convertThreeDigits(thousand) + ' Thousand '
-  if (rem > 0) result += convertThreeDigits(rem)
+  // ----------------------------------------------------------- items table
+  doc.setFillColor(...NAVY)
+  doc.rect(MARGIN_X, y, contentWidth, THEAD_H, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(6.8)
+  doc.setTextColor(255, 255, 255)
+  const headBase = y + THEAD_H - 1.9
+  doc.text('#', COL.sl, headBase)
+  doc.text('ITEM DESCRIPTION', COL.desc, headBase)
+  doc.text('QTY', COL.qty, headBase, { align: 'right' })
+  doc.text('WEIGHT', COL.kg, headBase, { align: 'right' })
+  doc.text('RATE/KG', COL.rate, headBase, { align: 'right' })
+  doc.text('AMOUNT', COL.amount, headBase, { align: 'right' })
+  y += THEAD_H
 
-  return `Rupees ${result.trim()} Only`
+  const { rowH } = opts
+  const descWidth = COL.qty - COL.desc - 5
+  opts.items.forEach((item, i) => {
+    if (i % 2 === 1) {
+      doc.setFillColor(...ROW_ALT_BG)
+      doc.rect(MARGIN_X, y, contentWidth, rowH, 'F')
+    }
+
+    const base = y + rowH - (rowH >= 5 ? 1.8 : 1.4)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(rowH >= 5 ? 7.8 : 7)
+    doc.setTextColor(...DARK_TEXT)
+
+    doc.text(String(opts.startIndex + i + 1), COL.sl, base)
+    doc.text(
+      doc.splitTextToSize(item.description || 'Pipe Product', descWidth)[0],
+      COL.desc,
+      base,
+    )
+    doc.text(item.quantity_pcs != null ? `${num(item.quantity_pcs)} pcs` : '-', COL.qty, base, {
+      align: 'right',
+    })
+    doc.text(`${num(item.weight_kg)} kg`, COL.kg, base, { align: 'right' })
+    doc.text(money(item.price_per_kg), COL.rate, base, { align: 'right' })
+
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...NAVY)
+    doc.text(money(item.amount), COL.amount, base, { align: 'right' })
+
+    doc.setDrawColor(...BORDER_GRAY)
+    doc.setLineWidth(0.15)
+    doc.line(MARGIN_X, y + rowH, PAGE_W - MARGIN_X, y + rowH)
+
+    y += rowH
+  })
+
+  if (!opts.showTotals) {
+    doc.setFont('helvetica', 'bolditalic')
+    doc.setFontSize(7.5)
+    doc.setTextColor(...MUTED_TEXT)
+    doc.text('Continued on next sheet...', COL.amount, y + 4.4, { align: 'right' })
+    return
+  }
+
+  // ------------------------------------------------------- quantity totals
+  doc.setFillColor(...BAND_BG)
+  doc.rect(MARGIN_X, y, contentWidth, QTY_BAND_H, 'F')
+  doc.setDrawColor(...BORDER_GRAY)
+  doc.setLineWidth(0.25)
+  doc.rect(MARGIN_X, y, contentWidth, QTY_BAND_H, 'S')
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...NAVY)
+  doc.text('TOTAL', COL.desc, y + QTY_BAND_H - 1.8)
+  if (opts.totalPcs > 0) {
+    doc.text(`${num(opts.totalPcs)} pcs`, COL.qty, y + QTY_BAND_H - 1.8, { align: 'right' })
+  }
+  doc.text(`${num(opts.totalKg)} kg`, COL.kg, y + QTY_BAND_H - 1.8, { align: 'right' })
+  y += QTY_BAND_H + 2
+
+  // -------------------------------------------------------- money summary
+  const sumWidth = 66
+  const sumX = PAGE_W - MARGIN_X - sumWidth
+
+  opts.summary.forEach((line) => {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.8)
+    doc.setTextColor(...DARK_TEXT)
+    doc.text(line.label, sumX, y + SUM_ROW_H - 1.5)
+    doc.text(line.value, COL.amount, y + SUM_ROW_H - 1.5, { align: 'right' })
+    y += SUM_ROW_H
+  })
+
+  doc.setFillColor(...NAVY)
+  doc.rect(sumX, y, sumWidth, GRAND_H, 'F')
+  doc.setFillColor(...RED)
+  doc.rect(sumX, y, 1.8, GRAND_H, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.setTextColor(255, 255, 255)
+  doc.text('GRAND TOTAL', sumX + 4.5, y + GRAND_H - 2.9)
+  doc.text(`Rs. ${money(bill.grand_total)}`, COL.amount, y + GRAND_H - 2.9, { align: 'right' })
+
+  // Notes sit beside the summary block, in the space it leaves free.
+  if (bill.notes) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7)
+    doc.setTextColor(...MUTED_TEXT)
+    const noteWidth = sumX - MARGIN_X - 6
+    doc.text(doc.splitTextToSize(bill.notes, noteWidth)[0], MARGIN_X, y - 1)
+  }
+
+  // ---------------------------------------------------------------- footer
+  // Flows directly under the total rather than being pinned to the bottom of
+  // the half: pinning it left a dead gap mid-invoice on a short bill. Any
+  // slack now collects below the footer, reading as margin instead of a hole.
+  const footBase = Math.min(y + GRAND_H + 4.2, top + COPY_H - 1.5)
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(6.5)
+  doc.setTextColor(...MUTED_TEXT)
+  doc.text('Computer-generated invoice.', MARGIN_X, footBase)
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...NAVY)
+  doc.text(`For ${BUSINESS_NAME}`, COL.amount, footBase, { align: 'right' })
 }
 
 export function generateBillPdfDoc(bill: BillRow): jsPDF {
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'a4',
-  })
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
-  const pageWidth = 210
-  const margin = 12
-  const contentWidth = pageWidth - margin * 2
-  let y = 10
+  const allItems = normalizeLineItems(bill.line_items)
+  const summary = summaryLinesFor(bill)
 
-  // Brand Palette
-  const NAVY = [15, 31, 69] as const // Deep Professional Navy #0F1F45
-  const RED = [210, 31, 31] as const // Crimson Red #D21F1F
-  const TEAL = [13, 148, 136] as const // Accent Teal #0D9488
-  const DARK_TEXT = [30, 41, 59] as const // Dark Slate #1E293B
-  const MUTED_TEXT = [100, 116, 139] as const // Slate Gray #64748B
-  const CARD_BG = [248, 250, 252] as const // Light Slate Tint #F8FAFC
-  const ROW_ALT_BG = [241, 245, 249] as const // Subtle Row Banding #F1F5F9
-  const BORDER_GRAY = [226, 232, 240] as const // Border Gray #E2E8F0
+  const totalPcs = allItems.reduce((sum, i) => sum + (i.quantity_pcs ?? 0), 0)
+  const totalKg = allItems.reduce((sum, i) => sum + (i.weight_kg ?? 0), 0)
 
-  // ==========================================
-  // 1. TOP ACCENT HEADER BAND
-  // ==========================================
-  doc.setFillColor(...NAVY)
-  doc.rect(margin, y, contentWidth, 3.5, 'F')
-  doc.setFillColor(...RED)
-  doc.rect(margin, y + 3.5, contentWidth, 1.5, 'F')
+  const addrLines = wrapAddress(doc, bill.customer_address)
+  const metaH =
+    META_H_BASE + Math.max(0, addrLines.length - 1) * META_H_PER_EXTRA_LINE
 
-  y += 11
+  // Space left for item rows once the fixed sections are accounted for. The
+  // totals overhead is charged to every sheet (not just the last) so each
+  // sheet holds the same number of rows and the cut line never moves.
+  const overhead =
+    HEAD_H + metaH + THEAD_H + QTY_BAND_H + summary.length * SUM_ROW_H + GRAND_H + FOOT_H
+  const itemsSpace = COPY_H - overhead
+  const perSheet = Math.max(1, Math.floor(itemsSpace / ROW_H_MIN))
 
-  // ==========================================
-  // COMPANY BRANDING (DISPLAYED ONCE ONLY)
-  // Kept plain and simple by design — just the name, no address/GST/phone.
-  // ==========================================
-  const businessName = 'Sai Ganga Pipes'
-
-  // Company Name
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(15)
-  doc.setTextColor(...NAVY)
-  doc.text(businessName, margin, y)
-
-  // "INVOICE" Badge Container on top right (Removed "TAX" prefix)
-  const badgeWidth = 28
-  const badgeHeight = 7.5
-  const badgeX = pageWidth - margin - badgeWidth
-  const badgeY = y - 5.5
-
-  doc.setFillColor(...NAVY)
-  doc.rect(badgeX, badgeY, badgeWidth, badgeHeight, 'F')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
-  doc.setTextColor(255, 255, 255)
-  doc.text('INVOICE', badgeX + badgeWidth / 2, badgeY + 5.2, { align: 'center' })
-
-  y += 7.5
-
-  // Thin Divider Line
-  doc.setDrawColor(...BORDER_GRAY)
-  doc.setLineWidth(0.4)
-  doc.line(margin, y, pageWidth - margin, y)
-
-  y += 5.5
-
-  // ==========================================
-  // 2. BILL TO & INVOICE DETAILS CARDS (Side-by-Side)
-  // ==========================================
-  const cardWidth = 89
-  const cardHeight = 28
-  const leftCardX = margin
-  const rightCardX = margin + cardWidth + 8
-
-  // --- LEFT CARD: Customer / Bill To ---
-  doc.setFillColor(...CARD_BG)
-  doc.rect(leftCardX, y, cardWidth, cardHeight, 'F')
-  doc.setDrawColor(...BORDER_GRAY)
-  doc.setLineWidth(0.3)
-  doc.rect(leftCardX, y, cardWidth, cardHeight, 'S')
-
-  // Left card vertical accent bar (Navy)
-  doc.setFillColor(...NAVY)
-  doc.rect(leftCardX, y, 1.8, cardHeight, 'F')
-
-  let cY = y + 4.5
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
-  doc.setTextColor(...RED)
-  doc.text('BILL TO / CUSTOMER DETAILS:', leftCardX + 5, cY)
-
-  cY += 4.8
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.setTextColor(...NAVY)
-  doc.text(bill.customer_name || 'Cash Customer', leftCardX + 5, cY)
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  doc.setTextColor(...DARK_TEXT)
-
-  cY += 4.5
-  if (bill.customer_address) {
-    const custAddrLines = doc.splitTextToSize(bill.customer_address, 80)
-    doc.text(custAddrLines[0], leftCardX + 5, cY)
+  // An empty bill still prints as a valid (zero-item) invoice rather than
+  // producing a blank page.
+  const sheets: BillLineItem[][] = []
+  for (let i = 0; i < allItems.length; i += perSheet) {
+    sheets.push(allItems.slice(i, i + perSheet))
   }
+  if (sheets.length === 0) sheets.push([])
 
-  // --- RIGHT CARD: Invoice Details ---
-  doc.setFillColor(...CARD_BG)
-  doc.rect(rightCardX, y, cardWidth, cardHeight, 'F')
-  doc.setDrawColor(...BORDER_GRAY)
-  doc.setLineWidth(0.3)
-  doc.rect(rightCardX, y, cardWidth, cardHeight, 'S')
+  sheets.forEach((sheetItems, sheetIndex) => {
+    if (sheetIndex > 0) doc.addPage()
 
-  // Right card vertical accent bar (Teal)
-  doc.setFillColor(...TEAL)
-  doc.rect(rightCardX, y, 1.8, cardHeight, 'F')
+    const isLastSheet = sheetIndex === sheets.length - 1
+    const rowH = sheetItems.length
+      ? Math.min(ROW_H_MAX, Math.max(ROW_H_MIN, itemsSpace / sheetItems.length))
+      : ROW_H_MAX
 
-  let rY = y + 4.5
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
-  doc.setTextColor(...RED)
-  doc.text('INVOICE DETAILS:', rightCardX + 5, rY)
-
-  rY += 5.5
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...MUTED_TEXT)
-  doc.text('Invoice No:', rightCardX + 5, rY)
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  doc.setTextColor(...NAVY)
-  doc.text(bill.bill_number, rightCardX + 26, rY)
-
-  rY += 5.5
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...MUTED_TEXT)
-  doc.text('Invoice Date:', rightCardX + 5, rY)
-
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(...DARK_TEXT)
-  doc.text(formatInvoiceDate(bill.bill_date), rightCardX + 26, rY)
-
-  if (bill.status === 'voided') {
-    rY += 5.5
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8.5)
-    doc.setTextColor(...RED)
-    doc.text('STATUS: VOIDED', rightCardX + 5, rY)
-  }
-
-  y += cardHeight + 7.5
-
-  // ==========================================
-  // 3. ITEMS TABLE
-  // ==========================================
-  const colX = {
-    sl: margin + 4,
-    desc: margin + 12,
-    pcs: margin + 98,
-    kg: margin + 128,
-    price: margin + 156,
-    amount: pageWidth - margin - 4,
-  }
-
-  // Table Header
-  const tableHeaderHeight = 8.5
-  doc.setFillColor(...NAVY)
-  doc.rect(margin, y, contentWidth, tableHeaderHeight, 'F')
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.setTextColor(255, 255, 255)
-
-  doc.text('#', colX.sl, y + 5.8)
-  doc.text('ITEM DESCRIPTION', colX.desc, y + 5.8)
-  doc.text('QTY (PCS)', colX.pcs, y + 5.8, { align: 'right' })
-  doc.text('WEIGHT (KG)', colX.kg, y + 5.8, { align: 'right' })
-  doc.text('PRICE / KG (Rs.)', colX.price, y + 5.8, { align: 'right' })
-  doc.text('AMOUNT (Rs.)', colX.amount, y + 5.8, { align: 'right' })
-
-  y += tableHeaderHeight
-
-  // Table Body Rows
-  const lineItems = bill.line_items ?? []
-  let totalPcsSum = 0
-  let totalKgSum = 0
-
-  lineItems.forEach((item, index) => {
-    const rowHeight = 8.5
-    const isEven = index % 2 === 0
-
-    if (!isEven) {
-      doc.setFillColor(...ROW_ALT_BG)
-      doc.rect(margin, y, contentWidth, rowHeight, 'F')
+    const opts: CopyOptions = {
+      items: sheetItems,
+      totalPcs,
+      totalKg,
+      summary,
+      rowH,
+      showTotals: isLastSheet,
+      sheetLabel: sheets.length > 1 ? `Sheet ${sheetIndex + 1} of ${sheets.length}` : null,
+      startIndex: sheetIndex * perSheet,
+      addrLines,
+      metaH,
     }
 
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
-    doc.setTextColor(...DARK_TEXT)
+    // Two identical copies: top half and bottom half of the same sheet.
+    drawInvoiceCopy(doc, bill, MARGIN_Y, opts)
+    drawInvoiceCopy(doc, bill, MARGIN_Y + COPY_H + CUT_GUTTER, opts)
 
-    // Sl No
-    doc.text(String(index + 1), colX.sl, y + 5.6)
-
-    // Description
-    doc.text(item.description || 'Pipe Product', colX.desc, y + 5.6)
-
-    // Qty (Pcs)
-    const pcsVal = item.quantity_pcs != null ? item.quantity_pcs : null
-    if (pcsVal != null) totalPcsSum += pcsVal
-    doc.text(pcsVal != null ? `${pcsVal} pcs` : '-', colX.pcs, y + 5.6, { align: 'right' })
-
-    // Weight (Kg)
-    const kgVal = item.weight_kg || 0
-    totalKgSum += kgVal
-    doc.text(`${kgVal.toLocaleString('en-IN', { maximumFractionDigits: 2 })} kg`, colX.kg, y + 5.6, {
-      align: 'right',
-    })
-
-    // Price / Kg
-    doc.text(`Rs. ${(item.price_per_kg ?? 0).toFixed(2)}`, colX.price, y + 5.6, { align: 'right' })
-
-    // Amount (Emphasized Bold)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(...NAVY)
-    doc.text(
-      `Rs. ${(item.amount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
-      colX.amount,
-      y + 5.6,
-      { align: 'right' },
-    )
-
-    // Row bottom grid line
+    // Cut guide dead-centre, in the gutter between the two copies.
+    const cutY = MARGIN_Y + COPY_H + CUT_GUTTER / 2
     doc.setDrawColor(...BORDER_GRAY)
-    doc.setLineWidth(0.2)
-    doc.line(margin, y + rowHeight, pageWidth - margin, y + rowHeight)
+    doc.setLineWidth(0.3)
+    doc.setLineDashPattern([1.6, 1.6], 0)
+    doc.line(MARGIN_X, cutY, PAGE_W - MARGIN_X, cutY)
+    doc.setLineDashPattern([], 0)
 
-    y += rowHeight
-  })
-
-  // ==========================================
-  // 4. TOTAL QUANTITY ROW (Subtotal Band)
-  // ==========================================
-  const totalRowHeight = 8
-  doc.setFillColor(235, 242, 250)
-  doc.rect(margin, y, contentWidth, totalRowHeight, 'F')
-  doc.setDrawColor(...BORDER_GRAY)
-  doc.setLineWidth(0.3)
-  doc.rect(margin, y, contentWidth, totalRowHeight, 'S')
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...NAVY)
-  doc.text('TOTAL QUANTITY:', colX.desc, y + 5.4)
-
-  if (totalPcsSum > 0) {
-    doc.text(`${totalPcsSum} pcs`, colX.pcs, y + 5.4, { align: 'right' })
-  }
-  doc.text(`${totalKgSum.toLocaleString('en-IN', { maximumFractionDigits: 2 })} kg`, colX.kg, y + 5.4, {
-    align: 'right',
-  })
-
-  y += totalRowHeight + 7.5
-
-  // ==========================================
-  // 5. TOTALS SECTION & AMOUNT IN WORDS
-  // ==========================================
-  const summaryWidth = 75
-  const summaryX = pageWidth - margin - summaryWidth
-  const leftBoxWidth = contentWidth - summaryWidth - 7
-
-  // --- LEFT BOX: Amount in Words & Notes ---
-  const leftBoxHeight = 28
-  doc.setFillColor(...CARD_BG)
-  doc.rect(margin, y, leftBoxWidth, leftBoxHeight, 'F')
-  doc.setDrawColor(...BORDER_GRAY)
-  doc.setLineWidth(0.3)
-  doc.rect(margin, y, leftBoxWidth, leftBoxHeight, 'S')
-
-  // Accent bar on top of amount in words box
-  doc.setFillColor(...NAVY)
-  doc.rect(margin, y, leftBoxWidth, 1.2, 'F')
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(7.5)
-  doc.setTextColor(...RED)
-  doc.text('AMOUNT IN WORDS:', margin + 4, y + 5.5)
-
-  doc.setFont('helvetica', 'bolditalic')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...NAVY)
-  const wordsText = numberToWordsRupees(bill.grand_total)
-  const wordsLines = doc.splitTextToSize(wordsText, leftBoxWidth - 8)
-  doc.text(wordsLines, margin + 4, y + 10)
-
-  if (bill.notes) {
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7.5)
-    doc.setTextColor(...MUTED_TEXT)
-    doc.text('Notes / Terms:', margin + 4, y + 19.5)
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7.5)
-    const noteLine = doc.splitTextToSize(bill.notes, leftBoxWidth - 8)[0]
-    doc.text(noteLine, margin + 4, y + 23.5)
-  }
-
-  // --- RIGHT BOX: Subtotal, Tax, Discount & GRAND TOTAL ---
-  let summaryY = y
-
-  const drawSummaryRow = (
-    label: string,
-    value: string,
-    isGrand = false,
-  ) => {
-    const lineH = isGrand ? 9.5 : 6.2
-
-    if (isGrand) {
-      // Bold Solid Navy Box for GRAND TOTAL
-      doc.setFillColor(...NAVY)
-      doc.rect(summaryX, summaryY, summaryWidth, lineH, 'F')
-
-      // Red Accent bar inside Grand Total box
-      doc.setFillColor(...RED)
-      doc.rect(summaryX, summaryY, 2, lineH, 'F')
-
-      doc.setTextColor(255, 255, 255)
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(10.5)
-    } else {
-      doc.setFillColor(255, 255, 255)
-      doc.rect(summaryX, summaryY, summaryWidth, lineH, 'F')
-      doc.setDrawColor(...BORDER_GRAY)
-      doc.setLineWidth(0.3)
-      doc.rect(summaryX, summaryY, summaryWidth, lineH, 'S')
-      doc.setTextColor(...DARK_TEXT)
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(8.5)
-    }
-
-    const paddingX = 4
-    const textY = summaryY + (isGrand ? 6.4 : 4.4)
-
-    doc.text(label, summaryX + paddingX + (isGrand ? 2 : 0), textY)
-    doc.text(value, summaryX + summaryWidth - paddingX, textY, { align: 'right' })
-
-    summaryY += lineH
-  }
-
-  drawSummaryRow(
-    'Subtotal',
-    `Rs. ${(bill.subtotal ?? bill.grand_total).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
-  )
-
-  if (bill.discount && bill.discount > 0) {
-    drawSummaryRow(
-      'Discount',
-      `- Rs. ${bill.discount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
-    )
-  }
-
-  if (bill.tax && bill.tax > 0) {
-    drawSummaryRow(
-      'Tax / GST',
-      `+ Rs. ${bill.tax.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
-    )
-  }
-
-  if (bill.transport_charges && bill.transport_charges > 0) {
-    drawSummaryRow(
-      'Transport',
-      `+ Rs. ${bill.transport_charges.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
-    )
-  }
-
-  drawSummaryRow(
-    'GRAND TOTAL',
-    `Rs. ${(bill.grand_total ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`,
-    true,
-  )
-
-  y = Math.max(y + leftBoxHeight + 8, summaryY + 10)
-
-  // ==========================================
-  // 6. FOOTER & AUTHORIZED SIGNATORY
-  // ==========================================
-  const sigX = pageWidth - margin - 60
-  const sigY = 248
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...NAVY)
-  doc.text(`For ${businessName}`, sigX, sigY)
-
-  // Signature line
-  doc.setDrawColor(...BORDER_GRAY)
-  doc.setLineWidth(0.4)
-  doc.line(sigX, sigY + 16, sigX + 55, sigY + 16)
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  doc.setTextColor(...MUTED_TEXT)
-  doc.text('Authorized Signatory', sigX + 27.5, sigY + 20.5, { align: 'center' })
-
-  // Footer Divider Bar & Closing Text
-  const footerY = 276
-
-  doc.setDrawColor(...NAVY)
-  doc.setLineWidth(0.6)
-  doc.line(margin, footerY, pageWidth - margin, footerY)
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...NAVY)
-  doc.text('Thank you for your business!', pageWidth / 2, footerY + 5, {
-    align: 'center',
-  })
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7)
-  doc.setTextColor(...MUTED_TEXT)
-  doc.text('This is a computer-generated invoice.', pageWidth / 2, footerY + 8.5, {
-    align: 'center',
+    doc.setFontSize(6)
+    doc.setTextColor(...MUTED_TEXT)
+    doc.text('cut here', PAGE_W / 2, cutY - 1.2, { align: 'center' })
   })
 
   return doc
