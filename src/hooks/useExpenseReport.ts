@@ -6,6 +6,9 @@ export type PurchaseReportLine = {
   supplier: string
   item: string
   quantityKg: number
+  /** The rate the purchase was priced at. null on rows old enough to predate
+   *  per-kg pricing and to carry no cost to derive it from. */
+  ratePerKg: number | null
   /** null on rows recorded before a purchase price was required — shown as
    *  "—" rather than 0.00, which would read as "this cost nothing". */
   purchasePrice: number | null
@@ -53,7 +56,7 @@ export function useExpenseReport(fromDate: string, toDate: string) {
         supabase
           .from('raw_material_purchases')
           .select(
-            'entry_date, total_qty_kg, cost, transport_charges, supplier_name, raw_material_types(name), raw_material_suppliers(name)',
+            'entry_date, total_qty_kg, cost, price_per_kg, transport_charges, supplier_name, raw_material_types(name), raw_material_suppliers(name)',
           )
           .gte('entry_date', fromDate)
           .lte('entry_date', toDate)
@@ -61,7 +64,7 @@ export function useExpenseReport(fromDate: string, toDate: string) {
         supabase
           .from('scrap_purchases')
           .select(
-            'entry_date, quantity_kg, cost, transport_charges, scrap_dealers(name), scrap_types(name)',
+            'entry_date, quantity_kg, cost, price_per_kg, transport_charges, scrap_dealers(name), scrap_types(name)',
           )
           .gte('entry_date', fromDate)
           .lte('entry_date', toDate)
@@ -85,14 +88,24 @@ export function useExpenseReport(fromDate: string, toDate: string) {
         quantityKg: number,
         costRaw: unknown,
         transportRaw: unknown,
+        rateRaw: unknown,
       ): PurchaseReportLine => {
         const purchasePrice = costRaw == null ? null : Number(costRaw) || 0
         const transport = Number(transportRaw) || 0
+        // Older rows stored only a total; show the rate it implies rather than
+        // a blank column.
+        const ratePerKg =
+          rateRaw != null
+            ? Number(rateRaw) || 0
+            : purchasePrice !== null && quantityKg > 0
+              ? Math.round((purchasePrice / quantityKg) * 100) / 100
+              : null
         return {
           entry_date,
           supplier,
           item,
           quantityKg,
+          ratePerKg,
           purchasePrice,
           transport,
           total: purchasePrice === null ? null : purchasePrice + transport,
@@ -108,6 +121,7 @@ export function useExpenseReport(fromDate: string, toDate: string) {
             Number(r.total_qty_kg) || 0,
             r.cost,
             r.transport_charges,
+            r.price_per_kg,
           ),
         ),
         ...((scrapPurchases.data ?? []) as any[]).map((r) =>
@@ -118,6 +132,7 @@ export function useExpenseReport(fromDate: string, toDate: string) {
             Number(r.quantity_kg) || 0,
             r.cost,
             r.transport_charges,
+            r.price_per_kg,
           ),
         ),
       ].sort((a, b) => a.entry_date.localeCompare(b.entry_date))

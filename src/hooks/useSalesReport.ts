@@ -2,13 +2,16 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import type { BillLineItem } from './useBills'
 
+/** One row per bill — not per line item. A sales report is read bill by bill
+ *  ("what did this customer take, what did it come to"), and repeating the
+ *  customer on a row per pipe size made a month's report pages long. */
 export type SalesReportLine = {
   bill_date: string
   bill_number: string
   customer: string
-  item: string
-  quantityPcs: number | null
+  /** Everything on the bill, added up. */
   weightKg: number
+  /** The bill's grand total, so the rows add up to total sales. */
   amount: number
 }
 
@@ -65,22 +68,25 @@ export function useSalesReport(fromDate: string, toDate: string) {
       let salesAmount = 0
 
       for (const bill of bills) {
-        salesAmount += Number(bill.grand_total) || 0
+        const billTotal = Number(bill.grand_total) || 0
+        salesAmount += billTotal
+
+        // Line items are still read — that's the only place weight and piece
+        // counts live — but they're folded into the bill's own row.
+        let billKg = 0
         for (const item of parseLineItems(bill.line_items)) {
-          const pcs = item.quantity_pcs != null ? Number(item.quantity_pcs) || 0 : null
-          const kg = Number(item.weight_kg) || 0
-          quantityPcs += pcs ?? 0
-          weightKg += kg
-          lines.push({
-            bill_date: bill.bill_date,
-            bill_number: bill.bill_number,
-            customer: bill.customer_name || 'Cash Customer',
-            item: item.description || 'Pipe Product',
-            quantityPcs: pcs,
-            weightKg: kg,
-            amount: Number(item.amount) || 0,
-          })
+          billKg += Number(item.weight_kg) || 0
+          quantityPcs += item.quantity_pcs != null ? Number(item.quantity_pcs) || 0 : 0
         }
+        weightKg += billKg
+
+        lines.push({
+          bill_date: bill.bill_date,
+          bill_number: bill.bill_number,
+          customer: bill.customer_name || 'Cash Customer',
+          weightKg: billKg,
+          amount: billTotal,
+        })
       }
 
       return {

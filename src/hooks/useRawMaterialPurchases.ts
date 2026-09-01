@@ -13,7 +13,10 @@ export type NewRawMaterialPurchase = {
   pack_kg: number | null
   num_bags: number | null
   total_qty_kg: number
-  /** What was paid for this purchase, in full. Mandatory. */
+  /** The agreed rate — what the owner actually enters. Mandatory. */
+  price_per_kg: number
+  /** What was paid for the goods: price_per_kg × total_qty_kg, computed for
+   *  the user rather than typed. Mandatory. */
   cost: number
   /** Freight, kept separate from cost so total = cost + transport. */
   transport_charges: number

@@ -523,6 +523,7 @@ export type Database = {
           notes: string | null
           num_bags: number | null
           pack_kg: number | null
+          price_per_kg: number | null
           raw_material_type_id: string
           supplier_id: string | null
           supplier_name: string | null
@@ -540,6 +541,7 @@ export type Database = {
           notes?: string | null
           num_bags?: number | null
           pack_kg?: number | null
+          price_per_kg?: number | null
           raw_material_type_id: string
           supplier_id?: string | null
           supplier_name?: string | null
@@ -557,6 +559,7 @@ export type Database = {
           notes?: string | null
           num_bags?: number | null
           pack_kg?: number | null
+          price_per_kg?: number | null
           raw_material_type_id?: string
           supplier_id?: string | null
           supplier_name?: string | null
@@ -875,6 +878,7 @@ export type Database = {
           entry_date: string
           id: string
           notes: string | null
+          price_per_kg: number | null
           quantity_kg: number
           scrap_dealer_id: string | null
           scrap_type_id: string
@@ -888,6 +892,7 @@ export type Database = {
           entry_date?: string
           id?: string
           notes?: string | null
+          price_per_kg?: number | null
           quantity_kg: number
           scrap_dealer_id?: string | null
           scrap_type_id: string
@@ -901,6 +906,7 @@ export type Database = {
           entry_date?: string
           id?: string
           notes?: string | null
+          price_per_kg?: number | null
           quantity_kg?: number
           scrap_dealer_id?: string | null
           scrap_type_id?: string

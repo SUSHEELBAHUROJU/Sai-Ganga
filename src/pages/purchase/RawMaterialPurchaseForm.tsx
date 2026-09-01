@@ -8,6 +8,7 @@ import { PackSizeField } from '../../components/PackSizeField'
 import { StickyActionBar } from '../../components/StickyActionBar'
 import { SaveButton } from '../../components/SaveButton'
 import { SupplierPicker } from '../../components/SupplierPicker'
+import { PurchaseCostSummary } from '../../components/PurchaseCostSummary'
 import { ACTION_STYLES } from '../../lib/actionColors'
 import { useToast } from '../../lib/toast'
 import {
@@ -16,7 +17,7 @@ import {
   validateCost,
   validateOptionalTransport,
 } from '../../lib/validate'
-import { formatQty } from '../../lib/format'
+import { formatQty, purchaseCost } from '../../lib/format'
 
 const purchaseStyle = ACTION_STYLES.purchase
 const purchaseAccentClass = `${purchaseStyle.text} ${purchaseStyle.textDark} bg-current/10 hover:bg-current/20`
@@ -34,18 +35,21 @@ export function RawMaterialPurchaseForm({ entryDate }: { entryDate: string }) {
   const [packKg, setPackKg] = useState<number | null>(25)
   const [numBags, setNumBags] = useState('')
   const [directKg, setDirectKg] = useState('')
-  const [cost, setCost] = useState('')
+  const [pricePerKg, setPricePerKg] = useState('')
   const [transport, setTransport] = useState('')
   const [notes, setNotes] = useState('')
 
   const totalQtyKg =
     entryMode === 'bag' ? (packKg && numBags ? packKg * Number(numBags) : 0) : Number(directKg) || 0
-  const totalPurchaseCost = (Number(cost) || 0) + (Number(transport) || 0)
+  // Rate × weight, recomputed on every keystroke — change the pack size, the
+  // bag count or the rate and the cost below follows immediately.
+  const materialCost = purchaseCost(Number(pricePerKg) || 0, totalQtyKg)
+  const transportCost = Number(transport) || 0
 
   function resetAmounts() {
     setNumBags('')
     setDirectKg('')
-    setCost('')
+    setPricePerKg('')
     setTransport('')
     setNotes('')
   }
@@ -59,7 +63,7 @@ export function RawMaterialPurchaseForm({ entryDate }: { entryDate: string }) {
             validateQuantity(numBags, 'number of bags'),
           )
         : validateQuantity(directKg, 'total quantity'),
-      validateCost(cost),
+      validateCost(pricePerKg),
       validateOptionalTransport(transport),
     )
     if (problem) {
@@ -77,8 +81,9 @@ export function RawMaterialPurchaseForm({ entryDate }: { entryDate: string }) {
         pack_kg: entryMode === 'bag' ? packKg : null,
         num_bags: entryMode === 'bag' ? Number(numBags) : null,
         total_qty_kg: totalQtyKg,
-        cost: Number(cost),
-        transport_charges: Number(transport) || 0,
+        price_per_kg: Number(pricePerKg),
+        cost: materialCost,
+        transport_charges: transportCost,
         notes: notes.trim() || null,
       },
       {
@@ -182,13 +187,13 @@ export function RawMaterialPurchaseForm({ entryDate }: { entryDate: string }) {
         </div>
 
         <Field
-          label="Purchase Price (₹)"
+          label="Price per kg (₹)"
           type="number"
           min="0"
           inputMode="decimal"
-          value={cost}
-          onChange={(e) => setCost(e.target.value)}
-          placeholder="Total paid for this purchase"
+          value={pricePerKg}
+          onChange={(e) => setPricePerKg(e.target.value)}
+          placeholder="Rate agreed with the supplier"
         />
 
         <Field
@@ -201,16 +206,12 @@ export function RawMaterialPurchaseForm({ entryDate }: { entryDate: string }) {
           placeholder="0"
         />
 
-        {totalPurchaseCost > 0 && (
-          <div className="flex items-baseline justify-between rounded-xl bg-orange-50 px-4 py-3 dark:bg-orange-950/30">
-            <span className="text-xs font-medium text-orange-700 dark:text-orange-400">
-              Total Purchase Cost
-            </span>
-            <span className="text-lg font-bold text-orange-700 dark:text-orange-400">
-              ₹{formatQty(totalPurchaseCost)}
-            </span>
-          </div>
-        )}
+        <PurchaseCostSummary
+          pricePerKg={Number(pricePerKg) || 0}
+          quantityKg={totalQtyKg}
+          materialCost={materialCost}
+          transport={transportCost}
+        />
 
         <Field
           label="Notes (optional)"

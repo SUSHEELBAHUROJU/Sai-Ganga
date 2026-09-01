@@ -8,7 +8,10 @@ export type NewScrapPurchase = {
   scrap_dealer_id: string | null
   scrap_type_id: string
   quantity_kg: number
-  /** What was paid for this purchase, in full. Mandatory. */
+  /** The agreed rate — what the owner actually enters. Mandatory. */
+  price_per_kg: number
+  /** What was paid for the goods: price_per_kg × quantity_kg, computed for the
+   *  user rather than typed. Mandatory. */
   cost: number
   /** Freight, kept separate from cost so total = cost + transport. */
   transport_charges: number

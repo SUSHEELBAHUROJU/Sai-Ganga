@@ -20,8 +20,12 @@ export function validateQuantity(
   return null
 }
 
-/** Purchase price is mandatory — a purchase can't be saved without it. */
-export function validateCost(raw: string, fieldLabel = 'the purchase price'): string | null {
+/**
+ * The purchase rate is mandatory — a purchase can't be saved without it. The
+ * total cost is derived from it (see purchaseCost), so this is the only money
+ * figure the forms ask for besides transport.
+ */
+export function validateCost(raw: string, fieldLabel = 'the price per kg'): string | null {
   const text = raw.trim()
   if (!text) return `Enter ${fieldLabel}`
 

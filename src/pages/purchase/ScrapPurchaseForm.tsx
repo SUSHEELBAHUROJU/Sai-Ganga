@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAddScrapPurchase } from '../../hooks/useScrapPurchases'
 import { useScrapTypes } from '../../hooks/useScrapTypes'
 import { ScrapDealerPicker } from '../../components/ScrapDealerPicker'
+import { PurchaseCostSummary } from '../../components/PurchaseCostSummary'
 import { Chip } from '../../components/Chip'
 import { Field } from '../../components/Field'
 import { NumberStepper } from '../../components/NumberStepper'
@@ -15,7 +16,7 @@ import {
   validateCost,
   validateOptionalTransport,
 } from '../../lib/validate'
-import { formatQty } from '../../lib/format'
+import { purchaseCost } from '../../lib/format'
 
 const purchaseStyle = ACTION_STYLES.purchase
 const purchaseAccentClass = `${purchaseStyle.text} ${purchaseStyle.textDark} bg-current/10 hover:bg-current/20`
@@ -28,41 +29,44 @@ export function ScrapPurchaseForm({ entryDate }: { entryDate: string }) {
   const [dealerId, setDealerId] = useState('')
   const [scrapTypeId, setScrapTypeId] = useState('')
   const [quantityKg, setQuantityKg] = useState('')
-  const [cost, setCost] = useState('')
+  const [pricePerKg, setPricePerKg] = useState('')
   const [transport, setTransport] = useState('')
   const [notes, setNotes] = useState('')
 
   const activeScrapTypes = (scrapTypes ?? []).filter((t) => t.is_active)
-  const totalPurchaseCost = (Number(cost) || 0) + (Number(transport) || 0)
+  // Rate × weight, recomputed as either one is typed.
+  const qtyValue = Number(quantityKg) || 0
+  const materialCost = purchaseCost(Number(pricePerKg) || 0, qtyValue)
+  const transportCost = Number(transport) || 0
 
   function handleSave() {
     const problem = firstError(
       scrapTypeId ? null : 'Select a scrap type',
       validateQuantity(quantityKg, 'quantity'),
-      validateCost(cost),
+      validateCost(pricePerKg),
       validateOptionalTransport(transport),
     )
     if (problem) {
       showToast(problem, 'error')
       return
     }
-    const qty = Number(quantityKg)
 
     addPurchase.mutate(
       {
         entry_date: entryDate,
         scrap_dealer_id: dealerId || null,
         scrap_type_id: scrapTypeId,
-        quantity_kg: qty,
-        cost: Number(cost),
-        transport_charges: Number(transport) || 0,
+        quantity_kg: qtyValue,
+        price_per_kg: Number(pricePerKg),
+        cost: materialCost,
+        transport_charges: transportCost,
         notes: notes.trim() || null,
       },
       {
         onSuccess: () => {
           showToast('Purchase Added!')
           setQuantityKg('')
-          setCost('')
+          setPricePerKg('')
           setTransport('')
           setNotes('')
         },
@@ -108,13 +112,13 @@ export function ScrapPurchaseForm({ entryDate }: { entryDate: string }) {
         />
 
         <Field
-          label="Purchase Price (₹)"
+          label="Price per kg (₹)"
           type="number"
           min="0"
           inputMode="decimal"
-          value={cost}
-          onChange={(e) => setCost(e.target.value)}
-          placeholder="Total paid for this purchase"
+          value={pricePerKg}
+          onChange={(e) => setPricePerKg(e.target.value)}
+          placeholder="Rate agreed with the dealer"
         />
 
         <Field
@@ -127,16 +131,12 @@ export function ScrapPurchaseForm({ entryDate }: { entryDate: string }) {
           placeholder="0"
         />
 
-        {totalPurchaseCost > 0 && (
-          <div className="flex items-baseline justify-between rounded-xl bg-orange-50 px-4 py-3 dark:bg-orange-950/30">
-            <span className="text-xs font-medium text-orange-700 dark:text-orange-400">
-              Total Purchase Cost
-            </span>
-            <span className="text-lg font-bold text-orange-700 dark:text-orange-400">
-              ₹{formatQty(totalPurchaseCost)}
-            </span>
-          </div>
-        )}
+        <PurchaseCostSummary
+          pricePerKg={Number(pricePerKg) || 0}
+          quantityKg={qtyValue}
+          materialCost={materialCost}
+          transport={transportCost}
+        />
 
         <Field
           label="Notes (optional)"

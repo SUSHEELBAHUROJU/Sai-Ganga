@@ -77,7 +77,7 @@ export function SalesReportTab() {
 
           <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
             <h3 className="mb-3 text-sm font-semibold text-slate-500 dark:text-slate-400">
-              Sales ({report.lines.length} line{report.lines.length === 1 ? '' : 's'})
+              Sales ({report.lines.length} bill{report.lines.length === 1 ? '' : 's'})
             </h3>
             {report.lines.length === 0 ? (
               <p className="text-sm text-slate-400 dark:text-slate-500">
@@ -85,29 +85,35 @@ export function SalesReportTab() {
               </p>
             ) : (
               <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-                <table className="w-full min-w-[30rem] text-sm">
+                <table className="w-full min-w-[32rem] text-sm">
                   <thead>
                     <tr className="text-left text-xs text-slate-500 dark:text-slate-400">
+                      <th className="pb-2 font-medium">#</th>
                       <th className="pb-2 font-medium">Date</th>
+                      <th className="pb-2 font-medium">Bill</th>
                       <th className="pb-2 font-medium">Customer</th>
-                      <th className="pb-2 font-medium">Item</th>
-                      <th className="pb-2 text-right font-medium">Qty</th>
+                      <th className="pb-2 text-right font-medium">Weight</th>
                       <th className="pb-2 text-right font-medium">Amount</th>
                     </tr>
                   </thead>
                   <tbody>
                     {report.lines.map((l, i) => (
                       <tr
-                        key={`${l.bill_number}-${i}`}
+                        key={l.bill_number}
                         className="border-t border-slate-100 dark:border-slate-800"
                       >
+                        <td className="py-2 tabular-nums text-slate-400 dark:text-slate-500">
+                          {i + 1}
+                        </td>
                         <td className="whitespace-nowrap py-2 text-slate-600 dark:text-slate-400">
                           {formatShortDate(l.bill_date)}
                         </td>
+                        <td className="whitespace-nowrap py-2 text-slate-600 dark:text-slate-400">
+                          {l.bill_number}
+                        </td>
                         <td className="py-2 text-slate-700 dark:text-slate-300">{l.customer}</td>
-                        <td className="py-2 text-slate-700 dark:text-slate-300">{l.item}</td>
                         <td className="whitespace-nowrap py-2 text-right tabular-nums">
-                          {l.quantityPcs != null ? `${formatQty(l.quantityPcs)} pcs` : '—'}
+                          {formatQty(l.weightKg)} kg
                         </td>
                         <td className="whitespace-nowrap py-2 text-right font-medium tabular-nums">
                           ₹{formatQty(l.amount)}

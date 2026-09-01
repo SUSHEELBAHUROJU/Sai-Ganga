@@ -26,7 +26,8 @@ import { PipeProductPicker } from '../../components/PipeProductPicker'
 import { CustomerPicker } from '../../components/CustomerPicker'
 import { ScrapDealerPicker } from '../../components/ScrapDealerPicker'
 import { SupplierPicker } from '../../components/SupplierPicker'
-import { formatQty } from '../../lib/format'
+import { PurchaseCostSummary } from '../../components/PurchaseCostSummary'
+import { formatQty, purchaseCost } from '../../lib/format'
 
 /** A form reports its patch (or null when invalid) via `onValidChange`. */
 export type EditFormProps<Row> = {
@@ -45,6 +46,21 @@ function DateRow({ value, onChange }: { value: string; onChange: (v: string) => 
       <DateField value={value} onChange={onChange} />
     </div>
   )
+}
+
+/**
+ * Seed the rate field of a purchase edit form. Rows recorded before purchases
+ * were priced per kg only stored a total, so fall back to the rate that total
+ * implies — the figure stays editable and the cost recomputes from it.
+ */
+function initialPricePerKg(
+  pricePerKg: number | null,
+  cost: number | null,
+  quantityKg: number,
+): string {
+  if (pricePerKg !== null) return String(pricePerKg)
+  if (cost !== null && quantityKg > 0) return String(Math.round((cost / quantityKg) * 100) / 100)
+  return ''
 }
 
 function TotalPreview({ label, value }: { label: string; value: number }) {
@@ -326,7 +342,9 @@ export function EditRawPurchaseForm({ row, onChange }: EditFormProps<RawPurchase
   const [directKg, setDirectKg] = useState(
     row.entry_mode === 'direct_kg' ? String(row.total_qty_kg) : '',
   )
-  const [cost, setCost] = useState(row.cost === null ? '' : String(row.cost))
+  const [pricePerKg, setPricePerKg] = useState(
+    initialPricePerKg(row.price_per_kg, row.cost, row.total_qty_kg),
+  )
   const [transport, setTransport] = useState(
     row.transport_charges ? String(row.transport_charges) : '',
   )
@@ -335,6 +353,7 @@ export function EditRawPurchaseForm({ row, onChange }: EditFormProps<RawPurchase
   const selectableTypes = (materialTypes ?? []).filter((t) => t.is_active || t.id === typeId)
   const total =
     entryMode === 'bag' ? (packKg ?? 0) * Number(numBags || 0) : Number(directKg || 0)
+  const materialCost = purchaseCost(Number(pricePerKg) || 0, total)
 
   function emit(next: {
     entryDate?: string
@@ -344,7 +363,7 @@ export function EditRawPurchaseForm({ row, onChange }: EditFormProps<RawPurchase
     packKg?: number
     numBags?: string
     directKg?: string
-    cost?: string
+    pricePerKg?: string
     transport?: string
     notes?: string
   }) {
@@ -355,17 +374,18 @@ export function EditRawPurchaseForm({ row, onChange }: EditFormProps<RawPurchase
     const pack = next.packKg ?? packKg
     const bags = next.numBags ?? numBags
     const direct = next.directKg ?? directKg
-    const costText = next.cost ?? cost
+    const priceText = next.pricePerKg ?? pricePerKg
     const transportText = next.transport ?? transport
     const note = next.notes ?? notes
 
     const totalQty = mode === 'bag' ? (pack ?? 0) * Number(bags || 0) : Number(direct || 0)
-    const costValue = Number(costText)
-    // Purchase price is mandatory, so an edit that clears it is not a valid
-    // patch — the Save button stays disabled rather than writing a null the
-    // DB check constraint would reject anyway.
+    const priceValue = Number(priceText)
+    // The rate is mandatory, so an edit that clears it is not a valid patch —
+    // the Save button stays disabled rather than writing a null cost the DB
+    // check constraint would reject anyway. Cost is always recomputed here, so
+    // changing the pack size or bag count re-prices the purchase.
     onChange(
-      material && totalQty > 0 && costText.trim() !== '' && costValue > 0
+      material && totalQty > 0 && priceText.trim() !== '' && priceValue > 0
         ? {
             entry_date: date,
             raw_material_type_id: material,
@@ -374,7 +394,8 @@ export function EditRawPurchaseForm({ row, onChange }: EditFormProps<RawPurchase
             pack_kg: mode === 'bag' ? pack : null,
             num_bags: mode === 'bag' ? Number(bags) : null,
             total_qty_kg: totalQty,
-            cost: costValue,
+            price_per_kg: priceValue,
+            cost: purchaseCost(priceValue, totalQty),
             transport_charges: Number(transportText) || 0,
             notes: note.trim() || null,
           }
@@ -490,14 +511,14 @@ export function EditRawPurchaseForm({ row, onChange }: EditFormProps<RawPurchase
       )}
       <TotalPreview label="Total Quantity" value={total} />
       <Field
-        label="Purchase Price (₹)"
+        label="Price per kg (₹)"
         type="number"
         min="0"
         inputMode="decimal"
-        value={cost}
+        value={pricePerKg}
         onChange={(e) => {
-          setCost(e.target.value)
-          emit({ cost: e.target.value })
+          setPricePerKg(e.target.value)
+          emit({ pricePerKg: e.target.value })
         }}
       />
       <Field
@@ -510,6 +531,12 @@ export function EditRawPurchaseForm({ row, onChange }: EditFormProps<RawPurchase
           setTransport(e.target.value)
           emit({ transport: e.target.value })
         }}
+      />
+      <PurchaseCostSummary
+        pricePerKg={Number(pricePerKg) || 0}
+        quantityKg={total}
+        materialCost={materialCost}
+        transport={Number(transport) || 0}
       />
       <Field
         label="Notes (optional)"
@@ -529,20 +556,23 @@ export function EditScrapPurchaseForm({ row, onChange }: EditFormProps<ScrapPurc
   const [dealerId, setDealerId] = useState(row.scrap_dealer_id ?? '')
   const [scrapTypeId, setScrapTypeId] = useState(row.scrap_type_id)
   const [quantity, setQuantity] = useState(String(row.quantity_kg))
-  const [cost, setCost] = useState(row.cost === null ? '' : String(row.cost))
+  const [pricePerKg, setPricePerKg] = useState(
+    initialPricePerKg(row.price_per_kg, row.cost, row.quantity_kg),
+  )
   const [transport, setTransport] = useState(
     row.transport_charges ? String(row.transport_charges) : '',
   )
   const [notes, setNotes] = useState(row.notes ?? '')
 
   const selectableScrapTypes = (scrapTypes ?? []).filter((t) => t.is_active || t.id === scrapTypeId)
+  const materialCost = purchaseCost(Number(pricePerKg) || 0, Number(quantity) || 0)
 
   function emit(next: {
     entryDate?: string
     dealerId?: string
     scrapTypeId?: string
     quantity?: string
-    cost?: string
+    pricePerKg?: string
     transport?: string
     notes?: string
   }) {
@@ -550,18 +580,20 @@ export function EditScrapPurchaseForm({ row, onChange }: EditFormProps<ScrapPurc
     const dealer = next.dealerId ?? dealerId
     const scrapType = next.scrapTypeId ?? scrapTypeId
     const qty = Number(next.quantity ?? quantity)
-    const costText = next.cost ?? cost
+    const priceText = next.pricePerKg ?? pricePerKg
     const transportText = next.transport ?? transport
     const note = next.notes ?? notes
-    const costValue = Number(costText)
+    const priceValue = Number(priceText)
+    // Cost follows the rate and the quantity — editing either re-prices it.
     onChange(
-      scrapType && qty > 0 && costText.trim() !== '' && costValue > 0
+      scrapType && qty > 0 && priceText.trim() !== '' && priceValue > 0
         ? {
             entry_date: date,
             scrap_dealer_id: dealer || null,
             scrap_type_id: scrapType,
             quantity_kg: qty,
-            cost: costValue,
+            price_per_kg: priceValue,
+            cost: purchaseCost(priceValue, qty),
             transport_charges: Number(transportText) || 0,
             notes: note.trim() || null,
           }
@@ -620,14 +652,14 @@ export function EditScrapPurchaseForm({ row, onChange }: EditFormProps<ScrapPurc
         }}
       />
       <Field
-        label="Purchase Price (₹)"
+        label="Price per kg (₹)"
         type="number"
         min="0"
         inputMode="decimal"
-        value={cost}
+        value={pricePerKg}
         onChange={(e) => {
-          setCost(e.target.value)
-          emit({ cost: e.target.value })
+          setPricePerKg(e.target.value)
+          emit({ pricePerKg: e.target.value })
         }}
       />
       <Field
@@ -640,6 +672,12 @@ export function EditScrapPurchaseForm({ row, onChange }: EditFormProps<ScrapPurc
           setTransport(e.target.value)
           emit({ transport: e.target.value })
         }}
+      />
+      <PurchaseCostSummary
+        pricePerKg={Number(pricePerKg) || 0}
+        quantityKg={Number(quantity) || 0}
+        materialCost={materialCost}
+        transport={Number(transport) || 0}
       />
       <Field
         label="Notes (optional)"

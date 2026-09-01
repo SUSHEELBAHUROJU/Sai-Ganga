@@ -611,12 +611,36 @@ export function generateLedgerStatementBlob(
 const REPORT_MARGIN = 12
 const REPORT_BOTTOM = 282
 
+/** dd-mm-yyyy. The invoice's spelled-out date is too wide for a report table
+ *  that carries a row per transaction — it ran into the next column. */
+function reportDate(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return `${d}-${m}-${y}`
+}
+
 type ReportColumn = {
   header: string
   /** x offset from the left margin. */
   x: number
   align?: 'left' | 'right'
   width?: number
+}
+
+/**
+ * One line of `text` that fits `width`, ending in "..." when the value was
+ * longer. Cutting silently made a long trading name read as a different,
+ * shorter one; the ellipsis says the name continues. Assumes the caller has
+ * already set the font it will draw with.
+ */
+function fitToWidth(doc: jsPDF, text: string, width: number): string {
+  const lines = doc.splitTextToSize(text, width) as string[]
+  if (lines.length <= 1) return lines[0] ?? ''
+
+  let candidate = lines[0]
+  while (candidate.length > 1 && doc.getTextWidth(`${candidate}...`) > width) {
+    candidate = candidate.slice(0, -1)
+  }
+  return `${candidate.trimEnd()}...`
 }
 
 /** Shared table renderer for both reports, so they stay visually identical
@@ -675,7 +699,7 @@ function drawReportTable(
     columns.forEach((col, ci) => {
       const raw = row[ci] ?? ''
       const align = col.align === 'right' ? 'right' : 'left'
-      const text = col.width ? doc.splitTextToSize(raw, col.width)[0] ?? '' : raw
+      const text = col.width ? fitToWidth(doc, raw, col.width) : raw
       doc.text(text, REPORT_MARGIN + col.x, y + 4.2, { align })
     })
 
@@ -772,6 +796,7 @@ export type ExpenseReportData = {
     supplier: string
     item: string
     quantityKg: number
+    ratePerKg: number | null
     purchasePrice: number | null
     transport: number
     total: number | null
@@ -801,21 +826,21 @@ export function generateExpenseReportDoc(
     y,
     [
       { header: 'DATE', x: 2 },
-      { header: 'SUPPLIER', x: 24, width: 40 },
-      { header: 'ITEM', x: 68, width: 36 },
-      { header: 'QTY (KG)', x: 122, align: 'right' },
-      { header: 'PRICE (Rs.)', x: 148, align: 'right' },
-      { header: 'TRANSPORT', x: 168, align: 'right' },
+      { header: 'SUPPLIER', x: 17, width: 38 },
+      { header: 'ITEM', x: 57, width: 30 },
+      { header: 'QTY (KG)', x: 112, align: 'right' },
+      { header: 'RATE/KG', x: 136, align: 'right' },
+      { header: 'TRANSPORT', x: 162, align: 'right' },
       { header: 'TOTAL (Rs.)', x: 186, align: 'right' },
     ],
     report.purchases.map((p) => [
-      formatInvoiceDate(p.entry_date),
+      reportDate(p.entry_date),
       p.supplier,
       p.item,
       num(p.quantityKg),
-      p.purchasePrice === null ? '—' : money(p.purchasePrice),
+      p.ratePerKg === null ? '-' : money(p.ratePerKg),
       money(p.transport),
-      p.total === null ? '—' : money(p.total),
+      p.total === null ? '-' : money(p.total),
     ]),
     'No purchases in this period.',
   )
@@ -830,7 +855,7 @@ export function generateExpenseReportDoc(
       { header: 'DESCRIPTION', x: 68, width: 116 },
     ],
     report.salaries.map((s) => [
-      formatInvoiceDate(s.entry_date),
+      reportDate(s.entry_date),
       money(s.amount),
       s.notes ?? '',
     ]),
@@ -848,7 +873,7 @@ export function generateExpenseReportDoc(
       { header: 'DESCRIPTION', x: 108, width: 78 },
     ],
     report.otherExpenses.map((e) => [
-      formatInvoiceDate(e.entry_date),
+      reportDate(e.entry_date),
       e.category,
       money(e.amount),
       e.notes ?? '',
@@ -873,12 +898,11 @@ export function generateExpenseReportDoc(
 }
 
 export type SalesReportData = {
+  /** One entry per bill — see SalesReportLine. */
   lines: {
     bill_date: string
     bill_number: string
     customer: string
-    item: string
-    quantityPcs: number | null
     weightKg: number
     amount: number
   }[]
@@ -894,20 +918,18 @@ export function generateSalesReportDoc(report: SalesReportData, periodLabel: str
     doc,
     y,
     [
-      { header: 'DATE', x: 2 },
-      { header: 'BILL', x: 24 },
-      { header: 'CUSTOMER', x: 44, width: 44 },
-      { header: 'ITEM', x: 92, width: 32 },
-      { header: 'QTY', x: 140, align: 'right' },
-      { header: 'WEIGHT (KG)', x: 164, align: 'right' },
+      { header: 'S.NO', x: 2 },
+      { header: 'DATE', x: 13 },
+      { header: 'BILL', x: 31 },
+      { header: 'CUSTOMER', x: 48, width: 84 },
+      { header: 'WEIGHT (KG)', x: 152, align: 'right' },
       { header: 'AMOUNT (Rs.)', x: 186, align: 'right' },
     ],
-    report.lines.map((l) => [
-      formatInvoiceDate(l.bill_date),
+    report.lines.map((l, i) => [
+      String(i + 1),
+      reportDate(l.bill_date),
       l.bill_number,
       l.customer,
-      l.item,
-      l.quantityPcs != null ? `${num(l.quantityPcs)} pcs` : '-',
       num(l.weightKg),
       money(l.amount),
     ]),
