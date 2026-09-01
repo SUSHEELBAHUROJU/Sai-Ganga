@@ -20,14 +20,27 @@ export function validateQuantity(
   return null
 }
 
-export function validateOptionalCost(raw: string): string | null {
+/** Purchase price is mandatory — a purchase can't be saved without it. */
+export function validateCost(raw: string, fieldLabel = 'the purchase price'): string | null {
+  const text = raw.trim()
+  if (!text) return `Enter ${fieldLabel}`
+
+  const value = Number(text)
+  if (!Number.isFinite(value)) return `${fieldLabel} must be a number`
+  if (value <= 0) return `${fieldLabel} must be more than 0`
+  if (value > 100_000_000) return `${fieldLabel} looks too large — please check`
+  return null
+}
+
+/** Transport charges are optional and default to 0 — only reject a bad number. */
+export function validateOptionalTransport(raw: string): string | null {
   const text = raw.trim()
   if (!text) return null
 
   const value = Number(text)
-  if (!Number.isFinite(value)) return 'Cost must be a number'
-  if (value < 0) return "Cost can't be negative"
-  if (value > 100_000_000) return 'Cost looks too large — please check'
+  if (!Number.isFinite(value)) return 'Transport charges must be a number'
+  if (value < 0) return "Transport charges can't be negative"
+  if (value > 100_000_000) return 'Transport charges look too large — please check'
   return null
 }
 

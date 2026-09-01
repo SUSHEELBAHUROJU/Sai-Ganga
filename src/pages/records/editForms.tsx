@@ -2,6 +2,7 @@ import { useState, useEffect, type ReactNode } from 'react'
 import { usePipeProducts } from '../../hooks/usePipeProducts'
 import { useRawMaterialTypes } from '../../hooks/useRawMaterialTypes'
 import { useScrapTypes } from '../../hooks/useScrapTypes'
+import { useExpenseCategories } from '../../hooks/useExpenseCategories'
 import type {
   ProductionRecordRow,
   SaleRecordRow,
@@ -9,6 +10,7 @@ import type {
   RawPurchaseRecordRow,
   ScrapPurchaseRecordRow,
   FactoryWasteRecordRow,
+  ExpenseRecordRow,
 } from '../../hooks/useRecords'
 import type { EntryMode } from '../../hooks/useRawMaterialPurchases'
 import { DateField } from '../../components/DateField'
@@ -23,6 +25,7 @@ import {
 import { PipeProductPicker } from '../../components/PipeProductPicker'
 import { CustomerPicker } from '../../components/CustomerPicker'
 import { ScrapDealerPicker } from '../../components/ScrapDealerPicker'
+import { SupplierPicker } from '../../components/SupplierPicker'
 import { formatQty } from '../../lib/format'
 
 /** A form reports its patch (or null when invalid) via `onValidChange`. */
@@ -316,7 +319,7 @@ export function EditRawPurchaseForm({ row, onChange }: EditFormProps<RawPurchase
   const { data: materialTypes } = useRawMaterialTypes()
   const [entryDate, setEntryDate] = useState(row.entry_date)
   const [typeId, setTypeId] = useState(row.raw_material_type_id)
-  const [supplier, setSupplier] = useState(row.supplier_name ?? '')
+  const [supplierId, setSupplierId] = useState(row.supplier_id ?? '')
   const [entryMode, setEntryMode] = useState<EntryMode>(row.entry_mode as EntryMode)
   const [packKg, setPackKg] = useState<number | null>(row.pack_kg ?? 25)
   const [numBags, setNumBags] = useState(row.num_bags === null ? '' : String(row.num_bags))
@@ -324,6 +327,9 @@ export function EditRawPurchaseForm({ row, onChange }: EditFormProps<RawPurchase
     row.entry_mode === 'direct_kg' ? String(row.total_qty_kg) : '',
   )
   const [cost, setCost] = useState(row.cost === null ? '' : String(row.cost))
+  const [transport, setTransport] = useState(
+    row.transport_charges ? String(row.transport_charges) : '',
+  )
   const [notes, setNotes] = useState(row.notes ?? '')
 
   const selectableTypes = (materialTypes ?? []).filter((t) => t.is_active || t.id === typeId)
@@ -333,36 +339,43 @@ export function EditRawPurchaseForm({ row, onChange }: EditFormProps<RawPurchase
   function emit(next: {
     entryDate?: string
     typeId?: string
-    supplier?: string
+    supplierId?: string
     entryMode?: EntryMode
     packKg?: number
     numBags?: string
     directKg?: string
     cost?: string
+    transport?: string
     notes?: string
   }) {
     const date = next.entryDate ?? entryDate
     const material = next.typeId ?? typeId
-    const supplierName = next.supplier ?? supplier
+    const supplier = next.supplierId !== undefined ? next.supplierId : supplierId
     const mode = next.entryMode ?? entryMode
     const pack = next.packKg ?? packKg
     const bags = next.numBags ?? numBags
     const direct = next.directKg ?? directKg
     const costText = next.cost ?? cost
+    const transportText = next.transport ?? transport
     const note = next.notes ?? notes
 
     const totalQty = mode === 'bag' ? (pack ?? 0) * Number(bags || 0) : Number(direct || 0)
+    const costValue = Number(costText)
+    // Purchase price is mandatory, so an edit that clears it is not a valid
+    // patch — the Save button stays disabled rather than writing a null the
+    // DB check constraint would reject anyway.
     onChange(
-      material && totalQty > 0
+      material && totalQty > 0 && costText.trim() !== '' && costValue > 0
         ? {
             entry_date: date,
             raw_material_type_id: material,
-            supplier_name: supplierName.trim() || null,
+            supplier_id: supplier || null,
             entry_mode: mode,
             pack_kg: mode === 'bag' ? pack : null,
             num_bags: mode === 'bag' ? Number(bags) : null,
             total_qty_kg: totalQty,
-            cost: costText ? Number(costText) : null,
+            cost: costValue,
+            transport_charges: Number(transportText) || 0,
             notes: note.trim() || null,
           }
         : null,
@@ -396,14 +409,23 @@ export function EditRawPurchaseForm({ row, onChange }: EditFormProps<RawPurchase
           ))}
         </div>
       </div>
-      <Field
-        label="Supplier (optional)"
-        value={supplier}
-        onChange={(e) => {
-          setSupplier(e.target.value)
-          emit({ supplier: e.target.value })
-        }}
-      />
+      <div>
+        <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+          Supplier (optional)
+        </span>
+        <SupplierPicker
+          value={supplierId || null}
+          onChange={(v) => {
+            setSupplierId(v)
+            emit({ supplierId: v })
+          }}
+        />
+        {!supplierId && row.supplier_name && (
+          <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+            Recorded earlier as “{row.supplier_name}” — pick a supplier above to link it.
+          </p>
+        )}
+      </div>
       <div>
         <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
           Entry Mode
@@ -468,7 +490,7 @@ export function EditRawPurchaseForm({ row, onChange }: EditFormProps<RawPurchase
       )}
       <TotalPreview label="Total Quantity" value={total} />
       <Field
-        label="Cost (optional)"
+        label="Purchase Price (₹)"
         type="number"
         min="0"
         inputMode="decimal"
@@ -476,6 +498,17 @@ export function EditRawPurchaseForm({ row, onChange }: EditFormProps<RawPurchase
         onChange={(e) => {
           setCost(e.target.value)
           emit({ cost: e.target.value })
+        }}
+      />
+      <Field
+        label="Transport Charges (₹, optional)"
+        type="number"
+        min="0"
+        inputMode="decimal"
+        value={transport}
+        onChange={(e) => {
+          setTransport(e.target.value)
+          emit({ transport: e.target.value })
         }}
       />
       <Field
@@ -497,6 +530,9 @@ export function EditScrapPurchaseForm({ row, onChange }: EditFormProps<ScrapPurc
   const [scrapTypeId, setScrapTypeId] = useState(row.scrap_type_id)
   const [quantity, setQuantity] = useState(String(row.quantity_kg))
   const [cost, setCost] = useState(row.cost === null ? '' : String(row.cost))
+  const [transport, setTransport] = useState(
+    row.transport_charges ? String(row.transport_charges) : '',
+  )
   const [notes, setNotes] = useState(row.notes ?? '')
 
   const selectableScrapTypes = (scrapTypes ?? []).filter((t) => t.is_active || t.id === scrapTypeId)
@@ -507,6 +543,7 @@ export function EditScrapPurchaseForm({ row, onChange }: EditFormProps<ScrapPurc
     scrapTypeId?: string
     quantity?: string
     cost?: string
+    transport?: string
     notes?: string
   }) {
     const date = next.entryDate ?? entryDate
@@ -514,15 +551,18 @@ export function EditScrapPurchaseForm({ row, onChange }: EditFormProps<ScrapPurc
     const scrapType = next.scrapTypeId ?? scrapTypeId
     const qty = Number(next.quantity ?? quantity)
     const costText = next.cost ?? cost
+    const transportText = next.transport ?? transport
     const note = next.notes ?? notes
+    const costValue = Number(costText)
     onChange(
-      scrapType && qty > 0
+      scrapType && qty > 0 && costText.trim() !== '' && costValue > 0
         ? {
             entry_date: date,
             scrap_dealer_id: dealer || null,
             scrap_type_id: scrapType,
             quantity_kg: qty,
-            cost: costText ? Number(costText) : null,
+            cost: costValue,
+            transport_charges: Number(transportText) || 0,
             notes: note.trim() || null,
           }
         : null,
@@ -580,7 +620,7 @@ export function EditScrapPurchaseForm({ row, onChange }: EditFormProps<ScrapPurc
         }}
       />
       <Field
-        label="Cost (optional)"
+        label="Purchase Price (₹)"
         type="number"
         min="0"
         inputMode="decimal"
@@ -588,6 +628,17 @@ export function EditScrapPurchaseForm({ row, onChange }: EditFormProps<ScrapPurc
         onChange={(e) => {
           setCost(e.target.value)
           emit({ cost: e.target.value })
+        }}
+      />
+      <Field
+        label="Transport Charges (₹, optional)"
+        type="number"
+        min="0"
+        inputMode="decimal"
+        value={transport}
+        onChange={(e) => {
+          setTransport(e.target.value)
+          emit({ transport: e.target.value })
         }}
       />
       <Field
@@ -668,6 +719,93 @@ export function EditFactoryWasteForm({ row, onChange }: EditFormProps<FactoryWas
       />
       <Field
         label="Notes (optional)"
+        value={notes}
+        onChange={(e) => {
+          setNotes(e.target.value)
+          emit({ notes: e.target.value })
+        }}
+      />
+    </FormShell>
+  )
+}
+
+export function EditExpenseForm({ row, onChange }: EditFormProps<ExpenseRecordRow>) {
+  const { data: categories } = useExpenseCategories()
+  const [entryDate, setEntryDate] = useState(row.entry_date)
+  const [categoryId, setCategoryId] = useState(row.category_id)
+  const [amount, setAmount] = useState(String(row.amount))
+  const [notes, setNotes] = useState(row.notes ?? '')
+
+  // A category that has since been removed still shows while it's the one
+  // this expense uses — editing an old record must not silently re-bucket it.
+  const selectableCategories = (categories ?? []).filter(
+    (c) => c.is_active || c.id === categoryId,
+  )
+
+  function emit(next: {
+    entryDate?: string
+    categoryId?: string
+    amount?: string
+    notes?: string
+  }) {
+    const date = next.entryDate ?? entryDate
+    const category = next.categoryId ?? categoryId
+    const amountText = next.amount ?? amount
+    const note = next.notes ?? notes
+    const amountValue = Number(amountText)
+
+    onChange(
+      category && amountText.trim() !== '' && amountValue > 0
+        ? {
+            entry_date: date,
+            category_id: category,
+            amount: amountValue,
+            notes: note.trim() || null,
+          }
+        : null,
+    )
+  }
+
+  return (
+    <FormShell>
+      <DateRow
+        value={entryDate}
+        onChange={(v) => {
+          setEntryDate(v)
+          emit({ entryDate: v })
+        }}
+      />
+      <div>
+        <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+          Expense Type
+        </span>
+        <div className="flex flex-wrap gap-2">
+          {selectableCategories.map((c) => (
+            <Chip
+              key={c.id}
+              label={c.name}
+              selected={categoryId === c.id}
+              onClick={() => {
+                setCategoryId(c.id)
+                emit({ categoryId: c.id })
+              }}
+            />
+          ))}
+        </div>
+      </div>
+      <Field
+        label="Amount (₹)"
+        type="number"
+        min="0"
+        inputMode="decimal"
+        value={amount}
+        onChange={(e) => {
+          setAmount(e.target.value)
+          emit({ amount: e.target.value })
+        }}
+      />
+      <Field
+        label="Description (optional)"
         value={notes}
         onChange={(e) => {
           setNotes(e.target.value)

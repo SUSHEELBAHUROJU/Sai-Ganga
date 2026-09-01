@@ -22,12 +22,14 @@ export type RecyclingRecordRow = Tables['recycling_entries']['Row'] & {
 }
 export type RawPurchaseRecordRow = Tables['raw_material_purchases']['Row'] & {
   raw_material_types: NameRef
+  raw_material_suppliers: NameRef
 }
 export type ScrapPurchaseRecordRow = Tables['scrap_purchases']['Row'] & {
   scrap_dealers: NameRef
   scrap_types: NameRef
 }
 export type FactoryWasteRecordRow = Tables['factory_waste_entries']['Row'] & { scrap_types: NameRef }
+export type ExpenseRecordRow = Tables['expenses']['Row'] & { expense_categories: NameRef }
 
 export type RecordKind =
   | 'production'
@@ -36,6 +38,7 @@ export type RecordKind =
   | 'raw_material_purchase'
   | 'scrap_purchase'
   | 'factory_waste'
+  | 'expense'
 
 export type EntryRecord =
   | { kind: 'production'; row: ProductionRecordRow }
@@ -44,6 +47,7 @@ export type EntryRecord =
   | { kind: 'raw_material_purchase'; row: RawPurchaseRecordRow }
   | { kind: 'scrap_purchase'; row: ScrapPurchaseRecordRow }
   | { kind: 'factory_waste'; row: FactoryWasteRecordRow }
+  | { kind: 'expense'; row: ExpenseRecordRow }
 
 export const RECORD_KIND_LABEL: Record<RecordKind, string> = {
   production: 'Production',
@@ -52,6 +56,13 @@ export const RECORD_KIND_LABEL: Record<RecordKind, string> = {
   raw_material_purchase: 'Raw Material',
   scrap_purchase: 'Scrap Purchase',
   factory_waste: 'Factory Waste',
+  expense: 'Expense',
+}
+
+/** A raw-material purchase's supplier: the structured one, falling back to the
+ *  free text recorded before suppliers became real entities. */
+export function rawPurchaseSupplierName(row: RawPurchaseRecordRow): string | null {
+  return row.raw_material_suppliers?.name ?? row.supplier_name ?? null
 }
 
 /**
@@ -111,7 +122,7 @@ export function describeRecord(record: EntryRecord): {
     case 'raw_material_purchase':
       return {
         title: record.row.raw_material_types?.name ?? 'Unknown material',
-        subtitle: record.row.supplier_name,
+        subtitle: rawPurchaseSupplierName(record.row),
         amount: `${formatQty(record.row.total_qty_kg)} kg`,
         amountKgPcs: null,
       }
@@ -127,6 +138,14 @@ export function describeRecord(record: EntryRecord): {
         title: record.row.scrap_types?.name ?? 'Unknown scrap type',
         subtitle: 'Factory waste',
         amount: `${formatQty(record.row.quantity_kg)} kg`,
+        amountKgPcs: null,
+      }
+    // Money out, not stock — the only kind whose amount is rupees.
+    case 'expense':
+      return {
+        title: record.row.expense_categories?.name ?? 'Expense',
+        subtitle: record.row.notes,
+        amount: `₹${formatQty(record.row.amount)}`,
         amountKgPcs: null,
       }
   }
@@ -175,7 +194,7 @@ export function useRecords({ fromDate, toDate, kinds }: RecordsFilter) {
           .order('created_at', { ascending: false })
           .limit(ROW_CAP)
 
-      const [production, sales, recycling, rawPurchases, scrapPurchases, factoryWaste] =
+      const [production, sales, recycling, rawPurchases, scrapPurchases, factoryWaste, expenses] =
         await Promise.all([
           wants('production')
             ? inRange(
@@ -199,7 +218,11 @@ export function useRecords({ fromDate, toDate, kinds }: RecordsFilter) {
               )
             : null,
           wants('raw_material_purchase')
-            ? inRange(supabase.from('raw_material_purchases').select('*, raw_material_types(name)'))
+            ? inRange(
+                supabase
+                  .from('raw_material_purchases')
+                  .select('*, raw_material_types(name), raw_material_suppliers(name)'),
+              )
             : null,
           wants('scrap_purchase')
             ? inRange(
@@ -208,6 +231,9 @@ export function useRecords({ fromDate, toDate, kinds }: RecordsFilter) {
             : null,
           wants('factory_waste')
             ? inRange(supabase.from('factory_waste_entries').select('*, scrap_types(name)'))
+            : null,
+          wants('expense')
+            ? inRange(supabase.from('expenses').select('*, expense_categories(name)'))
             : null,
         ])
 
@@ -218,13 +244,20 @@ export function useRecords({ fromDate, toDate, kinds }: RecordsFilter) {
         rawPurchases,
         scrapPurchases,
         factoryWaste,
+        expenses,
       ]) {
         if (result?.error) throw result.error
       }
 
-      const truncated = [production, sales, recycling, rawPurchases, scrapPurchases, factoryWaste].some(
-        (result) => (result?.data?.length ?? 0) >= ROW_CAP,
-      )
+      const truncated = [
+        production,
+        sales,
+        recycling,
+        rawPurchases,
+        scrapPurchases,
+        factoryWaste,
+        expenses,
+      ].some((result) => (result?.data?.length ?? 0) >= ROW_CAP)
 
       const records: EntryRecord[] = [
         ...((production?.data ?? []) as unknown as ProductionRecordRow[]).map(
@@ -244,6 +277,9 @@ export function useRecords({ fromDate, toDate, kinds }: RecordsFilter) {
         ),
         ...((factoryWaste?.data ?? []) as unknown as FactoryWasteRecordRow[]).map(
           (row): EntryRecord => ({ kind: 'factory_waste', row }),
+        ),
+        ...((expenses?.data ?? []) as unknown as ExpenseRecordRow[]).map(
+          (row): EntryRecord => ({ kind: 'expense', row }),
         ),
       ]
 
@@ -279,6 +315,9 @@ export type GroupedTransaction = {
   subtitle: string | null
   totalKg: number
   totalPcs: number
+  /** Rupee total — set only for money-denominated kinds (expenses), where a
+   *  kg figure would be meaningless. */
+  totalAmount: number | null
   bill: BillRef | null
   items: EntryRecord[]
 }
@@ -309,7 +348,8 @@ export function groupRecordsByTransaction(records: EntryRecord[]): [string, Grou
       const timeBatch = Math.floor(new Date(record.row.created_at).getTime() / (5 * 60 * 1000))
       key = `prod_${timeBatch}`
     } else if (record.kind === 'raw_material_purchase') {
-      const supplier = record.row.supplier_name || 'unknown'
+      const supplier =
+        record.row.supplier_id || rawPurchaseSupplierName(record.row) || 'unknown'
       const timeBatch = Math.floor(new Date(record.row.created_at).getTime() / (5 * 60 * 1000))
       key = `raw_${supplier}_${timeBatch}`
     } else if (record.kind === 'scrap_purchase') {
@@ -335,7 +375,10 @@ export function groupRecordsByTransaction(records: EntryRecord[]): [string, Grou
         title = 'Pipe Production'
       } else if (record.kind === 'raw_material_purchase') {
         title = 'Raw Material Purchase'
-        subtitle = record.row.supplier_name ? `Supplier: ${record.row.supplier_name}` : null
+        const supplierName = rawPurchaseSupplierName(record.row)
+        subtitle = supplierName ? `Supplier: ${supplierName}` : null
+      } else if (record.kind === 'expense') {
+        title = record.row.expense_categories?.name ?? 'Expense'
       } else if (record.kind === 'scrap_purchase') {
         title = 'Scrap Purchase'
         subtitle = record.row.scrap_dealers?.name ? `Dealer: ${record.row.scrap_dealers.name}` : null
@@ -361,6 +404,7 @@ export function groupRecordsByTransaction(records: EntryRecord[]): [string, Grou
         subtitle,
         totalKg: 0,
         totalPcs: 0,
+        totalAmount: record.kind === 'expense' ? 0 : null,
         bill,
         items: [],
       }
@@ -381,6 +425,8 @@ export function groupRecordsByTransaction(records: EntryRecord[]): [string, Grou
       existingGroup.totalKg += record.row.total_qty_kg ?? 0
     } else if (record.kind === 'scrap_purchase' || record.kind === 'factory_waste') {
       existingGroup.totalKg += record.row.quantity_kg ?? 0
+    } else if (record.kind === 'expense') {
+      existingGroup.totalAmount = (existingGroup.totalAmount ?? 0) + (record.row.amount ?? 0)
     }
   }
 

@@ -8,7 +8,10 @@ export type NewScrapPurchase = {
   scrap_dealer_id: string | null
   scrap_type_id: string
   quantity_kg: number
-  cost: number | null
+  /** What was paid for this purchase, in full. Mandatory. */
+  cost: number
+  /** Freight, kept separate from cost so total = cost + transport. */
+  transport_charges: number
   notes: string | null
 }
 
@@ -23,6 +26,8 @@ export function useAddScrapPurchase() {
       queryClient.invalidateQueries({ queryKey: ['scrap_purchases'] })
       queryClient.invalidateQueries({ queryKey: ['scrap_stock'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+      queryClient.invalidateQueries({ queryKey: ['records'] })
+      queryClient.invalidateQueries({ queryKey: ['reports'] })
     },
   })
 }

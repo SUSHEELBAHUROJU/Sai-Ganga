@@ -3,7 +3,9 @@ import { PipeSizesTab } from './settings/PipeSizesTab'
 import { RawMaterialsTab } from './settings/RawMaterialsTab'
 import { CustomersTab } from './settings/CustomersTab'
 import { ScrapDealersTab } from './settings/ScrapDealersTab'
+import { SuppliersTab } from './settings/SuppliersTab'
 import { ScrapTypesTab } from './settings/ScrapTypesTab'
+import { ExpenseTypesTab } from './settings/ExpenseTypesTab'
 import { StockSettingsTab } from './settings/StockSettingsTab'
 import { SecurityTab } from './settings/SecurityTab'
 import { BackupTab } from './settings/BackupTab'
@@ -13,8 +15,10 @@ const TABS = [
   { key: 'pipe_sizes', label: 'Pipe Sizes' },
   { key: 'raw_materials', label: 'Raw Materials' },
   { key: 'customers', label: 'Customers' },
+  { key: 'suppliers', label: 'Suppliers' },
   { key: 'scrap_dealers', label: 'Scrap Dealers' },
   { key: 'scrap_types', label: 'Scrap Types' },
+  { key: 'expense_types', label: 'Expense Types' },
   { key: 'stock_settings', label: 'Stock Settings' },
   { key: 'billing', label: 'Billing Settings' },
   { key: 'backup', label: 'Backup' },
@@ -52,8 +56,10 @@ export function SettingsPage() {
       {activeTab === 'pipe_sizes' && <PipeSizesTab />}
       {activeTab === 'raw_materials' && <RawMaterialsTab />}
       {activeTab === 'customers' && <CustomersTab />}
+      {activeTab === 'suppliers' && <SuppliersTab />}
       {activeTab === 'scrap_dealers' && <ScrapDealersTab />}
       {activeTab === 'scrap_types' && <ScrapTypesTab />}
+      {activeTab === 'expense_types' && <ExpenseTypesTab />}
       {activeTab === 'stock_settings' && <StockSettingsTab />}
       {activeTab === 'billing' && <BillingSettingsTab />}
       {activeTab === 'backup' && <BackupTab />}

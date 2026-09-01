@@ -599,3 +599,355 @@ export function generateLedgerStatementBlob(
 
   return { blob, file, filename, url }
 }
+
+/* ==========================================================================
+ * Business reports — Expense/Purchase and Sales
+ *
+ * Full-page A4 (unlike the two-copy invoice, which is a customer handout):
+ * these are internal documents that get filed or shared with an accountant,
+ * so they run long and paginate rather than being cut in half.
+ * ========================================================================== */
+
+const REPORT_MARGIN = 12
+const REPORT_BOTTOM = 282
+
+type ReportColumn = {
+  header: string
+  /** x offset from the left margin. */
+  x: number
+  align?: 'left' | 'right'
+  width?: number
+}
+
+/** Shared table renderer for both reports, so they stay visually identical
+ *  and neither has to reimplement paging, banding, or header repetition. */
+function drawReportTable(
+  doc: jsPDF,
+  startY: number,
+  columns: ReportColumn[],
+  rows: string[][],
+  emptyMessage: string,
+): number {
+  const contentWidth = PAGE_W - REPORT_MARGIN * 2
+  let y = startY
+
+  const drawHeader = () => {
+    doc.setFillColor(...NAVY)
+    doc.rect(REPORT_MARGIN, y, contentWidth, 6.5, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.5)
+    doc.setTextColor(255, 255, 255)
+    columns.forEach((col) => {
+      doc.text(col.header, REPORT_MARGIN + col.x, y + 4.4, {
+        align: col.align === 'right' ? 'right' : 'left',
+      })
+    })
+    y += 6.5
+  }
+
+  drawHeader()
+
+  if (rows.length === 0) {
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(8)
+    doc.setTextColor(...MUTED_TEXT)
+    doc.text(emptyMessage, REPORT_MARGIN + 3, y + 5)
+    return y + 9
+  }
+
+  const rowH = 6
+  rows.forEach((row, i) => {
+    if (y + rowH > REPORT_BOTTOM) {
+      doc.addPage()
+      y = 16
+      drawHeader()
+    }
+
+    if (i % 2 === 1) {
+      doc.setFillColor(...ROW_ALT_BG)
+      doc.rect(REPORT_MARGIN, y, contentWidth, rowH, 'F')
+    }
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.8)
+    doc.setTextColor(...DARK_TEXT)
+
+    columns.forEach((col, ci) => {
+      const raw = row[ci] ?? ''
+      const align = col.align === 'right' ? 'right' : 'left'
+      const text = col.width ? doc.splitTextToSize(raw, col.width)[0] ?? '' : raw
+      doc.text(text, REPORT_MARGIN + col.x, y + 4.2, { align })
+    })
+
+    doc.setDrawColor(...BORDER_GRAY)
+    doc.setLineWidth(0.15)
+    doc.line(REPORT_MARGIN, y + rowH, PAGE_W - REPORT_MARGIN, y + rowH)
+    y += rowH
+  })
+
+  return y
+}
+
+/** Report title block — business name, report name, and the period covered. */
+function drawReportHeader(doc: jsPDF, title: string, periodLabel: string): number {
+  const contentWidth = PAGE_W - REPORT_MARGIN * 2
+  let y = 14
+
+  doc.setFillColor(...NAVY)
+  doc.rect(REPORT_MARGIN, y, contentWidth, 1.4, 'F')
+  doc.setFillColor(...RED)
+  doc.rect(REPORT_MARGIN, y + 1.4, contentWidth, 0.7, 'F')
+
+  y += 8
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(14)
+  doc.setTextColor(...NAVY)
+  doc.text(BUSINESS_NAME, REPORT_MARGIN, y)
+
+  doc.setFontSize(10)
+  doc.text(title, PAGE_W - REPORT_MARGIN, y, { align: 'right' })
+
+  y += 5.5
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+  doc.setTextColor(...MUTED_TEXT)
+  doc.text(`Period: ${periodLabel}`, REPORT_MARGIN, y)
+
+  return y + 6
+}
+
+/** Section heading inside a report. */
+function drawSectionTitle(doc: jsPDF, y: number, label: string): number {
+  const top = y + 6.5
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(...RED)
+  doc.text(label.toUpperCase(), REPORT_MARGIN, top)
+  return top + 2.5
+}
+
+function drawSummaryBlock(
+  doc: jsPDF,
+  y: number,
+  rows: { label: string; value: string }[],
+  grand: { label: string; value: string },
+): number {
+  const width = 84
+  const x = PAGE_W - REPORT_MARGIN - width
+  let cursor = y + 4
+
+  // Keep the whole block on one page — a summary split across a page break
+  // is exactly the part someone flips to first.
+  const needed = rows.length * 5.2 + 10
+  if (cursor + needed > REPORT_BOTTOM) {
+    doc.addPage()
+    cursor = 16
+  }
+
+  rows.forEach((row) => {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.2)
+    doc.setTextColor(...DARK_TEXT)
+    doc.text(row.label, x, cursor + 3.6)
+    doc.text(row.value, PAGE_W - REPORT_MARGIN, cursor + 3.6, { align: 'right' })
+    cursor += 5.2
+  })
+
+  doc.setFillColor(...NAVY)
+  doc.rect(x, cursor, width, 9, 'F')
+  doc.setFillColor(...RED)
+  doc.rect(x, cursor, 1.8, 9, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.setTextColor(255, 255, 255)
+  doc.text(grand.label, x + 4.5, cursor + 6)
+  doc.text(grand.value, PAGE_W - REPORT_MARGIN, cursor + 6, { align: 'right' })
+
+  return cursor + 9
+}
+
+export type ExpenseReportData = {
+  purchases: {
+    entry_date: string
+    supplier: string
+    item: string
+    quantityKg: number
+    purchasePrice: number | null
+    transport: number
+    total: number | null
+  }[]
+  salaries: { entry_date: string; category: string; amount: number; notes: string | null }[]
+  otherExpenses: { entry_date: string; category: string; amount: number; notes: string | null }[]
+  totals: {
+    purchaseCost: number
+    transport: number
+    purchaseTotal: number
+    salaries: number
+    otherExpenses: number
+    grandTotal: number
+  }
+}
+
+export function generateExpenseReportDoc(
+  report: ExpenseReportData,
+  periodLabel: string,
+): jsPDF {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  let y = drawReportHeader(doc, 'Expense Report', periodLabel)
+
+  y = drawSectionTitle(doc, y, 'Purchases')
+  y = drawReportTable(
+    doc,
+    y,
+    [
+      { header: 'DATE', x: 2 },
+      { header: 'SUPPLIER', x: 24, width: 40 },
+      { header: 'ITEM', x: 68, width: 36 },
+      { header: 'QTY (KG)', x: 122, align: 'right' },
+      { header: 'PRICE (Rs.)', x: 148, align: 'right' },
+      { header: 'TRANSPORT', x: 168, align: 'right' },
+      { header: 'TOTAL (Rs.)', x: 186, align: 'right' },
+    ],
+    report.purchases.map((p) => [
+      formatInvoiceDate(p.entry_date),
+      p.supplier,
+      p.item,
+      num(p.quantityKg),
+      p.purchasePrice === null ? '—' : money(p.purchasePrice),
+      money(p.transport),
+      p.total === null ? '—' : money(p.total),
+    ]),
+    'No purchases in this period.',
+  )
+
+  y = drawSectionTitle(doc, y, 'Salaries')
+  y = drawReportTable(
+    doc,
+    y,
+    [
+      { header: 'DATE', x: 2 },
+      { header: 'AMOUNT (Rs.)', x: 60, align: 'right' },
+      { header: 'DESCRIPTION', x: 68, width: 116 },
+    ],
+    report.salaries.map((s) => [
+      formatInvoiceDate(s.entry_date),
+      money(s.amount),
+      s.notes ?? '',
+    ]),
+    'No salary payments in this period.',
+  )
+
+  y = drawSectionTitle(doc, y, 'Other Expenses')
+  y = drawReportTable(
+    doc,
+    y,
+    [
+      { header: 'DATE', x: 2 },
+      { header: 'TYPE', x: 24, width: 40 },
+      { header: 'AMOUNT (Rs.)', x: 100, align: 'right' },
+      { header: 'DESCRIPTION', x: 108, width: 78 },
+    ],
+    report.otherExpenses.map((e) => [
+      formatInvoiceDate(e.entry_date),
+      e.category,
+      money(e.amount),
+      e.notes ?? '',
+    ]),
+    'No other expenses in this period.',
+  )
+
+  y = drawSectionTitle(doc, y, 'Summary')
+  drawSummaryBlock(
+    doc,
+    y,
+    [
+      { label: 'Total Purchase Cost', value: `Rs. ${money(report.totals.purchaseCost)}` },
+      { label: 'Total Transport', value: `Rs. ${money(report.totals.transport)}` },
+      { label: 'Total Salaries', value: `Rs. ${money(report.totals.salaries)}` },
+      { label: 'Total Other Expenses', value: `Rs. ${money(report.totals.otherExpenses)}` },
+    ],
+    { label: 'TOTAL EXPENSES', value: `Rs. ${money(report.totals.grandTotal)}` },
+  )
+
+  return doc
+}
+
+export type SalesReportData = {
+  lines: {
+    bill_date: string
+    bill_number: string
+    customer: string
+    item: string
+    quantityPcs: number | null
+    weightKg: number
+    amount: number
+  }[]
+  totals: { quantityPcs: number; weightKg: number; salesAmount: number; billCount: number }
+}
+
+export function generateSalesReportDoc(report: SalesReportData, periodLabel: string): jsPDF {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  let y = drawReportHeader(doc, 'Sales Report', periodLabel)
+
+  y = drawSectionTitle(doc, y, 'Sales')
+  y = drawReportTable(
+    doc,
+    y,
+    [
+      { header: 'DATE', x: 2 },
+      { header: 'BILL', x: 24 },
+      { header: 'CUSTOMER', x: 44, width: 44 },
+      { header: 'ITEM', x: 92, width: 32 },
+      { header: 'QTY', x: 140, align: 'right' },
+      { header: 'WEIGHT (KG)', x: 164, align: 'right' },
+      { header: 'AMOUNT (Rs.)', x: 186, align: 'right' },
+    ],
+    report.lines.map((l) => [
+      formatInvoiceDate(l.bill_date),
+      l.bill_number,
+      l.customer,
+      l.item,
+      l.quantityPcs != null ? `${num(l.quantityPcs)} pcs` : '-',
+      num(l.weightKg),
+      money(l.amount),
+    ]),
+    'No sales in this period.',
+  )
+
+  y = drawSectionTitle(doc, y, 'Summary')
+  drawSummaryBlock(
+    doc,
+    y,
+    [
+      { label: 'Bills Raised', value: String(report.totals.billCount) },
+      { label: 'Total Quantity Sold', value: `${num(report.totals.quantityPcs)} pcs` },
+      { label: 'Total Weight Sold', value: `${num(report.totals.weightKg)} kg` },
+    ],
+    { label: 'TOTAL SALES', value: `Rs. ${money(report.totals.salesAmount)}` },
+  )
+
+  return doc
+}
+
+function reportBlob(doc: jsPDF, filename: string) {
+  const blob = doc.output('blob')
+  const file = new File([blob], filename, { type: 'application/pdf' })
+  const url = URL.createObjectURL(blob)
+  return { blob, file, filename, url }
+}
+
+const slug = (text: string) => text.replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '')
+
+export function generateExpenseReportBlob(report: ExpenseReportData, periodLabel: string) {
+  return reportBlob(
+    generateExpenseReportDoc(report, periodLabel),
+    `Expense_Report_${slug(periodLabel)}.pdf`,
+  )
+}
+
+export function generateSalesReportBlob(report: SalesReportData, periodLabel: string) {
+  return reportBlob(
+    generateSalesReportDoc(report, periodLabel),
+    `Sales_Report_${slug(periodLabel)}.pdf`,
+  )
+}

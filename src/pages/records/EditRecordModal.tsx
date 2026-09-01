@@ -10,6 +10,7 @@ import {
   EditRawPurchaseForm,
   EditScrapPurchaseForm,
   EditFactoryWasteForm,
+  EditExpenseForm,
 } from './editForms'
 
 type EditRecordModalProps = {
@@ -57,6 +58,8 @@ export function EditRecordModal({ record, onClose }: EditRecordModalProps) {
         return <EditScrapPurchaseForm row={current.row} onChange={setPatch} />
       case 'factory_waste':
         return <EditFactoryWasteForm row={current.row} onChange={setPatch} />
+      case 'expense':
+        return <EditExpenseForm row={current.row} onChange={setPatch} />
     }
   }
 

@@ -4,6 +4,8 @@ import { DailySummaryTab } from './reports/DailySummaryTab'
 import { MonthlyTab } from './reports/MonthlyTab'
 import { CurrentStockView } from './reports/CurrentStockView'
 import { ReceivablesTab } from './reports/ReceivablesTab'
+import { ExpenseReportTab } from './reports/ExpenseReportTab'
+import { SalesReportTab } from './reports/SalesReportTab'
 import { DateRangeField } from '../components/DateRangeField'
 import { todayISODate } from '../lib/date'
 
@@ -12,7 +14,13 @@ const TABS = [
   { key: 'monthly', label: 'Trend' },
   { key: 'stock', label: 'Stock' },
   { key: 'dues', label: 'Dues' },
+  { key: 'sales_report', label: 'Sales Report' },
+  { key: 'expense_report', label: 'Expenses' },
 ] as const
+
+// The two downloadable reports own their own month/range picker, so the
+// shared range control above doesn't apply to them.
+const TABS_WITHOUT_SHARED_RANGE: readonly string[] = ['stock', 'sales_report', 'expense_report']
 
 type TabKey = (typeof TABS)[number]['key']
 
@@ -59,7 +67,7 @@ export function ReportsPage() {
         </div>
       </div>
 
-      {activeTab !== 'stock' && (
+      {!TABS_WITHOUT_SHARED_RANGE.includes(activeTab) && (
         <div className="mb-5">
           <DateRangeField
             fromDate={fromDate}
@@ -76,6 +84,8 @@ export function ReportsPage() {
       {activeTab === 'monthly' && <MonthlyTab fromDate={fromDate} toDate={toDate} />}
       {activeTab === 'stock' && <CurrentStockView />}
       {activeTab === 'dues' && <ReceivablesTab fromDate={fromDate} toDate={toDate} />}
+      {activeTab === 'sales_report' && <SalesReportTab />}
+      {activeTab === 'expense_report' && <ExpenseReportTab />}
     </div>
   )
 }

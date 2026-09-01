@@ -178,6 +178,77 @@ export type Database = {
         }
         Relationships: []
       }
+      expense_categories: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          is_salary: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          is_salary?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          is_salary?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      expenses: {
+        Row: {
+          amount: number
+          category_id: string
+          created_at: string
+          created_by: string | null
+          entry_date: string
+          id: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          category_id: string
+          created_at?: string
+          created_by?: string | null
+          entry_date?: string
+          id?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          category_id?: string
+          created_at?: string
+          created_by?: string | null
+          entry_date?: string
+          id?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "expense_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       factory_waste_entries: {
         Row: {
           created_at: string
@@ -453,8 +524,10 @@ export type Database = {
           num_bags: number | null
           pack_kg: number | null
           raw_material_type_id: string
+          supplier_id: string | null
           supplier_name: string | null
           total_qty_kg: number
+          transport_charges: number
           updated_at: string
         }
         Insert: {
@@ -468,8 +541,10 @@ export type Database = {
           num_bags?: number | null
           pack_kg?: number | null
           raw_material_type_id: string
+          supplier_id?: string | null
           supplier_name?: string | null
           total_qty_kg: number
+          transport_charges?: number
           updated_at?: string
         }
         Update: {
@@ -483,8 +558,10 @@ export type Database = {
           num_bags?: number | null
           pack_kg?: number | null
           raw_material_type_id?: string
+          supplier_id?: string | null
           supplier_name?: string | null
           total_qty_kg?: number
+          transport_charges?: number
           updated_at?: string
         }
         Relationships: [
@@ -502,7 +579,47 @@ export type Database = {
             referencedRelation: "raw_material_types"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "raw_material_purchases_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "raw_material_suppliers"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      raw_material_suppliers: {
+        Row: {
+          address: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          name: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       raw_material_types: {
         Row: {
@@ -761,6 +878,7 @@ export type Database = {
           quantity_kg: number
           scrap_dealer_id: string | null
           scrap_type_id: string
+          transport_charges: number
           updated_at: string
         }
         Insert: {
@@ -773,6 +891,7 @@ export type Database = {
           quantity_kg: number
           scrap_dealer_id?: string | null
           scrap_type_id: string
+          transport_charges?: number
           updated_at?: string
         }
         Update: {
@@ -785,6 +904,7 @@ export type Database = {
           quantity_kg?: number
           scrap_dealer_id?: string | null
           scrap_type_id?: string
+          transport_charges?: number
           updated_at?: string
         }
         Relationships: [

@@ -7,9 +7,15 @@ import { NumberStepper } from '../../components/NumberStepper'
 import { PackSizeField } from '../../components/PackSizeField'
 import { StickyActionBar } from '../../components/StickyActionBar'
 import { SaveButton } from '../../components/SaveButton'
+import { SupplierPicker } from '../../components/SupplierPicker'
 import { ACTION_STYLES } from '../../lib/actionColors'
 import { useToast } from '../../lib/toast'
-import { firstError, validateQuantity, validateOptionalCost } from '../../lib/validate'
+import {
+  firstError,
+  validateQuantity,
+  validateCost,
+  validateOptionalTransport,
+} from '../../lib/validate'
 import { formatQty } from '../../lib/format'
 
 const purchaseStyle = ACTION_STYLES.purchase
@@ -23,21 +29,24 @@ export function RawMaterialPurchaseForm({ entryDate }: { entryDate: string }) {
   const activeTypes = useMemo(() => (materialTypes ?? []).filter((t) => t.is_active), [materialTypes])
 
   const [materialTypeId, setMaterialTypeId] = useState<string | null>(null)
-  const [supplierName, setSupplierName] = useState('')
+  const [supplierId, setSupplierId] = useState('')
   const [entryMode, setEntryMode] = useState<EntryMode>('bag')
   const [packKg, setPackKg] = useState<number | null>(25)
   const [numBags, setNumBags] = useState('')
   const [directKg, setDirectKg] = useState('')
   const [cost, setCost] = useState('')
+  const [transport, setTransport] = useState('')
   const [notes, setNotes] = useState('')
 
   const totalQtyKg =
     entryMode === 'bag' ? (packKg && numBags ? packKg * Number(numBags) : 0) : Number(directKg) || 0
+  const totalPurchaseCost = (Number(cost) || 0) + (Number(transport) || 0)
 
   function resetAmounts() {
     setNumBags('')
     setDirectKg('')
     setCost('')
+    setTransport('')
     setNotes('')
   }
 
@@ -50,7 +59,8 @@ export function RawMaterialPurchaseForm({ entryDate }: { entryDate: string }) {
             validateQuantity(numBags, 'number of bags'),
           )
         : validateQuantity(directKg, 'total quantity'),
-      validateOptionalCost(cost),
+      validateCost(cost),
+      validateOptionalTransport(transport),
     )
     if (problem) {
       showToast(problem, 'error')
@@ -62,12 +72,13 @@ export function RawMaterialPurchaseForm({ entryDate }: { entryDate: string }) {
       {
         entry_date: entryDate,
         raw_material_type_id: materialTypeId,
-        supplier_name: supplierName.trim() || null,
+        supplier_id: supplierId || null,
         entry_mode: entryMode,
         pack_kg: entryMode === 'bag' ? packKg : null,
         num_bags: entryMode === 'bag' ? Number(numBags) : null,
         total_qty_kg: totalQtyKg,
-        cost: cost ? Number(cost) : null,
+        cost: Number(cost),
+        transport_charges: Number(transport) || 0,
         notes: notes.trim() || null,
       },
       {
@@ -106,12 +117,12 @@ export function RawMaterialPurchaseForm({ entryDate }: { entryDate: string }) {
           )}
         </div>
 
-        <Field
-          label="Supplier (optional)"
-          value={supplierName}
-          onChange={(e) => setSupplierName(e.target.value)}
-          placeholder="Supplier name"
-        />
+        <div>
+          <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+            Supplier (optional)
+          </span>
+          <SupplierPicker value={supplierId || null} onChange={setSupplierId} />
+        </div>
 
         <div>
           <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -171,14 +182,35 @@ export function RawMaterialPurchaseForm({ entryDate }: { entryDate: string }) {
         </div>
 
         <Field
-          label="Cost (optional)"
+          label="Purchase Price (₹)"
           type="number"
           min="0"
           inputMode="decimal"
           value={cost}
           onChange={(e) => setCost(e.target.value)}
+          placeholder="Total paid for this purchase"
+        />
+
+        <Field
+          label="Transport Charges (₹, optional)"
+          type="number"
+          min="0"
+          inputMode="decimal"
+          value={transport}
+          onChange={(e) => setTransport(e.target.value)}
           placeholder="0"
         />
+
+        {totalPurchaseCost > 0 && (
+          <div className="flex items-baseline justify-between rounded-xl bg-orange-50 px-4 py-3 dark:bg-orange-950/30">
+            <span className="text-xs font-medium text-orange-700 dark:text-orange-400">
+              Total Purchase Cost
+            </span>
+            <span className="text-lg font-bold text-orange-700 dark:text-orange-400">
+              ₹{formatQty(totalPurchaseCost)}
+            </span>
+          </div>
+        )}
 
         <Field
           label="Notes (optional)"

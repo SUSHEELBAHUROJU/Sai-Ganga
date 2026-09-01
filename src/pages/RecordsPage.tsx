@@ -42,6 +42,7 @@ const KIND_BADGE: Record<RecordKind, string> = {
   raw_material_purchase: 'bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300',
   scrap_purchase: 'bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300',
   factory_waste: 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
+  expense: 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300',
 }
 
 const RANGE_PRESETS = [
@@ -354,7 +355,11 @@ export function RecordsPage() {
                       {/* Header Right Side (Total + Expand Toggle) */}
                       <div className="flex items-center gap-3 shrink-0">
                         <div className="text-right">
-                          {group.totalPcs > 0 ? (
+                          {group.totalAmount !== null ? (
+                            <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                              ₹{formatQty(group.totalAmount)}
+                            </span>
+                          ) : group.totalPcs > 0 ? (
                             <AmountKgPcs kg={group.totalKg} pcs={group.totalPcs} />
                           ) : (
                             <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">

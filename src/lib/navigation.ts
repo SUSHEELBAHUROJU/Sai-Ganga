@@ -1,4 +1,4 @@
-import { Home, History, Settings, Wallet, type LucideIcon } from 'lucide-react'
+import { Home, History, Settings, Wallet, Receipt, type LucideIcon } from 'lucide-react'
 import { ACTION_STYLES } from './actionColors'
 
 export type NavItem = {
@@ -36,6 +36,7 @@ export const PRIMARY_NAV_ITEMS: NavItem[] = [
 
 export const SECONDARY_NAV_ITEMS: NavItem[] = [
   { path: '/records', label: 'Records', icon: History, badgeClass: 'bg-slate-500' },
+  { path: '/expenses', label: 'Expenses', icon: Receipt, badgeClass: 'bg-rose-500' },
   { path: '/ledger', label: 'Ledger', icon: Wallet, badgeClass: 'bg-red-500' },
   {
     path: '/reports',

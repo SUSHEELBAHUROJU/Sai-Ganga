@@ -9,6 +9,7 @@ const TABLE_FOR_KIND = {
   raw_material_purchase: 'raw_material_purchases',
   scrap_purchase: 'scrap_purchases',
   factory_waste: 'factory_waste_entries',
+  expense: 'expenses',
 } as const satisfies Record<RecordKind, string>
 
 /**
@@ -22,12 +23,16 @@ const STOCK_KEYS_FOR_KIND: Record<RecordKind, string[][]> = {
   raw_material_purchase: [['raw_material_stock']],
   scrap_purchase: [['scrap_stock']],
   factory_waste: [['scrap_stock']],
+  // An expense moves money, not stock — nothing stock-derived to refresh.
+  expense: [['expenses']],
 }
 
 function invalidateForKind(queryClient: QueryClient, kind: RecordKind) {
   queryClient.invalidateQueries({ queryKey: ['records'] })
   queryClient.invalidateQueries({ queryKey: ['dashboard'] })
   queryClient.invalidateQueries({ queryKey: ['production_entries'] })
+  // Purchases and expenses both feed the expense report's totals.
+  queryClient.invalidateQueries({ queryKey: ['reports'] })
   for (const queryKey of STOCK_KEYS_FOR_KIND[kind]) {
     queryClient.invalidateQueries({ queryKey })
   }

@@ -98,16 +98,32 @@ const EXPORTS: ExportDef[] = [
     label: 'Raw Material Purchases',
     description: 'Virgin/recycled granule purchases',
     table: 'raw_material_purchases',
-    select: '*, raw_material_types(name)',
-    columns: ['entry_date', 'material', 'supplier_name', 'total_qty_kg', 'cost', 'notes', 'created_at'],
+    select: '*, raw_material_types(name), raw_material_suppliers(name)',
+    columns: [
+      'entry_date',
+      'material',
+      'supplier_name',
+      'total_qty_kg',
+      'purchase_price',
+      'transport_charges',
+      'total_cost',
+      'notes',
+      'created_at',
+    ],
     flatten: (row) => {
       const t = nested(row, 'raw_material_types')
+      const s = nested(row, 'raw_material_suppliers')
+      const cost = Number(row.cost) || 0
+      const transport = Number(row.transport_charges) || 0
       return {
         entry_date: row.entry_date,
         material: t?.name ?? '',
-        supplier_name: row.supplier_name ?? '',
+        // Structured supplier, falling back to the free text older rows used.
+        supplier_name: (s?.name as string | undefined) ?? row.supplier_name ?? '',
         total_qty_kg: row.total_qty_kg,
-        cost: row.cost ?? '',
+        purchase_price: row.cost ?? '',
+        transport_charges: transport,
+        total_cost: row.cost == null ? '' : cost + transport,
         notes: row.notes,
         created_at: row.created_at,
       }
@@ -119,16 +135,30 @@ const EXPORTS: ExportDef[] = [
     description: 'Scrap bought from dealers',
     table: 'scrap_purchases',
     select: '*, scrap_types(name), scrap_dealers(name)',
-    columns: ['entry_date', 'scrap_type', 'dealer', 'quantity_kg', 'cost', 'notes', 'created_at'],
+    columns: [
+      'entry_date',
+      'scrap_type',
+      'dealer',
+      'quantity_kg',
+      'purchase_price',
+      'transport_charges',
+      'total_cost',
+      'notes',
+      'created_at',
+    ],
     flatten: (row) => {
       const t = nested(row, 'scrap_types')
       const d = nested(row, 'scrap_dealers')
+      const cost = Number(row.cost) || 0
+      const transport = Number(row.transport_charges) || 0
       return {
         entry_date: row.entry_date,
         scrap_type: t?.name ?? '',
         dealer: d?.name ?? '',
         quantity_kg: row.quantity_kg,
-        cost: row.cost ?? '',
+        purchase_price: row.cost ?? '',
+        transport_charges: transport,
+        total_cost: row.cost == null ? '' : cost + transport,
         notes: row.notes,
         created_at: row.created_at,
       }
@@ -195,6 +225,42 @@ const EXPORTS: ExportDef[] = [
     table: 'scrap_dealers',
     select: '*',
     columns: ['name', 'phone', 'address', 'is_active', 'created_at'],
+    flatten: (row) => row,
+  },
+  {
+    key: 'suppliers',
+    label: 'Suppliers',
+    description: 'Everyone raw material has been bought from',
+    table: 'raw_material_suppliers',
+    select: '*',
+    columns: ['name', 'phone', 'address', 'is_active', 'created_at'],
+    flatten: (row) => row,
+  },
+  {
+    key: 'expenses',
+    label: 'Expenses',
+    description: 'Salaries, bills and every other expense logged',
+    table: 'expenses',
+    select: '*, expense_categories(name)',
+    columns: ['entry_date', 'expense_type', 'amount', 'notes', 'created_at'],
+    flatten: (row) => {
+      const c = nested(row, 'expense_categories')
+      return {
+        entry_date: row.entry_date,
+        expense_type: c?.name ?? '',
+        amount: row.amount,
+        notes: row.notes,
+        created_at: row.created_at,
+      }
+    },
+  },
+  {
+    key: 'expense_types',
+    label: 'Expense Types',
+    description: 'Expense categories, active or removed',
+    table: 'expense_categories',
+    select: '*',
+    columns: ['name', 'is_active', 'created_at'],
     flatten: (row) => row,
   },
 ]
