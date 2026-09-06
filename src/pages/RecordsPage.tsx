@@ -9,6 +9,7 @@ import {
   ChevronUp,
   Layers,
   Download,
+  Share2,
 } from 'lucide-react'
 import {
   useRecords,
@@ -72,6 +73,7 @@ export function RecordsPage() {
 
   const [editing, setEditing] = useState<EntryRecord | null>(null)
   const [deleting, setDeleting] = useState<EntryRecord | null>(null)
+  const [sharing, setSharing] = useState(false)
 
   // Track collapsed groups (true = collapsed)
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
@@ -161,35 +163,87 @@ export function RecordsPage() {
 
   const isSingleDay = fromDate === toDate
   const isFiltered = kinds.length > 0 || fromDate !== isoDateDaysAgo(6) || toDate !== today
+  const entryCount = recordsResult?.records.length ?? 0
+  const pdfDisabled = isLoading || entryCount === 0
 
   function resetFilters() {
     setKinds([])
     applyPreset(6)
   }
 
-  function handleDownloadPdf() {
+  /** The report for whatever the filters currently select, or null when the
+   *  filters match nothing. */
+  function buildPdf() {
     const records = recordsResult?.records ?? []
-    if (records.length === 0) {
-      showToast('Nothing to download for these filters', 'error')
-      return
-    }
+    if (records.length === 0) return null
+    const kindsLabel =
+      kinds.length === 0 ? 'All Types' : kinds.map((k) => RECORD_KIND_LABEL[k]).join(', ')
+    return generateRecordsReportBlob(
+      { ...buildRecordsReport(records), kindsLabel },
+      formatRangeLabel(fromDate, toDate),
+    )
+  }
+
+  function saveToDevice(url: string, filename: string) {
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }
+
+  function handleDownloadPdf() {
     try {
-      const periodLabel = formatRangeLabel(fromDate, toDate)
-      const kindsLabel = kinds.length === 0 ? 'All Types' : kinds.map((k) => RECORD_KIND_LABEL[k]).join(', ')
-      const { url, filename } = generateRecordsReportBlob(
-        { ...buildRecordsReport(records), kindsLabel },
-        periodLabel,
-      )
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-      showToast(`Downloaded ${filename}`)
+      const pdf = buildPdf()
+      if (!pdf) {
+        showToast('Nothing to download for these filters', 'error')
+        return
+      }
+      saveToDevice(pdf.url, pdf.filename)
+      URL.revokeObjectURL(pdf.url)
+      showToast(`Downloaded ${pdf.filename}`)
     } catch {
       showToast('Could not generate the PDF', 'error')
+    }
+  }
+
+  /** Hands the PDF to the phone's share sheet (WhatsApp, email, Drive…), and
+   *  falls back to a plain download on desktop browsers without one. */
+  async function handleSharePdf() {
+    setSharing(true)
+    let objectUrl: string | null = null
+    try {
+      const pdf = buildPdf()
+      if (!pdf) {
+        showToast('Nothing to share for these filters', 'error')
+        return
+      }
+      objectUrl = pdf.url
+
+      if (typeof navigator !== 'undefined' && 'share' in navigator && 'canShare' in navigator) {
+        try {
+          if (navigator.canShare({ files: [pdf.file] })) {
+            await navigator.share({
+              title: `Records — ${formatRangeLabel(fromDate, toDate)}`,
+              files: [pdf.file],
+            })
+            return
+          }
+        } catch (err) {
+          // A cancelled share sheet is not a failure — don't fall through to a
+          // download the user didn't ask for.
+          if ((err as { name?: string })?.name === 'AbortError') return
+        }
+      }
+
+      saveToDevice(pdf.url, pdf.filename)
+      showToast('PDF downloaded — attach it in WhatsApp or email')
+    } catch {
+      showToast('Could not generate the PDF', 'error')
+    } finally {
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+      setSharing(false)
     }
   }
 
@@ -267,15 +321,33 @@ export function RecordsPage() {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleDownloadPdf}
-          disabled={isLoading || (recordsResult?.records.length ?? 0) === 0}
-          className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800/70"
-        >
-          <Download className="h-4 w-4" />
-          Download PDF ({recordsResult?.records.length ?? 0} entries)
-        </button>
+        <div className="space-y-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            {entryCount === 0
+              ? 'No entries in this selection.'
+              : `${entryCount} ${entryCount === 1 ? 'entry' : 'entries'} · ${formatRangeLabel(fromDate, toDate)} · report is grouped day by day`}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={pdfDisabled}
+              className="flex min-h-[44px] items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800/70"
+            >
+              <Download className="h-4 w-4" />
+              Download PDF
+            </button>
+            <button
+              type="button"
+              onClick={handleSharePdf}
+              disabled={pdfDisabled || sharing}
+              className="flex min-h-[44px] items-center justify-center gap-2 rounded-lg bg-teal-600 text-sm font-semibold text-white hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Share2 className="h-4 w-4" />
+              {sharing ? 'Preparing…' : 'Share PDF'}
+            </button>
+          </div>
+        </div>
       </div>
 
       {isLoading && <LoadingState />}

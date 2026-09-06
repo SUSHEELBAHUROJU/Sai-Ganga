@@ -296,13 +296,21 @@ export function useRecords({ fromDate, toDate, kinds }: RecordsFilter) {
   })
 }
 
-export type RecordsReportRow = {
-  entry_date: string
+export type RecordsReportEntry = {
+  kind: RecordKind
   kindLabel: string
   details: string
   qty: string
   /** Rupees — only expenses carry money on this generic report. */
   amount: number | null
+}
+
+/** One day's entries, the unit the printed report is organised around. */
+export type RecordsReportDay = {
+  entry_date: string
+  entries: RecordsReportEntry[]
+  /** Money spent that day, for the day header — 0 when nothing was spent. */
+  amount: number
 }
 
 export type RecordsReportSummaryRow = {
@@ -312,15 +320,16 @@ export type RecordsReportSummaryRow = {
 }
 
 export type RecordsReportData = {
-  rows: RecordsReportRow[]
+  days: RecordsReportDay[]
   summary: RecordsReportSummaryRow[]
   totalEntries: number
 }
 
 /**
- * Turns whatever the Records page currently has loaded into a flat,
- * printable report — one row per entry, oldest first (a report reads
- * top-to-bottom chronologically; the on-screen list is newest-first).
+ * Turns whatever the Records page currently has loaded into a printable
+ * report, grouped by day the way the on-screen list is — a day heading, then
+ * that day's entries — and running oldest first, since a printed report reads
+ * top-to-bottom chronologically while the screen shows newest first.
  * Built straight from the same `records` the page already fetched, so the
  * PDF always matches what's on screen with no second round trip.
  */
@@ -332,17 +341,31 @@ export function buildRecordsReport(records: EntryRecord[]): RecordsReportData {
     return a.row.created_at < b.row.created_at ? -1 : 1
   })
 
-  const rows: RecordsReportRow[] = sorted.map((record) => {
+  const days: RecordsReportDay[] = []
+  for (const record of sorted) {
     const { title, subtitle, amount, amountKgPcs } = describeRecord(record)
     const isExpense = record.kind === 'expense'
-    return {
-      entry_date: record.row.entry_date,
+    const money = isExpense ? Number(record.row.amount) || 0 : null
+
+    let day = days[days.length - 1]
+    if (!day || day.entry_date !== record.row.entry_date) {
+      day = { entry_date: record.row.entry_date, entries: [], amount: 0 }
+      days.push(day)
+    }
+
+    day.entries.push({
+      kind: record.kind,
       kindLabel: RECORD_KIND_LABEL[record.kind],
       details: subtitle ? `${title} — ${subtitle}` : title,
-      qty: isExpense ? '' : amountKgPcs ? `${formatQty(amountKgPcs.kg)} kg (${formatQty(amountKgPcs.pcs)} pcs)` : amount,
-      amount: isExpense ? Number(record.row.amount) || 0 : null,
-    }
-  })
+      qty: isExpense
+        ? ''
+        : amountKgPcs
+          ? `${formatQty(amountKgPcs.kg)} kg (${formatQty(amountKgPcs.pcs)} pcs)`
+          : amount,
+      amount: money,
+    })
+    day.amount += money ?? 0
+  }
 
   type Bucket = { kg: number; pcs: number; amount: number; count: number }
   const byKind = new Map<RecordKind, Bucket>()
@@ -382,7 +405,7 @@ export function buildRecordsReport(records: EntryRecord[]): RecordsReportData {
       }
     })
 
-  return { rows, summary, totalEntries: records.length }
+  return { days, summary, totalEntries: records.length }
 }
 
 /** Records bucketed by entry_date, preserving the sorted order. */

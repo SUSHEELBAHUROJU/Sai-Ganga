@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf'
 import type { BillLineItem, BillRow } from '../hooks/useBills'
 import type { CustomerLedgerBalance, PassbookEntry } from '../hooks/useLedger'
+import type { RecordKind } from '../hooks/useRecords'
 import { formatInvoiceDate } from './date'
 import { formatQty } from './format'
 
@@ -955,15 +956,183 @@ export type RecordsReportData = {
   /** "All Types" or a comma-joined list — printed under the period so the
    *  PDF says which filter produced it, matching the on-screen Type chips. */
   kindsLabel: string
-  rows: {
+  days: {
     entry_date: string
-    kindLabel: string
-    details: string
-    qty: string
-    amount: number | null
+    entries: {
+      kind: RecordKind
+      kindLabel: string
+      details: string
+      qty: string
+      amount: number | null
+    }[]
+    amount: number
   }[]
   summary: { label: string; qty: string | null; amount: number | null }[]
   totalEntries: number
+}
+
+/** The same colour each kind wears in the app (nav, Home cards, Records
+ *  badges), so a printed row is recognisable at a glance the same way. */
+const KIND_SWATCH: Record<RecordKind, Rgb> = {
+  production: [37, 99, 235],
+  sale: [22, 163, 74],
+  recycling: [13, 148, 136],
+  raw_material_purchase: [234, 88, 12],
+  scrap_purchase: [234, 88, 12],
+  factory_waste: [100, 116, 139],
+  expense: [225, 29, 72],
+}
+
+const WEEKDAY_NAMES = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+]
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]
+
+/** "Tuesday, 04 August 2026" — the day heading. Spelled out because this is
+ *  the line someone scans for when hunting a particular day. */
+function reportDayLabel(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return iso
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${WEEKDAY_NAMES[d.getDay()]}, ${day} ${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`
+}
+
+/** Column geometry, shared by the header and the rows so they can't drift. */
+const REC_COL = { sno: 2, type: 12, details: 44, qty: 154, amount: 186 } as const
+const REC_DETAILS_W = 82
+const REC_ROW_H = 6
+const REC_DAY_H = 6.4
+
+/**
+ * The entries table, grouped under a heading per day rather than repeating the
+ * date on every row — the printed report is read a day at a time, the way the
+ * Records screen is. Its own renderer (not the shared drawReportTable) because
+ * of the day headings and the per-kind colour swatch.
+ */
+function drawRecordsDays(doc: jsPDF, startY: number, days: RecordsReportData['days']): number {
+  const contentWidth = PAGE_W - REPORT_MARGIN * 2
+  let y = startY
+
+  const drawColumnHeader = () => {
+    doc.setFillColor(...NAVY)
+    doc.rect(REPORT_MARGIN, y, contentWidth, 6.5, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.5)
+    doc.setTextColor(255, 255, 255)
+    doc.text('S.NO', REPORT_MARGIN + REC_COL.sno, y + 4.4)
+    doc.text('TYPE', REPORT_MARGIN + REC_COL.type, y + 4.4)
+    doc.text('DETAILS', REPORT_MARGIN + REC_COL.details, y + 4.4)
+    doc.text('QTY', REPORT_MARGIN + REC_COL.qty, y + 4.4, { align: 'right' })
+    doc.text('AMOUNT (Rs.)', REPORT_MARGIN + REC_COL.amount, y + 4.4, { align: 'right' })
+    y += 6.5
+  }
+
+  const drawDayHeading = (
+    day: RecordsReportData['days'][number],
+    continued: boolean,
+  ) => {
+    doc.setFillColor(...BAND_BG)
+    doc.rect(REPORT_MARGIN, y, contentWidth, REC_DAY_H, 'F')
+    doc.setFillColor(...RED)
+    doc.rect(REPORT_MARGIN, y, 1.3, REC_DAY_H, 'F')
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8.4)
+    doc.setTextColor(...NAVY)
+    doc.text(
+      continued ? `${reportDayLabel(day.entry_date)} (continued)` : reportDayLabel(day.entry_date),
+      REPORT_MARGIN + 4.5,
+      y + 4.4,
+    )
+
+    const count = `${day.entries.length} ${day.entries.length === 1 ? 'entry' : 'entries'}`
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.6)
+    doc.setTextColor(...MUTED_TEXT)
+    doc.text(
+      day.amount > 0 ? `${count}  ·  Rs. ${money(day.amount)} spent` : count,
+      PAGE_W - REPORT_MARGIN - 2.5,
+      y + 4.4,
+      { align: 'right' },
+    )
+    y += REC_DAY_H
+  }
+
+  drawColumnHeader()
+
+  if (days.length === 0) {
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(8)
+    doc.setTextColor(...MUTED_TEXT)
+    doc.text('No entries match these filters.', REPORT_MARGIN + 3, y + 5)
+    return y + 9
+  }
+
+  days.forEach((day, dayIndex) => {
+    if (dayIndex > 0) y += 2.5
+
+    // Never leave a day heading stranded at the foot of a page.
+    if (y + REC_DAY_H + REC_ROW_H > REPORT_BOTTOM) {
+      doc.addPage()
+      y = 16
+      drawColumnHeader()
+    }
+    drawDayHeading(day, false)
+
+    day.entries.forEach((entry, i) => {
+      if (y + REC_ROW_H > REPORT_BOTTOM) {
+        doc.addPage()
+        y = 16
+        drawColumnHeader()
+        drawDayHeading(day, true)
+      }
+
+      if (i % 2 === 1) {
+        doc.setFillColor(...ROW_ALT_BG)
+        doc.rect(REPORT_MARGIN, y, contentWidth, REC_ROW_H, 'F')
+      }
+
+      doc.setFillColor(...KIND_SWATCH[entry.kind])
+      doc.rect(REPORT_MARGIN + REC_COL.type, y + 2, 1.8, 1.8, 'F')
+
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(7.8)
+      doc.setTextColor(...DARK_TEXT)
+      doc.text(String(i + 1), REPORT_MARGIN + REC_COL.sno, y + 4.2)
+      doc.text(entry.kindLabel, REPORT_MARGIN + REC_COL.type + 3.2, y + 4.2)
+      doc.text(fitToWidth(doc, entry.details, REC_DETAILS_W), REPORT_MARGIN + REC_COL.details, y + 4.2)
+      doc.text(entry.qty, REPORT_MARGIN + REC_COL.qty, y + 4.2, { align: 'right' })
+      if (entry.amount !== null) {
+        doc.text(money(entry.amount), REPORT_MARGIN + REC_COL.amount, y + 4.2, { align: 'right' })
+      }
+
+      doc.setDrawColor(...BORDER_GRAY)
+      doc.setLineWidth(0.15)
+      doc.line(REPORT_MARGIN, y + REC_ROW_H, PAGE_W - REPORT_MARGIN, y + REC_ROW_H)
+      y += REC_ROW_H
+    })
+  })
+
+  return y
 }
 
 export function generateRecordsReportDoc(report: RecordsReportData, periodLabel: string): jsPDF {
@@ -973,31 +1142,15 @@ export function generateRecordsReportDoc(report: RecordsReportData, periodLabel:
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8.5)
   doc.setTextColor(...MUTED_TEXT)
-  doc.text(`Types: ${report.kindsLabel}`, REPORT_MARGIN, y)
+  doc.text(
+    `Types: ${report.kindsLabel}   ·   ${report.totalEntries} ${report.totalEntries === 1 ? 'entry' : 'entries'} over ${report.days.length} ${report.days.length === 1 ? 'day' : 'days'}`,
+    REPORT_MARGIN,
+    y,
+  )
   y += 4
 
-  y = drawSectionTitle(doc, y, 'Entries')
-  y = drawReportTable(
-    doc,
-    y,
-    [
-      { header: 'S.NO', x: 2 },
-      { header: 'DATE', x: 13 },
-      { header: 'TYPE', x: 31, width: 26 },
-      { header: 'DETAILS', x: 59, width: 68 },
-      { header: 'QTY', x: 152, align: 'right' },
-      { header: 'AMOUNT (Rs.)', x: 186, align: 'right' },
-    ],
-    report.rows.map((r, i) => [
-      String(i + 1),
-      reportDate(r.entry_date),
-      r.kindLabel,
-      r.details,
-      r.qty,
-      r.amount === null ? '' : money(r.amount),
-    ]),
-    'No entries match these filters.',
-  )
+  y = drawSectionTitle(doc, y, 'Day-by-day Entries')
+  y = drawRecordsDays(doc, y, report.days)
 
   y = drawSectionTitle(doc, y, 'Summary')
   drawSummaryBlock(
