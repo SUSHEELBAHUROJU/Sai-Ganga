@@ -958,13 +958,18 @@ export type RecordsReportData = {
   kindsLabel: string
   days: {
     entry_date: string
-    entries: {
-      kind: RecordKind
-      kindLabel: string
-      details: string
-      qty: string
-      amount: number | null
-    }[]
+    lines: (
+      | {
+          type: 'entry'
+          kind: RecordKind
+          kindLabel: string
+          details: string
+          qty: string
+          amount: number | null
+        }
+      | { type: 'subtotal'; label: string; qty: string }
+    )[]
+    entryCount: number
     amount: number
   }[]
   summary: { label: string; qty: string | null; amount: number | null }[]
@@ -1020,6 +1025,7 @@ function reportDayLabel(iso: string): string {
 const REC_COL = { sno: 2, type: 12, details: 44, qty: 154, amount: 186 } as const
 const REC_DETAILS_W = 82
 const REC_ROW_H = 6
+const REC_SUBTOTAL_H = 5.8
 const REC_DAY_H = 6.4
 
 /**
@@ -1064,7 +1070,7 @@ function drawRecordsDays(doc: jsPDF, startY: number, days: RecordsReportData['da
       y + 4.4,
     )
 
-    const count = `${day.entries.length} ${day.entries.length === 1 ? 'entry' : 'entries'}`
+    const count = `${day.entryCount} ${day.entryCount === 1 ? 'entry' : 'entries'}`
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(7.6)
     doc.setTextColor(...MUTED_TEXT)
@@ -1098,37 +1104,55 @@ function drawRecordsDays(doc: jsPDF, startY: number, days: RecordsReportData['da
     }
     drawDayHeading(day, false)
 
-    day.entries.forEach((entry, i) => {
-      if (y + REC_ROW_H > REPORT_BOTTOM) {
+    let serial = 0
+    day.lines.forEach((line) => {
+      const rowH = line.type === 'subtotal' ? REC_SUBTOTAL_H : REC_ROW_H
+      if (y + rowH > REPORT_BOTTOM) {
         doc.addPage()
         y = 16
         drawColumnHeader()
         drawDayHeading(day, true)
       }
 
-      if (i % 2 === 1) {
-        doc.setFillColor(...ROW_ALT_BG)
-        doc.rect(REPORT_MARGIN, y, contentWidth, REC_ROW_H, 'F')
+      if (line.type === 'subtotal') {
+        // Closes the rows above it — a bill's weight, or the day's output.
+        doc.setDrawColor(...NAVY)
+        doc.setLineWidth(0.35)
+        doc.line(REPORT_MARGIN + REC_COL.details, y + 0.4, PAGE_W - REPORT_MARGIN, y + 0.4)
+
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(7.6)
+        doc.setTextColor(...NAVY)
+        doc.text(line.label, REPORT_MARGIN + REC_COL.details, y + 4.1)
+        doc.text(line.qty, REPORT_MARGIN + REC_COL.qty, y + 4.1, { align: 'right' })
+        y += rowH
+        return
       }
 
-      doc.setFillColor(...KIND_SWATCH[entry.kind])
+      serial += 1
+      if (serial % 2 === 0) {
+        doc.setFillColor(...ROW_ALT_BG)
+        doc.rect(REPORT_MARGIN, y, contentWidth, rowH, 'F')
+      }
+
+      doc.setFillColor(...KIND_SWATCH[line.kind])
       doc.rect(REPORT_MARGIN + REC_COL.type, y + 2, 1.8, 1.8, 'F')
 
       doc.setFont('helvetica', 'normal')
       doc.setFontSize(7.8)
       doc.setTextColor(...DARK_TEXT)
-      doc.text(String(i + 1), REPORT_MARGIN + REC_COL.sno, y + 4.2)
-      doc.text(entry.kindLabel, REPORT_MARGIN + REC_COL.type + 3.2, y + 4.2)
-      doc.text(fitToWidth(doc, entry.details, REC_DETAILS_W), REPORT_MARGIN + REC_COL.details, y + 4.2)
-      doc.text(entry.qty, REPORT_MARGIN + REC_COL.qty, y + 4.2, { align: 'right' })
-      if (entry.amount !== null) {
-        doc.text(money(entry.amount), REPORT_MARGIN + REC_COL.amount, y + 4.2, { align: 'right' })
+      doc.text(String(serial), REPORT_MARGIN + REC_COL.sno, y + 4.2)
+      doc.text(line.kindLabel, REPORT_MARGIN + REC_COL.type + 3.2, y + 4.2)
+      doc.text(fitToWidth(doc, line.details, REC_DETAILS_W), REPORT_MARGIN + REC_COL.details, y + 4.2)
+      doc.text(line.qty, REPORT_MARGIN + REC_COL.qty, y + 4.2, { align: 'right' })
+      if (line.amount !== null) {
+        doc.text(money(line.amount), REPORT_MARGIN + REC_COL.amount, y + 4.2, { align: 'right' })
       }
 
       doc.setDrawColor(...BORDER_GRAY)
       doc.setLineWidth(0.15)
-      doc.line(REPORT_MARGIN, y + REC_ROW_H, PAGE_W - REPORT_MARGIN, y + REC_ROW_H)
-      y += REC_ROW_H
+      doc.line(REPORT_MARGIN, y + rowH, PAGE_W - REPORT_MARGIN, y + rowH)
+      y += rowH
     })
   })
 

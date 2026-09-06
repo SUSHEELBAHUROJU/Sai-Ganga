@@ -297,6 +297,7 @@ export function useRecords({ fromDate, toDate, kinds }: RecordsFilter) {
 }
 
 export type RecordsReportEntry = {
+  type: 'entry'
   kind: RecordKind
   kindLabel: string
   details: string
@@ -305,10 +306,21 @@ export type RecordsReportEntry = {
   amount: number | null
 }
 
-/** One day's entries, the unit the printed report is organised around. */
+/** A weight total closing a run of rows: a bill's sales, or a day's output. */
+export type RecordsReportSubtotal = {
+  type: 'subtotal'
+  label: string
+  qty: string
+}
+
+export type RecordsReportLine = RecordsReportEntry | RecordsReportSubtotal
+
+/** One day's rows, the unit the printed report is organised around. */
 export type RecordsReportDay = {
   entry_date: string
-  entries: RecordsReportEntry[]
+  lines: RecordsReportLine[]
+  /** Entries only — subtotal rows don't count towards the day's tally. */
+  entryCount: number
   /** Money spent that day, for the day header — 0 when nothing was spent. */
   amount: number
 }
@@ -325,47 +337,132 @@ export type RecordsReportData = {
   totalEntries: number
 }
 
+/** "385 kg (23 pcs)", or plain kg when nothing is counted in pieces. */
+function kgPcsText(kg: number, pcs: number): string {
+  return pcs > 0 ? `${formatQty(kg)} kg (${formatQty(pcs)} pcs)` : `${formatQty(kg)} kg`
+}
+
+/** The bill a sale was invoiced on, or null while it is still unbilled. */
+function saleBillNumber(row: SaleRecordRow): string | null {
+  const raw = row.bills as unknown
+  const bill = Array.isArray(raw) ? (raw[0] as BillRef) : (raw as BillRef)
+  return bill?.bill_number ?? null
+}
+
 /**
  * Turns whatever the Records page currently has loaded into a printable
  * report, grouped by day the way the on-screen list is — a day heading, then
- * that day's entries — and running oldest first, since a printed report reads
+ * that day's rows — and running oldest first, since a printed report reads
  * top-to-bottom chronologically while the screen shows newest first.
  * Built straight from the same `records` the page already fetched, so the
  * PDF always matches what's on screen with no second round trip.
+ *
+ * Within a day, rows are clustered by kind (and sales further by bill) rather
+ * than left in entry order, so the weight totals below each bill and below the
+ * day's production have something contiguous to close off.
  */
 export function buildRecordsReport(records: EntryRecord[]): RecordsReportData {
-  const sorted = [...records].sort((a, b) => {
-    if (a.row.entry_date !== b.row.entry_date) {
-      return a.row.entry_date < b.row.entry_date ? -1 : 1
-    }
-    return a.row.created_at < b.row.created_at ? -1 : 1
-  })
+  const kindOrder = Object.keys(RECORD_KIND_LABEL) as RecordKind[]
+  const rank = (kind: RecordKind) => kindOrder.indexOf(kind)
 
-  const days: RecordsReportDay[] = []
-  for (const record of sorted) {
+  const byDate = new Map<string, EntryRecord[]>()
+  for (const record of records) {
+    const bucket = byDate.get(record.row.entry_date)
+    if (bucket) bucket.push(record)
+    else byDate.set(record.row.entry_date, [record])
+  }
+
+  const toEntry = (record: EntryRecord): RecordsReportEntry => {
     const { title, subtitle, amount, amountKgPcs } = describeRecord(record)
     const isExpense = record.kind === 'expense'
-    const money = isExpense ? Number(record.row.amount) || 0 : null
-
-    let day = days[days.length - 1]
-    if (!day || day.entry_date !== record.row.entry_date) {
-      day = { entry_date: record.row.entry_date, entries: [], amount: 0 }
-      days.push(day)
-    }
-
-    day.entries.push({
+    return {
+      type: 'entry',
       kind: record.kind,
       kindLabel: RECORD_KIND_LABEL[record.kind],
       details: subtitle ? `${title} — ${subtitle}` : title,
-      qty: isExpense
-        ? ''
-        : amountKgPcs
-          ? `${formatQty(amountKgPcs.kg)} kg (${formatQty(amountKgPcs.pcs)} pcs)`
-          : amount,
-      amount: money,
-    })
-    day.amount += money ?? 0
+      qty: isExpense ? '' : amountKgPcs ? kgPcsText(amountKgPcs.kg, amountKgPcs.pcs) : amount,
+      amount: isExpense ? Number(record.row.amount) || 0 : null,
+    }
   }
+
+  /** Weight of one pipe-product row, the only kind measured in pieces. */
+  const pipeWeight = (record: EntryRecord) => {
+    if (record.kind !== 'production' && record.kind !== 'sale') return { kg: 0, pcs: 0 }
+    const p = record.row.pipe_products
+    return { kg: p ? piecesToKg(record.row.quantity, p.weight_kg) : 0, pcs: record.row.quantity }
+  }
+
+  const days: RecordsReportDay[] = [...byDate.keys()]
+    .sort()
+    .map((entry_date) => {
+      const dayRecords = [...byDate.get(entry_date)!].sort((a, b) => {
+        if (a.kind !== b.kind) return rank(a.kind) - rank(b.kind)
+        if (a.kind === 'sale' && b.kind === 'sale') {
+          // Keep a bill's lines together so its total sits directly beneath
+          // them, with anything not yet billed collected at the end.
+          const billA = saleBillNumber(a.row as SaleRecordRow)
+          const billB = saleBillNumber(b.row as SaleRecordRow)
+          if (billA !== billB) {
+            if (billA === null) return 1
+            if (billB === null) return -1
+            return billA < billB ? -1 : 1
+          }
+        }
+        return a.row.created_at < b.row.created_at ? -1 : 1
+      })
+
+      const lines: RecordsReportLine[] = []
+      let amount = 0
+
+      for (let i = 0; i < dayRecords.length; i++) {
+        const record = dayRecords[i]
+        lines.push(toEntry(record))
+        amount += record.kind === 'expense' ? Number(record.row.amount) || 0 : 0
+
+        if (record.kind !== 'production' && record.kind !== 'sale') continue
+
+        // Close the run once the next row belongs to a different group.
+        const next = dayRecords[i + 1]
+        const sameGroup =
+          next?.kind === record.kind &&
+          (record.kind !== 'sale' ||
+            saleBillNumber(next.row as SaleRecordRow) ===
+              saleBillNumber(record.row as SaleRecordRow))
+        if (sameGroup) continue
+
+        let kg = 0
+        let pcs = 0
+        let start = i
+        while (start >= 0) {
+          const candidate = dayRecords[start]
+          const inRun =
+            candidate.kind === record.kind &&
+            (record.kind !== 'sale' ||
+              saleBillNumber(candidate.row as SaleRecordRow) ===
+                saleBillNumber(record.row as SaleRecordRow))
+          if (!inRun) break
+          const w = pipeWeight(candidate)
+          kg += w.kg
+          pcs += w.pcs
+          start--
+        }
+
+        const billNumber =
+          record.kind === 'sale' ? saleBillNumber(record.row as SaleRecordRow) : null
+        lines.push({
+          type: 'subtotal',
+          label:
+            record.kind === 'production'
+              ? "Day's production total"
+              : billNumber
+                ? `Bill ${billNumber} — total`
+                : 'Sales not yet billed — total',
+          qty: kgPcsText(kg, pcs),
+        })
+      }
+
+      return { entry_date, lines, entryCount: dayRecords.length, amount }
+    })
 
   type Bucket = { kg: number; pcs: number; amount: number; count: number }
   const byKind = new Map<RecordKind, Bucket>()
