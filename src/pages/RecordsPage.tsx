@@ -1,8 +1,19 @@
 import { useState } from 'react'
-import { History, Pencil, SearchX, Trash2, Receipt, ChevronDown, ChevronUp, Layers } from 'lucide-react'
+import {
+  History,
+  Pencil,
+  SearchX,
+  Trash2,
+  Receipt,
+  ChevronDown,
+  ChevronUp,
+  Layers,
+  Download,
+} from 'lucide-react'
 import {
   useRecords,
   groupRecordsByTransaction,
+  buildRecordsReport,
   describeRecord,
   describeRecordAmountText,
   RECORD_KIND_LABEL,
@@ -31,6 +42,8 @@ import {
   MAX_QUERY_RANGE_DAYS,
 } from '../lib/date'
 import { formatPipeProductLabel, piecesToKg, formatQty } from '../lib/format'
+import { formatRangeLabel } from '../lib/date'
+import { generateRecordsReportBlob } from '../lib/pdfGenerator'
 import { LoadingState, EmptyState } from '../components/States'
 
 const ALL_KINDS = Object.keys(RECORD_KIND_LABEL) as RecordKind[]
@@ -154,6 +167,32 @@ export function RecordsPage() {
     applyPreset(6)
   }
 
+  function handleDownloadPdf() {
+    const records = recordsResult?.records ?? []
+    if (records.length === 0) {
+      showToast('Nothing to download for these filters', 'error')
+      return
+    }
+    try {
+      const periodLabel = formatRangeLabel(fromDate, toDate)
+      const kindsLabel = kinds.length === 0 ? 'All Types' : kinds.map((k) => RECORD_KIND_LABEL[k]).join(', ')
+      const { url, filename } = generateRecordsReportBlob(
+        { ...buildRecordsReport(records), kindsLabel },
+        periodLabel,
+      )
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      showToast(`Downloaded ${filename}`)
+    } catch {
+      showToast('Could not generate the PDF', 'error')
+    }
+  }
+
   return (
     <div className="space-y-5 pb-4">
       <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Records</h2>
@@ -227,6 +266,16 @@ export function RecordsPage() {
             ))}
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={handleDownloadPdf}
+          disabled={isLoading || (recordsResult?.records.length ?? 0) === 0}
+          className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-800/70"
+        >
+          <Download className="h-4 w-4" />
+          Download PDF ({recordsResult?.records.length ?? 0} entries)
+        </button>
       </div>
 
       {isLoading && <LoadingState />}

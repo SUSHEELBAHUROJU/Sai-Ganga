@@ -951,6 +951,68 @@ export function generateSalesReportDoc(report: SalesReportData, periodLabel: str
   return doc
 }
 
+export type RecordsReportData = {
+  /** "All Types" or a comma-joined list — printed under the period so the
+   *  PDF says which filter produced it, matching the on-screen Type chips. */
+  kindsLabel: string
+  rows: {
+    entry_date: string
+    kindLabel: string
+    details: string
+    qty: string
+    amount: number | null
+  }[]
+  summary: { label: string; qty: string | null; amount: number | null }[]
+  totalEntries: number
+}
+
+export function generateRecordsReportDoc(report: RecordsReportData, periodLabel: string): jsPDF {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  let y = drawReportHeader(doc, 'Records Report', periodLabel)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(8.5)
+  doc.setTextColor(...MUTED_TEXT)
+  doc.text(`Types: ${report.kindsLabel}`, REPORT_MARGIN, y)
+  y += 4
+
+  y = drawSectionTitle(doc, y, 'Entries')
+  y = drawReportTable(
+    doc,
+    y,
+    [
+      { header: 'S.NO', x: 2 },
+      { header: 'DATE', x: 13 },
+      { header: 'TYPE', x: 31, width: 26 },
+      { header: 'DETAILS', x: 59, width: 68 },
+      { header: 'QTY', x: 152, align: 'right' },
+      { header: 'AMOUNT (Rs.)', x: 186, align: 'right' },
+    ],
+    report.rows.map((r, i) => [
+      String(i + 1),
+      reportDate(r.entry_date),
+      r.kindLabel,
+      r.details,
+      r.qty,
+      r.amount === null ? '' : money(r.amount),
+    ]),
+    'No entries match these filters.',
+  )
+
+  y = drawSectionTitle(doc, y, 'Summary')
+  drawSummaryBlock(
+    doc,
+    y,
+    report.summary.map((s) => ({
+      label: s.label,
+      value: s.amount !== null ? `Rs. ${money(s.amount)}` : (s.qty ?? ''),
+    })),
+    { label: 'TOTAL ENTRIES', value: String(report.totalEntries) },
+  )
+
+  return doc
+}
+
 function reportBlob(doc: jsPDF, filename: string) {
   const blob = doc.output('blob')
   const file = new File([blob], filename, { type: 'application/pdf' })
@@ -971,5 +1033,12 @@ export function generateSalesReportBlob(report: SalesReportData, periodLabel: st
   return reportBlob(
     generateSalesReportDoc(report, periodLabel),
     `Sales_Report_${slug(periodLabel)}.pdf`,
+  )
+}
+
+export function generateRecordsReportBlob(report: RecordsReportData, periodLabel: string) {
+  return reportBlob(
+    generateRecordsReportDoc(report, periodLabel),
+    `Records_Report_${slug(periodLabel)}.pdf`,
   )
 }

@@ -296,6 +296,95 @@ export function useRecords({ fromDate, toDate, kinds }: RecordsFilter) {
   })
 }
 
+export type RecordsReportRow = {
+  entry_date: string
+  kindLabel: string
+  details: string
+  qty: string
+  /** Rupees — only expenses carry money on this generic report. */
+  amount: number | null
+}
+
+export type RecordsReportSummaryRow = {
+  label: string
+  qty: string | null
+  amount: number | null
+}
+
+export type RecordsReportData = {
+  rows: RecordsReportRow[]
+  summary: RecordsReportSummaryRow[]
+  totalEntries: number
+}
+
+/**
+ * Turns whatever the Records page currently has loaded into a flat,
+ * printable report — one row per entry, oldest first (a report reads
+ * top-to-bottom chronologically; the on-screen list is newest-first).
+ * Built straight from the same `records` the page already fetched, so the
+ * PDF always matches what's on screen with no second round trip.
+ */
+export function buildRecordsReport(records: EntryRecord[]): RecordsReportData {
+  const sorted = [...records].sort((a, b) => {
+    if (a.row.entry_date !== b.row.entry_date) {
+      return a.row.entry_date < b.row.entry_date ? -1 : 1
+    }
+    return a.row.created_at < b.row.created_at ? -1 : 1
+  })
+
+  const rows: RecordsReportRow[] = sorted.map((record) => {
+    const { title, subtitle, amount, amountKgPcs } = describeRecord(record)
+    const isExpense = record.kind === 'expense'
+    return {
+      entry_date: record.row.entry_date,
+      kindLabel: RECORD_KIND_LABEL[record.kind],
+      details: subtitle ? `${title} — ${subtitle}` : title,
+      qty: isExpense ? '' : amountKgPcs ? `${formatQty(amountKgPcs.kg)} kg (${formatQty(amountKgPcs.pcs)} pcs)` : amount,
+      amount: isExpense ? Number(record.row.amount) || 0 : null,
+    }
+  })
+
+  type Bucket = { kg: number; pcs: number; amount: number; count: number }
+  const byKind = new Map<RecordKind, Bucket>()
+  for (const record of records) {
+    const bucket = byKind.get(record.kind) ?? { kg: 0, pcs: 0, amount: 0, count: 0 }
+    bucket.count += 1
+    if (record.kind === 'production' || record.kind === 'sale') {
+      const p = record.row.pipe_products
+      bucket.kg += p ? piecesToKg(record.row.quantity, p.weight_kg) : 0
+      bucket.pcs += record.row.quantity
+    } else if (record.kind === 'recycling') {
+      bucket.kg += record.row.total_output_kg ?? 0
+    } else if (record.kind === 'raw_material_purchase') {
+      bucket.kg += record.row.total_qty_kg ?? 0
+    } else if (record.kind === 'scrap_purchase' || record.kind === 'factory_waste') {
+      bucket.kg += record.row.quantity_kg ?? 0
+    } else if (record.kind === 'expense') {
+      bucket.amount += Number(record.row.amount) || 0
+    }
+    byKind.set(record.kind, bucket)
+  }
+
+  const summary: RecordsReportSummaryRow[] = (Object.keys(RECORD_KIND_LABEL) as RecordKind[])
+    .filter((kind) => byKind.has(kind))
+    .map((kind) => {
+      const b = byKind.get(kind)!
+      const isExpense = kind === 'expense'
+      const qty = isExpense
+        ? null
+        : b.pcs > 0
+          ? `${formatQty(b.kg)} kg (${formatQty(b.pcs)} pcs)`
+          : `${formatQty(b.kg)} kg`
+      return {
+        label: `${RECORD_KIND_LABEL[kind]} (${b.count})`,
+        qty,
+        amount: isExpense ? b.amount : null,
+      }
+    })
+
+  return { rows, summary, totalEntries: records.length }
+}
+
 /** Records bucketed by entry_date, preserving the sorted order. */
 export function groupRecordsByDate(records: EntryRecord[]): [string, EntryRecord[]][] {
   const groups = new Map<string, EntryRecord[]>()
