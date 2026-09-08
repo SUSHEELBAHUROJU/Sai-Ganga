@@ -56,7 +56,9 @@ export type Database = {
         }
         Insert: {
           bill_date?: string
-          bill_number: string
+          // Optional since 20260908010000: the bills_assign_bill_number trigger
+          // fills it from the series when omitted.
+          bill_number?: string
           created_at?: string
           customer_address?: string | null
           customer_id?: string | null

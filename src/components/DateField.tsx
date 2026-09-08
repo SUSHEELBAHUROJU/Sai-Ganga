@@ -1,5 +1,5 @@
 import { CalendarDays } from 'lucide-react'
-import { formatDateLabel, todayISODate } from '../lib/date'
+import { formatDateLabel, isFutureISODate, todayISODate } from '../lib/date'
 
 type DateFieldProps = {
   value: string
@@ -20,7 +20,14 @@ export function DateField({ value, onChange }: DateFieldProps) {
         type="date"
         value={value}
         max={todayISODate()}
-        onChange={(e) => onChange(e.target.value || todayISODate())}
+        onChange={(e) => {
+          // `max` keeps the picker in range, but a date can still be typed
+          // straight into the field, so clamp instead of letting a future
+          // entry through. Snapping back to today is the same correction the
+          // empty case already made.
+          const next = e.target.value
+          onChange(!next || isFutureISODate(next) ? todayISODate() : next)
+        }}
         className="min-w-0 flex-1 bg-transparent text-sm font-medium text-slate-900 outline-none sm:w-[9.5rem] sm:flex-none dark:text-slate-100"
       />
       <span className="shrink-0 text-xs font-medium text-teal-600 dark:text-teal-400">

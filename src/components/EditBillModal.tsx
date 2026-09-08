@@ -13,6 +13,7 @@ import { useCustomers } from '../hooks/useCustomers'
 import { usePipeProducts } from '../hooks/usePipeProducts'
 import { useToast } from '../lib/toast'
 import { formatPipeProductLabel, piecesToKg } from '../lib/format'
+import { isFutureISODate, todayISODate } from '../lib/date'
 
 type EditBillModalProps = {
   open: boolean
@@ -265,6 +266,11 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
       }
     }
 
+    if (isFutureISODate(billDate)) {
+      showToast('Invoice date cannot be in the future', 'error')
+      return
+    }
+
     if (!customerName.trim()) {
       showToast('Please enter or select a customer name', 'error')
       return
@@ -378,6 +384,7 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
             type="date"
             required
             value={billDate}
+            max={todayISODate()}
             onChange={(e) => setBillDate(e.target.value)}
           />
 

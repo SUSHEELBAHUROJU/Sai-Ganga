@@ -3,7 +3,7 @@ import { Modal } from './Modal'
 import { Field } from './Field'
 import { useAddManualDue } from '../hooks/useLedger'
 import { useToast } from '../lib/toast'
-import { todayISODate } from '../lib/date'
+import { isFutureISODate, todayISODate } from '../lib/date'
 
 type AddManualDueModalProps = {
   open: boolean
@@ -30,6 +30,11 @@ export function AddManualDueModal({ open, onClose, customerId, customerName }: A
   }, [open])
 
   function handleSave() {
+    if (isFutureISODate(date)) {
+      showToast('Date cannot be in the future', 'error')
+      return
+    }
+
     const amountVal = Number(amount) || 0
     if (amountVal <= 0) {
       showToast('Enter an amount', 'error')

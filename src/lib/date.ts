@@ -15,6 +15,17 @@ export function isValidISODate(value: string | null): value is string {
   return !Number.isNaN(d.getTime()) && isoDateFromDate(d) === value
 }
 
+/**
+ * True when `value` is a valid date later than today. Entry screens reject one:
+ * nothing can be produced, purchased, sold or billed on a day that hasn't
+ * happened yet, and a stray future date hides the entry from every report and
+ * day-grouped view until that date arrives. ISO strings compare lexically, so
+ * a plain `>` is the whole test.
+ */
+export function isFutureISODate(value: string): boolean {
+  return isValidISODate(value) && value > todayISODate()
+}
+
 export function isoDateDaysAgo(days: number): string {
   const d = new Date()
   d.setDate(d.getDate() - days)

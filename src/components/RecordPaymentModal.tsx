@@ -4,7 +4,7 @@ import { Field } from './Field'
 import { Chip } from './Chip'
 import { useRecordPayment, type PaymentApp, type PaymentMode } from '../hooks/useLedger'
 import { useToast } from '../lib/toast'
-import { todayISODate } from '../lib/date'
+import { isFutureISODate, todayISODate } from '../lib/date'
 import { formatQty } from '../lib/format'
 
 type RecordPaymentModalProps = {
@@ -57,6 +57,11 @@ export function RecordPaymentModal({
   }
 
   function handleSave() {
+    if (isFutureISODate(date)) {
+      showToast('Payment date cannot be in the future', 'error')
+      return
+    }
+
     if (amountVal <= 0) {
       showToast('Enter an amount received', 'error')
       return

@@ -58,7 +58,20 @@ export function useNextBillNumber() {
         .single()
 
       const prefix = settings?.bill_prefix ?? 'SG-'
-      const num = settings?.next_bill_number ?? 1
+      let num = settings?.next_bill_number ?? 1
+
+      // Mirrors next_free_bill_number()'s skip, so the number previewed is the
+      // one the insert actually assigns. Without this, a bill renamed onto a
+      // number ahead of the counter would leave the Create header promising a
+      // number the trigger then steps over.
+      const { data: taken } = await supabase
+        .from('bills')
+        .select('bill_number')
+        .like('bill_number', `${prefix}%`)
+
+      const used = new Set((taken ?? []).map((b) => b.bill_number))
+      while (used.has(`${prefix}${String(num).padStart(4, '0')}`)) num += 1
+
       return `${prefix}${String(num).padStart(4, '0')}`
     },
   })
@@ -102,20 +115,17 @@ export function useCreateBill() {
 
   return useMutation({
     mutationFn: async (input: CreateBillInput): Promise<BillRow> => {
-      const { sale_entry_ids, bill_number: _providedNum, ...billData } = input
+      const { sale_entry_ids, bill_number: _previewNum, ...billData } = input
 
-      // Atomically generate the next bill number on actual save
-      let finalBillNumber = _providedNum
-      const { data: rpcBillNo, error: rpcError } = await supabase.rpc('generate_next_bill_number')
-      if (!rpcError && rpcBillNo) {
-        finalBillNumber = rpcBillNo as string
-      }
-
+      // The number is assigned by the bills_assign_bill_number trigger rather
+      // than requested up front, so it is allocated inside this insert's own
+      // transaction: if the insert fails, the counter rolls back with it and no
+      // number is burned. `bill_number` on the input is only the preview the
+      // modal showed, which is why it is dropped here.
       const { data, error } = await supabase
         .from('bills')
         .insert({
           ...billData,
-          bill_number: finalBillNumber,
           discount: billData.discount ?? 0,
           tax: billData.tax ?? 0,
           transport_charges: billData.transport_charges ?? 0,
@@ -181,39 +191,6 @@ export class DuplicateBillNumberError extends Error {
   }
 }
 
-/**
- * A renamed bill can jump ahead of the auto-increment counter — rename one to
- * SG-0040 while next_bill_number sits at 36 and generate_next_bill_number(),
- * which does no collision check of its own, marches straight into SG-0040 four
- * bills later and trips the unique index at creation time, far away from the
- * edit that caused it. Pushing the counter past the new number closes that gap.
- */
-async function advanceBillCounterPast(billNumber: string) {
-  const { data: settings } = await supabase
-    .from('company_settings')
-    .select('bill_prefix, next_bill_number')
-    .eq('id', 'default')
-    .single()
-
-  if (!settings) return
-
-  const prefix = settings.bill_prefix ?? 'SG-'
-  // Only numbers shaped like generated ones feed the counter — a one-off such
-  // as "MANUAL-7" shouldn't drag the whole sequence along behind it.
-  if (!billNumber.startsWith(prefix)) return
-
-  const digits = billNumber.slice(prefix.length)
-  if (!/^\d+$/.test(digits)) return
-
-  const seq = parseInt(digits, 10)
-  if (seq < (settings.next_bill_number ?? 1)) return
-
-  await supabase
-    .from('company_settings')
-    .update({ next_bill_number: seq + 1, updated_at: new Date().toISOString() })
-    .eq('id', 'default')
-}
-
 export function useUpdateBill() {
   const queryClient = useQueryClient()
 
@@ -263,18 +240,14 @@ export function useUpdateBill() {
         await supabase.from('sales_entries').insert(salesToInsert)
       }
 
-      if (input.bill_number) {
-        await advanceBillCounterPast(input.bill_number)
-      }
-
       return updatedBill
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bills'] })
       queryClient.invalidateQueries({ queryKey: ['records'] })
-      // A rename may have pushed the auto-increment counter forward.
+      // A rename can leave the counter pointing at a number now taken; the
+      // generator steps over it, so the preview is what needs refreshing.
       queryClient.invalidateQueries({ queryKey: ['next_bill_number'] })
-      queryClient.invalidateQueries({ queryKey: ['company_settings'] })
       queryClient.invalidateQueries({ queryKey: ['finished_goods_stock'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       // Editing a bill's total/customer changes the linked ledger due — the

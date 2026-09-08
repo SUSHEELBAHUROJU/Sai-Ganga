@@ -8,6 +8,7 @@ import { useCustomers } from '../hooks/useCustomers'
 import { usePipeProducts } from '../hooks/usePipeProducts'
 import { useToast } from '../lib/toast'
 import { piecesToKg } from '../lib/format'
+import { isFutureISODate, todayISODate } from '../lib/date'
 import { BillPdfModal } from './BillPdfModal'
 import type { BillRow } from '../hooks/useBills'
 
@@ -204,6 +205,11 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
   const grandTotal = Math.max(0, subtotal - discountVal + taxVal + transportVal)
 
   function handleSaveBill() {
+    if (isFutureISODate(billDate)) {
+      showToast('Bill date cannot be in the future', 'error')
+      return
+    }
+
     if (!customerName.trim()) {
       showToast('Please enter customer name', 'error')
       return
@@ -283,6 +289,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
               <input
                 type="date"
                 value={billDate}
+                max={todayISODate()}
                 onChange={(e) => setBillDate(e.target.value)}
                 className="ml-2 min-h-[44px] min-w-0 rounded-md border border-slate-300 px-2 py-1 text-sm font-semibold text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               />
