@@ -154,6 +154,8 @@ export function useCreateBill() {
 
 export type UpdateBillInput = {
   id: string
+  /** Only set when the number is actually being changed — see useUpdateBill. */
+  bill_number?: string
   bill_date: string
   customer_id?: string | null
   customer_name: string
@@ -166,6 +168,50 @@ export type UpdateBillInput = {
   transport_charges?: number
   grand_total: number
   notes?: string | null
+}
+
+/**
+ * Thrown when a bill is renamed onto a number another bill already holds.
+ * Named so the UI can surface the real message instead of a generic failure.
+ */
+export class DuplicateBillNumberError extends Error {
+  constructor(billNumber: string) {
+    super(`Bill number ${billNumber} is already used by another bill.`)
+    this.name = 'DuplicateBillNumberError'
+  }
+}
+
+/**
+ * A renamed bill can jump ahead of the auto-increment counter — rename one to
+ * SG-0040 while next_bill_number sits at 36 and generate_next_bill_number(),
+ * which does no collision check of its own, marches straight into SG-0040 four
+ * bills later and trips the unique index at creation time, far away from the
+ * edit that caused it. Pushing the counter past the new number closes that gap.
+ */
+async function advanceBillCounterPast(billNumber: string) {
+  const { data: settings } = await supabase
+    .from('company_settings')
+    .select('bill_prefix, next_bill_number')
+    .eq('id', 'default')
+    .single()
+
+  if (!settings) return
+
+  const prefix = settings.bill_prefix ?? 'SG-'
+  // Only numbers shaped like generated ones feed the counter — a one-off such
+  // as "MANUAL-7" shouldn't drag the whole sequence along behind it.
+  if (!billNumber.startsWith(prefix)) return
+
+  const digits = billNumber.slice(prefix.length)
+  if (!/^\d+$/.test(digits)) return
+
+  const seq = parseInt(digits, 10)
+  if (seq < (settings.next_bill_number ?? 1)) return
+
+  await supabase
+    .from('company_settings')
+    .update({ next_bill_number: seq + 1, updated_at: new Date().toISOString() })
+    .eq('id', 'default')
 }
 
 export function useUpdateBill() {
@@ -188,7 +234,15 @@ export function useUpdateBill() {
         .select()
         .single()
 
-      if (error) throw error
+      if (error) {
+        // bill_number is the table's only unique column, so a 23505 here can
+        // only mean the invoice number is taken. The modal pre-checks against
+        // its cached list; this is the backstop for a concurrent save.
+        if (error.code === '23505' && patch.bill_number) {
+          throw new DuplicateBillNumberError(patch.bill_number)
+        }
+        throw error
+      }
       const updatedBill = data as unknown as BillRow
 
       // Re-sync sales entries linked to this bill
@@ -209,11 +263,18 @@ export function useUpdateBill() {
         await supabase.from('sales_entries').insert(salesToInsert)
       }
 
+      if (input.bill_number) {
+        await advanceBillCounterPast(input.bill_number)
+      }
+
       return updatedBill
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bills'] })
       queryClient.invalidateQueries({ queryKey: ['records'] })
+      // A rename may have pushed the auto-increment counter forward.
+      queryClient.invalidateQueries({ queryKey: ['next_bill_number'] })
+      queryClient.invalidateQueries({ queryKey: ['company_settings'] })
       queryClient.invalidateQueries({ queryKey: ['finished_goods_stock'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       // Editing a bill's total/customer changes the linked ledger due — the

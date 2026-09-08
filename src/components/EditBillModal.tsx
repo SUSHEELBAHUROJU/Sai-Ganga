@@ -1,8 +1,14 @@
 import { useState, useEffect } from 'react'
 import { Modal } from './Modal'
 import { Field } from './Field'
-import { Plus, Trash2, Save } from 'lucide-react'
-import { useUpdateBill, type BillRow, type BillLineItem } from '../hooks/useBills'
+import { Plus, Trash2, Save, Lock, Unlock } from 'lucide-react'
+import {
+  useBills,
+  useUpdateBill,
+  DuplicateBillNumberError,
+  type BillRow,
+  type BillLineItem,
+} from '../hooks/useBills'
 import { useCustomers } from '../hooks/useCustomers'
 import { usePipeProducts } from '../hooks/usePipeProducts'
 import { useToast } from '../lib/toast'
@@ -47,9 +53,15 @@ function formatINR(val: any): string {
 export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
   const { data: customers } = useCustomers()
   const { data: pipeProducts } = usePipeProducts()
+  const { data: allBills } = useBills()
   const updateBill = useUpdateBill()
   const { showToast } = useToast()
 
+  const [billNumber, setBillNumber] = useState('')
+  // The invoice number stays locked until deliberately unlocked: GST expects a
+  // stable, non-reusable series (voiding preserves the number for exactly that
+  // reason), so renaming one should never happen by a stray tap.
+  const [billNumberUnlocked, setBillNumberUnlocked] = useState(false)
   const [billDate, setBillDate] = useState('')
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('')
   const [customerName, setCustomerName] = useState('')
@@ -65,6 +77,8 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
 
   useEffect(() => {
     if (open && bill) {
+      setBillNumber(bill.bill_number)
+      setBillNumberUnlocked(false)
       setBillDate(bill.bill_date || new Date().toISOString().split('T')[0])
       setSelectedCustomerId(bill.customer_id || '')
       setCustomerName(bill.customer_name || '')
@@ -225,6 +239,32 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+
+    const trimmedBillNumber = billNumber.trim()
+    if (!trimmedBillNumber) {
+      showToast('Bill number cannot be empty', 'error')
+      return
+    }
+
+    const billNumberChanged = trimmedBillNumber !== bill!.bill_number
+    if (billNumberChanged) {
+      // Compared case-insensitively even though the DB unique index is not:
+      // "sg-0035" alongside "SG-0035" would technically save, but as two
+      // invoices nobody could tell apart on paper.
+      const clash = (allBills ?? []).find(
+        (b) =>
+          b.id !== bill!.id &&
+          b.bill_number.toLowerCase() === trimmedBillNumber.toLowerCase(),
+      )
+      if (clash) {
+        showToast(
+          `Bill number ${clash.bill_number} is already used by another bill`,
+          'error',
+        )
+        return
+      }
+    }
+
     if (!customerName.trim()) {
       showToast('Please enter or select a customer name', 'error')
       return
@@ -242,6 +282,9 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
     updateBill.mutate(
       {
         id: bill!.id,
+        // Sent only on a real change so an untouched bill never rewrites its
+        // own number or nudges the auto-increment counter.
+        bill_number: billNumberChanged ? trimmedBillNumber : undefined,
         bill_date: billDate,
         customer_id: selectedCustomerId || null,
         customer_name: customerName.trim(),
@@ -260,7 +303,11 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
           showToast(`Bill ${updated.bill_number} updated successfully!`)
           onClose()
         },
-        onError: () => showToast('Failed to update bill', 'error'),
+        onError: (err) =>
+          showToast(
+            err instanceof DuplicateBillNumberError ? err.message : 'Failed to update bill',
+            'error',
+          ),
       },
     )
   }
@@ -274,13 +321,57 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-3">
-          <Field
-            label="Bill Number"
-            type="text"
-            disabled
-            value={bill.bill_number}
-            className="bg-slate-100 font-mono font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-          />
+          {/*
+            Hand-rolled rather than a <Field> because the label row carries the
+            lock toggle. Locked uses readOnly, not disabled, so the number can
+            still be selected and copied while it can't be typed over.
+          */}
+          <div>
+            <span className="mb-1 flex items-center justify-between gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+              <label htmlFor="edit-bill-number">Bill Number</label>
+              <button
+                type="button"
+                onClick={() => {
+                  if (billNumberUnlocked) {
+                    // Re-locking is the "undo that" gesture — drop whatever was
+                    // typed rather than leaving an edit staged out of sight.
+                    setBillNumber(bill!.bill_number)
+                    setBillNumberUnlocked(false)
+                  } else {
+                    setBillNumberUnlocked(true)
+                  }
+                }}
+                aria-label={
+                  billNumberUnlocked ? 'Lock bill number' : 'Unlock bill number for editing'
+                }
+                className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${
+                  billNumberUnlocked
+                    ? 'text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/50'
+                    : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+                }`}
+              >
+                {billNumberUnlocked ? (
+                  <Unlock className="h-3.5 w-3.5" />
+                ) : (
+                  <Lock className="h-3.5 w-3.5" />
+                )}
+                {billNumberUnlocked ? 'Lock' : 'Edit'}
+              </button>
+            </span>
+            <input
+              id="edit-bill-number"
+              type="text"
+              required
+              readOnly={!billNumberUnlocked}
+              value={billNumber}
+              onChange={(e) => setBillNumber(e.target.value)}
+              className={`min-h-[44px] w-full rounded-lg border px-3 py-2.5 font-mono text-base font-bold outline-none ${
+                billNumberUnlocked
+                  ? 'border-amber-400 bg-white text-slate-900 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 dark:border-amber-600 dark:bg-slate-900 dark:text-slate-100'
+                  : 'border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+              }`}
+            />
+          </div>
 
           <Field
             label="Invoice Date"
@@ -308,6 +399,13 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
             </select>
           </label>
         </div>
+
+        {billNumberUnlocked && (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+            Invoice numbers are meant to run in one unbroken series — change this
+            only to correct a mistake, not on a bill already shared or filed.
+          </p>
+        )}
 
         <div className="grid gap-3 sm:grid-cols-3">
           <Field
