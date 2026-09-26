@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import type { RecordKind } from './useRecords'
+import { invalidateSupplierLedger } from './useSupplierLedger'
 
 const TABLE_FOR_KIND = {
   production: 'production_entries',
@@ -35,6 +36,11 @@ function invalidateForKind(queryClient: QueryClient, kind: RecordKind) {
   queryClient.invalidateQueries({ queryKey: ['reports'] })
   for (const queryKey of STOCK_KEYS_FOR_KIND[kind]) {
     queryClient.invalidateQueries({ queryKey })
+  }
+  // The supplier ledger reads purchase cost live — a quantity, rate or
+  // supplier change (or a delete) moves the balance.
+  if (kind === 'raw_material_purchase' || kind === 'scrap_purchase') {
+    invalidateSupplierLedger(queryClient)
   }
 }
 

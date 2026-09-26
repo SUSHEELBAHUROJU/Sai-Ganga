@@ -1,6 +1,11 @@
 import jsPDF from 'jspdf'
 import type { BillLineItem, BillRow } from '../hooks/useBills'
 import type { CustomerLedgerBalance, PassbookEntry } from '../hooks/useLedger'
+import {
+  SUPPLIER_PAYMENT_MODE_LABEL,
+  type SupplierLedgerBalance,
+  type SupplierPassbookEntry,
+} from '../hooks/useSupplierLedger'
 import type { RecordKind } from '../hooks/useRecords'
 import { formatInvoiceDate } from './date'
 import { formatQty } from './format'
@@ -1218,4 +1223,111 @@ export function generateRecordsReportBlob(report: RecordsReportData, periodLabel
     generateRecordsReportDoc(report, periodLabel),
     `Records_Report_${slug(periodLabel)}.pdf`,
   )
+}
+
+/** Balance wording for the supplier statement — "Payable" / "Advance" rather
+ *  than accounting Cr/Dr, since the owner and supplier both read it. */
+function supplierBalanceLabel(balance: number): string {
+  if (balance > 0) return `${money(balance)} Payable`
+  if (balance < 0) return `${money(-balance)} Advance`
+  return 'Settled'
+}
+
+function supplierParticulars(entry: SupplierPassbookEntry): string {
+  if (entry.kind === 'purchase') {
+    const rate = entry.price_per_kg != null ? ` @ Rs. ${money(entry.price_per_kg)}` : ''
+    return `Purchase - ${entry.item_name ?? 'Material'} ${num(entry.quantity_kg)} kg${rate}`
+  }
+  if (entry.kind === 'payment') {
+    const parts = [
+      `Paid - ${entry.payment_mode ? SUPPLIER_PAYMENT_MODE_LABEL[entry.payment_mode] : 'Payment'}`,
+      entry.paid_to ? `to ${entry.paid_to}` : null,
+    ].filter(Boolean)
+    const extras = [
+      entry.bank_account,
+      entry.reference_no ? `Ref ${entry.reference_no}` : null,
+      entry.paid_by ? `by ${entry.paid_by}` : null,
+    ].filter(Boolean)
+    return extras.length ? `${parts.join(' ')} (${extras.join(', ')})` : parts.join(' ')
+  }
+  const label = entry.kind === 'refund' ? 'Refund received' : 'Opening / manual due'
+  return entry.note ? `${label} - ${entry.note}` : label
+}
+
+/**
+ * Supplier / scrap dealer statement: every purchase (material cost only) and
+ * every payment, oldest first, with the running balance. Paginates like the
+ * business reports — an active supplier's history runs well past one page.
+ */
+export function generateSupplierStatementDoc(
+  party: SupplierLedgerBalance,
+  entries: SupplierPassbookEntry[],
+): jsPDF {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  // Passbook RPC returns newest first; a statement reads top-down in time.
+  const sortedAsc = [...entries].reverse()
+  const periodLabel = sortedAsc.length
+    ? `${reportDate(sortedAsc[0].entry_date)} to ${reportDate(sortedAsc[sortedAsc.length - 1].entry_date)}`
+    : 'No transactions'
+
+  let y = drawReportHeader(doc, 'Supplier Statement', periodLabel)
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(11)
+  doc.setTextColor(...NAVY)
+  doc.text(party.name, REPORT_MARGIN, y + 2)
+  if (party.phone) {
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.5)
+    doc.setTextColor(...MUTED_TEXT)
+    doc.text(party.phone, REPORT_MARGIN, y + 6.5)
+  }
+  y += 8
+
+  // Separate Purchase / Paid columns rather than one signed amount — the
+  // sign doesn't survive black-and-white printing or a WhatsApp forward.
+  y = drawReportTable(
+    doc,
+    y,
+    [
+      { header: 'DATE', x: 2 },
+      { header: 'PARTICULARS', x: 20, width: 92 },
+      { header: 'PURCHASE', x: 130, align: 'right' },
+      { header: 'PAID', x: 152, align: 'right' },
+      { header: 'BALANCE', x: 184, align: 'right' },
+    ],
+    sortedAsc.map((entry) => {
+      // A refund reverses a payment, so it sits in the Paid column as a negative.
+      const purchaseCol = entry.kind === 'purchase' || entry.kind === 'due' ? money(entry.amount) : ''
+      const paidCol =
+        entry.kind === 'payment' ? money(entry.amount) : entry.kind === 'refund' ? `-${money(entry.amount)}` : ''
+      return [
+        reportDate(entry.entry_date),
+        supplierParticulars(entry),
+        purchaseCol,
+        paidCol,
+        supplierBalanceLabel(entry.running_balance),
+      ]
+    }),
+    'No purchases or payments yet.',
+  )
+
+  drawSummaryBlock(
+    doc,
+    y,
+    [
+      { label: 'Total Purchased', value: `Rs. ${money(party.total_purchased)}` },
+      { label: 'Total Paid', value: `Rs. ${money(party.total_paid)}` },
+    ],
+    {
+      label: party.balance < 0 ? 'ADVANCE' : 'PAYABLE',
+      value: `Rs. ${money(Math.abs(party.balance))}`,
+    },
+  )
+
+  return doc
+}
+
+export function generateSupplierStatementBlob(party: SupplierLedgerBalance, entries: SupplierPassbookEntry[]) {
+  return reportBlob(generateSupplierStatementDoc(party, entries), `Supplier_Statement_${slug(party.name)}.pdf`)
 }

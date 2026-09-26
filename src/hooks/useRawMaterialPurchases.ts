@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { invalidateSupplierLedger } from './useSupplierLedger'
 
 export type EntryMode = 'bag' | 'direct_kg'
 
@@ -36,6 +37,7 @@ export function useAddRawMaterialPurchase() {
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['records'] })
       queryClient.invalidateQueries({ queryKey: ['reports'] })
+      invalidateSupplierLedger(queryClient)
     },
   })
 }

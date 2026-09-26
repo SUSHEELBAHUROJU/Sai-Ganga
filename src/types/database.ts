@@ -966,6 +966,78 @@ export type Database = {
         }
         Relationships: []
       }
+      supplier_ledger_transactions: {
+        Row: {
+          amount: number
+          bank_account: string | null
+          created_at: string
+          created_by: string | null
+          date: string
+          id: string
+          note: string | null
+          paid_by: string | null
+          paid_to: string | null
+          party_type: string
+          payment_mode: string | null
+          reference_no: string | null
+          scrap_dealer_id: string | null
+          supplier_id: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          bank_account?: string | null
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          id?: string
+          note?: string | null
+          paid_by?: string | null
+          paid_to?: string | null
+          party_type: string
+          payment_mode?: string | null
+          reference_no?: string | null
+          scrap_dealer_id?: string | null
+          supplier_id?: string | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          bank_account?: string | null
+          created_at?: string
+          created_by?: string | null
+          date?: string
+          id?: string
+          note?: string | null
+          paid_by?: string | null
+          paid_to?: string | null
+          party_type?: string
+          payment_mode?: string | null
+          reference_no?: string | null
+          scrap_dealer_id?: string | null
+          supplier_id?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_ledger_transactions_scrap_dealer_id_fkey"
+            columns: ["scrap_dealer_id"]
+            isOneToOne: false
+            referencedRelation: "scrap_dealers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_ledger_transactions_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "raw_material_suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       bill_payment_status: {
@@ -1048,6 +1120,19 @@ export type Database = {
           opening_kg: number | null
           purchased_kg: number | null
           scrap_type_id: string | null
+        }
+        Relationships: []
+      }
+      supplier_ledger_balance: {
+        Row: {
+          balance: number | null
+          is_active: boolean | null
+          name: string | null
+          party_id: string | null
+          party_type: string | null
+          phone: string | null
+          total_paid: number | null
+          total_purchased: number | null
         }
         Relationships: []
       }
@@ -1145,6 +1230,7 @@ export type Database = {
         }
       }
       generate_next_bill_number: { Args: never; Returns: string }
+      next_free_bill_number: { Args: never; Returns: string }
       normalize_phone: { Args: { raw: string }; Returns: string }
       rpc_collections_by_mode: {
         Args: { p_from: string; p_to: string }
@@ -1221,6 +1307,35 @@ export type Database = {
           pipe_product_id: string
           total_pcs: number
           weight_kg: number
+        }[]
+      }
+      rpc_supplier_passbook: {
+        Args: { p_party_id: string; p_party_type: string }
+        Returns: {
+          amount: number
+          bank_account: string
+          created_at: string
+          entry_date: string
+          id: string
+          item_name: string
+          kind: string
+          note: string
+          paid_by: string
+          paid_to: string
+          payment_mode: string
+          price_per_kg: number
+          quantity_kg: number
+          reference_no: string
+          running_balance: number
+        }[]
+      }
+      rpc_supplier_payments_by_mode: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          cash_deposit_total: number
+          cash_total: number
+          combined_total: number
+          online_total: number
         }[]
       }
       rpc_today_summary: {

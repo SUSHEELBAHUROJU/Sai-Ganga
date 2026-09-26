@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAddScrapPurchase } from '../../hooks/useScrapPurchases'
 import { useScrapTypes } from '../../hooks/useScrapTypes'
+import { useScrapDealers } from '../../hooks/useScrapDealers'
 import { ScrapDealerPicker } from '../../components/ScrapDealerPicker'
 import { PurchaseCostSummary } from '../../components/PurchaseCostSummary'
 import { Chip } from '../../components/Chip'
@@ -16,13 +17,14 @@ import {
   validateCost,
   validateOptionalTransport,
 } from '../../lib/validate'
-import { purchaseCost } from '../../lib/format'
+import { formatQty, purchaseCost } from '../../lib/format'
 
 const purchaseStyle = ACTION_STYLES.purchase
 const purchaseAccentClass = `${purchaseStyle.text} ${purchaseStyle.textDark} bg-current/10 hover:bg-current/20`
 
 export function ScrapPurchaseForm({ entryDate }: { entryDate: string }) {
   const addPurchase = useAddScrapPurchase()
+  const { data: dealers } = useScrapDealers()
   const { data: scrapTypes } = useScrapTypes()
   const { showToast } = useToast()
 
@@ -64,7 +66,13 @@ export function ScrapPurchaseForm({ entryDate }: { entryDate: string }) {
       },
       {
         onSuccess: () => {
-          showToast('Purchase Added!')
+          // Material cost (not transport) goes onto the dealer's ledger.
+          const dealer = (dealers ?? []).find((d) => d.id === dealerId)
+          showToast(
+            dealer
+              ? `Purchase Added — ₹${formatQty(materialCost)} added to ${dealer.name}'s ledger`
+              : 'Purchase Added!',
+          )
           setQuantityKg('')
           setPricePerKg('')
           setTransport('')

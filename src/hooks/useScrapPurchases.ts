@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { invalidateSupplierLedger } from './useSupplierLedger'
 
 export type NewScrapPurchase = {
   entry_date: string
@@ -31,6 +32,7 @@ export function useAddScrapPurchase() {
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
       queryClient.invalidateQueries({ queryKey: ['records'] })
       queryClient.invalidateQueries({ queryKey: ['reports'] })
+      invalidateSupplierLedger(queryClient)
     },
   })
 }

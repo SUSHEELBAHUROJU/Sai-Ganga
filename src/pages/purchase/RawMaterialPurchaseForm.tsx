@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useRawMaterialTypes } from '../../hooks/useRawMaterialTypes'
 import { useAddRawMaterialPurchase, type EntryMode } from '../../hooks/useRawMaterialPurchases'
+import { useSuppliers } from '../../hooks/useSuppliers'
 import { Chip } from '../../components/Chip'
 import { Field } from '../../components/Field'
 import { NumberStepper } from '../../components/NumberStepper'
@@ -25,6 +26,7 @@ const purchaseAccentClass = `${purchaseStyle.text} ${purchaseStyle.textDark} bg-
 export function RawMaterialPurchaseForm({ entryDate }: { entryDate: string }) {
   const { data: materialTypes } = useRawMaterialTypes()
   const addPurchase = useAddRawMaterialPurchase()
+  const { data: suppliers } = useSuppliers()
   const { showToast } = useToast()
 
   const activeTypes = useMemo(() => (materialTypes ?? []).filter((t) => t.is_active), [materialTypes])
@@ -88,7 +90,13 @@ export function RawMaterialPurchaseForm({ entryDate }: { entryDate: string }) {
       },
       {
         onSuccess: () => {
-          showToast('Purchase Added!')
+          // Material cost (not transport) goes onto the supplier's ledger.
+          const supplier = (suppliers ?? []).find((sp) => sp.id === supplierId)
+          showToast(
+            supplier
+              ? `Purchase Added — ₹${formatQty(materialCost)} added to ${supplier.name}'s ledger`
+              : 'Purchase Added!',
+          )
           resetAmounts()
         },
         onError: () => showToast('Could not save purchase', 'error'),
