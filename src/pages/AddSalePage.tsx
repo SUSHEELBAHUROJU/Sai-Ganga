@@ -2,48 +2,90 @@ import { useState } from 'react'
 import { usePipeProducts } from '../hooks/usePipeProducts'
 import { useFinishedGoodsStock } from '../hooks/useStock'
 import { useCustomers } from '../hooks/useCustomers'
-import { useCreateSaleWithBill, type BillRow } from '../hooks/useBills'
+import { useCreateSaleWithBill, useNextBillNumber, type BillRow } from '../hooks/useBills'
 import { DateField } from '../components/DateField'
 import { CustomerPicker } from '../components/CustomerPicker'
 import { PipeLineItemForm, type PendingLine } from '../components/PipeLineItemForm'
+import { LineItemsList } from '../components/LineItemsList'
 import { SaleBillItems, lineAmount, type SaleLine } from '../components/SaleBillItems'
+import { SaleBillPreview } from '../components/SaleBillPreview'
 import { StickyActionBar } from '../components/StickyActionBar'
 import { BillPdfModal } from '../components/BillPdfModal'
 import { useEntryDate } from '../hooks/useEntryDate'
 import { useToast } from '../lib/toast'
-import { isFutureISODate } from '../lib/date'
+import { formatDateLabel, isFutureISODate } from '../lib/date'
 import { piecesToKg, formatPipeProductLabel } from '../lib/format'
 import { ACTION_STYLES } from '../lib/actionColors'
-import { Receipt, ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Receipt } from 'lucide-react'
+
+type Step = 1 | 2 | 3
+
+const STEPS: { step: Step; label: string }[] = [
+  { step: 1, label: 'Pipes' },
+  { step: 2, label: 'Rates & Charges' },
+  { step: 3, label: 'Review Bill' },
+]
 
 const rupees = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-const chargeInputClass =
+const numberInputClass =
   'min-h-[44px] w-full min-w-0 rounded-md border border-slate-300 bg-white px-2 py-2 font-mono text-base text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100'
 
+function StepIndicator({ current }: { current: Step }) {
+  return (
+    <ol className="flex gap-1.5">
+      {STEPS.map(({ step, label }) => {
+        const state = step === current ? 'current' : step < current ? 'done' : 'todo'
+        return (
+          <li key={step} className="min-w-0 flex-1">
+            <div
+              className={`h-1.5 rounded-full ${state === 'todo' ? 'bg-slate-200 dark:bg-slate-800' : 'bg-green-600'}`}
+            />
+            <p
+              className={`mt-1 truncate text-xs font-semibold ${
+                state === 'current'
+                  ? 'text-green-700 dark:text-green-400'
+                  : 'text-slate-400 dark:text-slate-500'
+              }`}
+            >
+              {step}. {label}
+            </p>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
 /**
- * One flow, one save: pick the customer, add each size with its pcs and rate,
- * then "Save & Create Bill" records the sale and its bill together and opens
- * Share / Print. (It used to save the sale first and then ask for rates on a
- * second screen — two saves, and closing the second left a sale with no bill.)
+ * Sale as three steps, nothing saved until the last one:
+ *   1. Pipes — who bought it, and what (Add to List)
+ *   2. Rates & Charges — rate per pipe, transport / discount / GST / note
+ *   3. Review Bill — the bill as it will be generated → Generate Bill,
+ *      which saves the sale and its bill together and opens Share / Print.
+ * Previous goes back a step with everything kept.
  */
 export function AddSalePage() {
   const { data: pipeProducts, isLoading } = usePipeProducts()
   const { data: finishedGoods } = useFinishedGoodsStock()
   const { data: customers } = useCustomers()
+  const { data: nextBillNumber } = useNextBillNumber()
   const createSale = useCreateSaleWithBill()
   const { showToast } = useToast()
 
+  const [step, setStep] = useState<Step>(1)
   const [entryDate, setEntryDate] = useEntryDate()
   const [customerId, setCustomerId] = useState<string>('')
   const [lines, setLines] = useState<SaleLine[]>([])
   const [focusLineId, setFocusLineId] = useState<string | null>(null)
-  const [chargesOpen, setChargesOpen] = useState(false)
+  const [sameRate, setSameRate] = useState('')
   const [transport, setTransport] = useState('')
   const [discount, setDiscount] = useState('')
   const [tax, setTax] = useState('')
   const [notes, setNotes] = useState('')
   const [createdBill, setCreatedBill] = useState<BillRow | null>(null)
+
+  const customer = (customers ?? []).find((c) => c.id === customerId) ?? null
 
   function getAvailableStock(pipeProductId: string) {
     const stockRow = finishedGoods?.find((p) => p.pipe_product_id === pipeProductId)
@@ -55,12 +97,7 @@ export function AddSalePage() {
   }
 
   function handleAddLine(line: PendingLine) {
-    const localId = crypto.randomUUID()
-    // Most loads go at one rate, so start from the previous line's — the field
-    // takes focus with it selected, so a different rate is just typed over.
-    const previousRate = lines[lines.length - 1]?.rate ?? ''
-    setLines((prev) => [...prev, { ...line, localId, rate: previousRate }])
-    setFocusLineId(localId)
+    setLines((prev) => [...prev, { ...line, localId: crypto.randomUUID(), rate: '' }])
   }
 
   function handleChangeLine(localId: string, patch: Partial<Pick<SaleLine, 'quantity' | 'rate'>>) {
@@ -71,6 +108,14 @@ export function AddSalePage() {
     setLines((prev) => prev.filter((l) => l.localId !== localId))
   }
 
+  function applySameRate() {
+    if (!(Number(sameRate) > 0)) {
+      showToast('Enter a rate to apply', 'error')
+      return
+    }
+    setLines((prev) => prev.map((l) => ({ ...l, rate: sameRate })))
+  }
+
   const itemsTotal = lines.reduce((sum, l) => sum + lineAmount(l), 0)
   const transportVal = Number(transport) || 0
   const discountVal = Number(discount) || 0
@@ -78,35 +123,50 @@ export function AddSalePage() {
   const grandTotal = Math.max(0, itemsTotal - discountVal + taxVal + transportVal)
   const missingRates = lines.filter((l) => !(Number(l.rate) > 0)).length
 
+  // What stops the current step from moving on, said plainly above the button.
   const blocker =
-    lines.length === 0
-      ? null
-      : !customerId
-        ? 'Pick who bought it (top of the page)'
-        : missingRates > 0
-          ? `Enter the rate for ${missingRates} item${missingRates === 1 ? '' : 's'}`
+    step === 1
+      ? !customerId
+        ? 'Pick who bought it'
+        : lines.length === 0
+          ? 'Add at least one pipe to the list'
           : null
+      : step === 2
+        ? lines.length === 0
+          ? 'Go back and add a pipe'
+          : missingRates > 0
+            ? `Enter the rate for ${missingRates} pipe${missingRates === 1 ? '' : 's'}`
+            : null
+        : null
+
+  function goTo(next: Step) {
+    setStep(next)
+    if (next === 2) {
+      // Ask for the price straight away: focus the first pipe still without one.
+      setFocusLineId(lines.find((l) => !(Number(l.rate) > 0))?.localId ?? null)
+    }
+    window.scrollTo({ top: 0 })
+  }
 
   function resetForm() {
+    setStep(1)
     setLines([])
     setCustomerId('')
     setFocusLineId(null)
-    setChargesOpen(false)
+    setSameRate('')
     setTransport('')
     setDiscount('')
     setTax('')
     setNotes('')
   }
 
-  function handleSave() {
-    if (lines.length === 0 || blocker) return
+  function handleGenerate() {
     if (isFutureISODate(entryDate)) {
       showToast('Sale date cannot be in the future', 'error')
       return
     }
-    const customer = (customers ?? []).find((c) => c.id === customerId)
-    if (!customer) {
-      showToast('Pick who bought it', 'error')
+    if (!customer || lines.length === 0 || missingRates > 0) {
+      showToast('Something is missing — go back and check', 'error')
       return
     }
 
@@ -139,11 +199,11 @@ export function AddSalePage() {
       },
       {
         onSuccess: (bill) => {
-          showToast(`Bill ${bill.bill_number} saved`)
+          showToast(`Bill ${bill.bill_number} generated`)
           resetForm()
           setCreatedBill(bill)
         },
-        onError: () => showToast('Could not save — nothing was recorded, try again', 'error'),
+        onError: () => showToast('Could not generate the bill — nothing was saved, try again', 'error'),
       },
     )
   }
@@ -152,115 +212,161 @@ export function AddSalePage() {
     <div className="space-y-6 pb-2">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Add Sale</h2>
-        <DateField value={entryDate} onChange={setEntryDate} />
+        {step === 1 ? (
+          <DateField value={entryDate} onChange={setEntryDate} />
+        ) : (
+          <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+            {customer?.name} · {formatDateLabel(entryDate)}
+          </p>
+        )}
       </div>
 
-      <div>
-        <h3 className="mb-2 text-sm font-semibold text-slate-500 dark:text-slate-400">1. Who Bought It?</h3>
-        <CustomerPicker value={customerId || null} onChange={setCustomerId} />
-      </div>
+      <StepIndicator current={step} />
 
-      <div>
-        <h3 className="mb-2 text-sm font-semibold text-slate-500 dark:text-slate-400">
-          2. Add Pipes {lines.length > 0 && `(${lines.length} added)`}
-        </h3>
-        <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-          {isLoading ? (
-            <p className="text-sm text-slate-500">Loading pipe sizes…</p>
-          ) : (
-            <PipeLineItemForm
-              pipeProducts={pipeProducts ?? []}
-              onAdd={handleAddLine}
-              getAvailableStock={getAvailableStock}
-              accent="sale"
-              disabledProductIds={lines.map((l) => l.pipeProductId)}
-            />
-          )}
-        </div>
-      </div>
+      {step === 1 && (
+        <>
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-slate-500 dark:text-slate-400">Who Bought It?</h3>
+            <CustomerPicker value={customerId || null} onChange={setCustomerId} />
+          </div>
 
-      {lines.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400">3. Rate for Each Pipe</h3>
-          <SaleBillItems
-            lines={lines}
-            focusLineId={focusLineId}
-            onChange={handleChangeLine}
-            onRemove={handleRemoveLine}
-          />
-
-          <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex justify-between text-sm font-medium text-slate-600 dark:text-slate-400">
-              <span>Items total</span>
-              <span className="font-mono font-bold text-slate-900 dark:text-slate-100">₹{rupees(itemsTotal)}</span>
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-slate-500 dark:text-slate-400">Add Pipes</h3>
+            <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+              {isLoading ? (
+                <p className="text-sm text-slate-500">Loading pipe sizes…</p>
+              ) : (
+                <PipeLineItemForm
+                  pipeProducts={pipeProducts ?? []}
+                  onAdd={handleAddLine}
+                  getAvailableStock={getAvailableStock}
+                  accent="sale"
+                  disabledProductIds={lines.map((l) => l.pipeProductId)}
+                />
+              )}
             </div>
+          </div>
 
-            <button
-              type="button"
-              onClick={() => setChargesOpen((v) => !v)}
-              aria-expanded={chargesOpen}
-              className="flex min-h-[44px] w-full items-center justify-between text-sm font-semibold text-teal-700 dark:text-teal-400"
-            >
-              Transport / Discount / GST / Note (optional)
-              {chargesOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </button>
+          <LineItemsList lines={lines} onRemove={handleRemoveLine} onUpdateQuantity={(id, q) => handleChangeLine(id, { quantity: q })} />
+        </>
+      )}
 
-            {chargesOpen && (
-              <div className="space-y-3">
-                <div className="grid grid-cols-3 gap-2">
-                  <label className="block min-w-0">
-                    <span className="mb-0.5 block text-xs text-slate-500 dark:text-slate-400">Transport ₹</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      inputMode="decimal"
-                      value={transport}
-                      onChange={(e) => setTransport(e.target.value)}
-                      placeholder="0"
-                      className={chargeInputClass}
-                    />
-                  </label>
-                  <label className="block min-w-0">
-                    <span className="mb-0.5 block text-xs text-slate-500 dark:text-slate-400">Discount ₹</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      inputMode="decimal"
-                      value={discount}
-                      onChange={(e) => setDiscount(e.target.value)}
-                      placeholder="0"
-                      className={chargeInputClass}
-                    />
-                  </label>
-                  <label className="block min-w-0">
-                    <span className="mb-0.5 block text-xs text-slate-500 dark:text-slate-400">GST ₹</span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      inputMode="decimal"
-                      value={tax}
-                      onChange={(e) => setTax(e.target.value)}
-                      placeholder="0"
-                      className={chargeInputClass}
-                    />
-                  </label>
-                </div>
-                <label className="block">
-                  <span className="mb-0.5 block text-xs text-slate-500 dark:text-slate-400">Note on bill</span>
+      {step === 2 && (
+        <>
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400">Rate for Each Pipe</h3>
+
+            {lines.length > 1 && (
+              <div className="flex items-end gap-2 rounded-lg bg-slate-100 p-2.5 dark:bg-slate-900">
+                <label className="block min-w-0 flex-1">
+                  <span className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                    Same rate for all pipes (₹/kg)
+                  </span>
                   <input
-                    type="text"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="e.g. Payment due in 15 days"
-                    className="min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={sameRate}
+                    onChange={(e) => setSameRate(e.target.value)}
+                    placeholder="e.g. 95"
+                    className={numberInputClass}
                   />
                 </label>
+                <button
+                  type="button"
+                  onClick={applySameRate}
+                  className="min-h-[44px] shrink-0 rounded-lg border border-green-300 bg-white px-3 text-sm font-semibold text-green-700 hover:bg-green-50 dark:border-green-800 dark:bg-slate-900 dark:text-green-400"
+                >
+                  Apply to all
+                </button>
               </div>
             )}
+
+            <SaleBillItems
+              lines={lines}
+              focusLineId={focusLineId}
+              onChange={handleChangeLine}
+              onRemove={handleRemoveLine}
+            />
           </div>
+
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+            <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400">Other Charges (optional)</h3>
+            <div className="grid grid-cols-3 gap-2">
+              <label className="block min-w-0">
+                <span className="mb-0.5 block text-xs text-slate-500 dark:text-slate-400">Transport ₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={transport}
+                  onChange={(e) => setTransport(e.target.value)}
+                  placeholder="0"
+                  className={numberInputClass}
+                />
+              </label>
+              <label className="block min-w-0">
+                <span className="mb-0.5 block text-xs text-slate-500 dark:text-slate-400">Discount ₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={discount}
+                  onChange={(e) => setDiscount(e.target.value)}
+                  placeholder="0"
+                  className={numberInputClass}
+                />
+              </label>
+              <label className="block min-w-0">
+                <span className="mb-0.5 block text-xs text-slate-500 dark:text-slate-400">GST ₹</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputMode="decimal"
+                  value={tax}
+                  onChange={(e) => setTax(e.target.value)}
+                  placeholder="0"
+                  className={numberInputClass}
+                />
+              </label>
+            </div>
+            <label className="block">
+              <span className="mb-0.5 block text-xs text-slate-500 dark:text-slate-400">Note on bill</span>
+              <input
+                type="text"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="e.g. Payment due in 15 days"
+                className="min-h-[44px] w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-base text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              />
+            </label>
+            <div className="flex items-baseline justify-between border-t border-slate-200 pt-2 dark:border-slate-800">
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Bill total</span>
+              <span className="font-mono text-lg font-bold text-slate-900 dark:text-slate-100">₹{rupees(grandTotal)}</span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {step === 3 && (
+        <div className="space-y-3">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Check the bill. Nothing is saved until you tap <span className="font-semibold">Generate Bill</span>.
+          </p>
+          <SaleBillPreview
+            billNumber={nextBillNumber ?? null}
+            billDate={entryDate}
+            customer={customer}
+            lines={lines}
+            transport={transportVal}
+            discount={discountVal}
+            tax={taxVal}
+            notes={notes}
+          />
         </div>
       )}
 
@@ -268,19 +374,40 @@ export function AddSalePage() {
         {blocker && (
           <p className="mb-2 text-center text-sm font-semibold text-amber-700 dark:text-amber-400">{blocker}</p>
         )}
-        <button
-          type="button"
-          disabled={lines.length === 0 || Boolean(blocker) || createSale.isPending}
-          onClick={handleSave}
-          className={`flex min-h-[50px] w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-bold text-white shadow-md transition-transform active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100 ${ACTION_STYLES.sale.gradient}`}
-        >
-          <Receipt className="h-[18px] w-[18px]" strokeWidth={2.5} />
-          {createSale.isPending
-            ? 'Saving…'
-            : lines.length === 0
-              ? 'Save & Create Bill'
-              : `Save & Create Bill · ₹${rupees(grandTotal)}`}
-        </button>
+        <div className="flex gap-2">
+          {step > 1 && (
+            <button
+              type="button"
+              onClick={() => goTo((step - 1) as Step)}
+              disabled={createSale.isPending}
+              className="flex min-h-[50px] shrink-0 items-center justify-center gap-1 rounded-2xl border border-slate-300 bg-white px-4 text-base font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            >
+              <ChevronLeft className="h-5 w-5" />
+              Previous
+            </button>
+          )}
+          {step < 3 ? (
+            <button
+              type="button"
+              disabled={Boolean(blocker)}
+              onClick={() => goTo((step + 1) as Step)}
+              className={`flex min-h-[50px] flex-1 items-center justify-center gap-1 rounded-2xl py-3.5 text-base font-bold text-white shadow-md transition-transform active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100 ${ACTION_STYLES.sale.gradient}`}
+            >
+              Next
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={createSale.isPending}
+              onClick={handleGenerate}
+              className={`flex min-h-[50px] flex-1 items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-bold text-white shadow-md transition-transform active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100 ${ACTION_STYLES.sale.gradient}`}
+            >
+              <Receipt className="h-[18px] w-[18px]" strokeWidth={2.5} />
+              {createSale.isPending ? 'Generating…' : 'Generate Bill'}
+            </button>
+          )}
+        </div>
       </StickyActionBar>
 
       <BillPdfModal open={createdBill !== null} bill={createdBill} onClose={() => setCreatedBill(null)} />
