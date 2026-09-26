@@ -33,6 +33,8 @@ export function useAddCustomer() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY })
+      // The Ledger list shows every customer by name — keep it in step.
+      queryClient.invalidateQueries({ queryKey: ['ledger_balances'] })
     },
   })
 }
@@ -47,6 +49,8 @@ export function useUpdateCustomer() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY })
+      // The Ledger list shows every customer by name — keep it in step.
+      queryClient.invalidateQueries({ queryKey: ['ledger_balances'] })
     },
   })
 }
@@ -63,6 +67,8 @@ export function useSetCustomerActive() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY })
+      // The Ledger list shows every customer by name — keep it in step.
+      queryClient.invalidateQueries({ queryKey: ['ledger_balances'] })
     },
   })
 }

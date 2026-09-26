@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Wallet, ChevronRight, Search, SearchX } from 'lucide-react'
-import { useCustomerLedgerBalances, type CustomerLedgerBalance } from '../../hooks/useLedger'
+import { useCustomerLedgerBalances } from '../../hooks/useLedger'
 import { Chip } from '../../components/Chip'
 import { LoadingState, EmptyState } from '../../components/States'
 import { CustomerPassbookModal } from '../../components/CustomerPassbookModal'
@@ -32,7 +32,11 @@ export function CustomerLedgerView() {
   const { data: balances, isLoading } = useCustomerLedgerBalances()
   const [sortMode, setSortMode] = useState<SortMode>('due')
   const [search, setSearch] = useState('')
-  const [selectedCustomer, setSelectedCustomer] = useState<CustomerLedgerBalance | null>(null)
+  // Keep only the id and read the row from the live list: holding the row
+  // itself froze the passbook's balance (and Mark Full Paid's amount) at
+  // whatever it was when opened, even after a payment was recorded.
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
+  const selectedCustomer = (balances ?? []).find((c) => c.customer_id === selectedCustomerId) ?? null
 
   const totalReceivables = useMemo(
     () => (balances ?? []).reduce((sum, c) => sum + Math.max(0, c.balance), 0),
@@ -104,7 +108,7 @@ export function CustomerLedgerView() {
           <button
             key={c.customer_id}
             type="button"
-            onClick={() => setSelectedCustomer(c)}
+            onClick={() => setSelectedCustomerId(c.customer_id)}
             className="flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3.5 text-left shadow-sm hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800"
           >
             <div className="min-w-0">
@@ -124,7 +128,7 @@ export function CustomerLedgerView() {
       <CustomerPassbookModal
         open={selectedCustomer !== null}
         customer={selectedCustomer}
-        onClose={() => setSelectedCustomer(null)}
+        onClose={() => setSelectedCustomerId(null)}
       />
     </div>
   )

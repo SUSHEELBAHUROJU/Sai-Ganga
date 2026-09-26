@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { MASTER_DATA_STALE_TIME } from '../lib/queryClient'
+import { invalidateSupplierLedger } from './useSupplierLedger'
 import type { Database } from '../types/database'
 
 /** Raw-material suppliers — the same structured-entity pattern as
@@ -40,6 +41,7 @@ export function useAddSupplier() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY })
+      invalidateSupplierLedger(queryClient)
     },
   })
 }
@@ -54,6 +56,7 @@ export function useUpdateSupplier() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY })
+      invalidateSupplierLedger(queryClient)
     },
   })
 }
@@ -70,6 +73,7 @@ export function useSetSupplierActive() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY })
+      invalidateSupplierLedger(queryClient)
     },
   })
 }

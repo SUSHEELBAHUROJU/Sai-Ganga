@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { MASTER_DATA_STALE_TIME } from '../lib/queryClient'
+import { invalidateSupplierLedger } from './useSupplierLedger'
 import type { Database } from '../types/database'
 
 export type ScrapDealer = Database['public']['Tables']['scrap_dealers']['Row']
@@ -33,6 +34,7 @@ export function useAddScrapDealer() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY })
+      invalidateSupplierLedger(queryClient)
     },
   })
 }
@@ -47,6 +49,7 @@ export function useUpdateScrapDealer() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY })
+      invalidateSupplierLedger(queryClient)
     },
   })
 }
@@ -63,6 +66,7 @@ export function useSetScrapDealerActive() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY })
+      invalidateSupplierLedger(queryClient)
     },
   })
 }
