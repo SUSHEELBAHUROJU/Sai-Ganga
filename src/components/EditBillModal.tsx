@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Modal } from './Modal'
 import { Field } from './Field'
-import { Plus, Trash2, Save, Lock, Unlock } from 'lucide-react'
+import { Plus, Trash2, Save, Lock, Unlock, ChevronDown, ChevronUp } from 'lucide-react'
 import {
   useBills,
   useUpdateBill,
@@ -12,7 +12,7 @@ import {
 import { useCustomers } from '../hooks/useCustomers'
 import { usePipeProducts } from '../hooks/usePipeProducts'
 import { useToast } from '../lib/toast'
-import { formatPipeProductLabel, piecesToKg } from '../lib/format'
+import { formatPipeProductLabel, formatQty, piecesToKg } from '../lib/format'
 import { isFutureISODate, todayISODate } from '../lib/date'
 
 type EditBillModalProps = {
@@ -75,6 +75,9 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
   const [tax, setTax] = useState<string>('0')
   const [transport, setTransport] = useState<string>('0')
   const [notes, setNotes] = useState<string>('')
+  // Customer details are rarely what's being corrected, so they sit collapsed
+  // behind a one-line summary and the line items get the first screen.
+  const [customerOpen, setCustomerOpen] = useState(false)
 
   useEffect(() => {
     if (open && bill) {
@@ -91,6 +94,7 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
       setNotes(bill.notes || '')
       setGlobalRate('')
       setLineItems(parseLineItems(bill.line_items))
+      setCustomerOpen(!bill.customer_name)
     }
   }, [open, bill])
 
@@ -106,9 +110,14 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
     }
   }
 
-  function handleApplyGlobalRate(rateStr: string) {
-    setGlobalRate(rateStr)
-    const price = parseFloat(rateStr) || 0
+  /** Explicit button rather than on every keystroke: typing "75" used to set
+   *  every line to ₹7 first, and a stray tap in the box wiped all rates. */
+  function applyRateToAll() {
+    const price = parseFloat(globalRate) || 0
+    if (price <= 0) {
+      showToast('Enter a rate to apply', 'error')
+      return
+    }
     setLineItems((prev) =>
       prev.map((item) => {
         const kg = item.weight_kg || 0
@@ -318,23 +327,24 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
     )
   }
 
+  const customerSummary = [customerPhone.trim(), customerAddress.trim()].filter(Boolean).join(' · ')
+  // text-base on every input: iOS zooms the page on focus for anything
+  // smaller, which on this form meant the sheet jumped around on each tap.
+  const numberInputClass =
+    'min-h-[44px] w-full min-w-0 rounded-md border border-slate-300 bg-white px-2 py-2 font-mono text-base text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100'
+
   return (
-    <Modal
-      title={`Edit Tax Invoice — ${bill.bill_number}`}
-      open={open}
-      onClose={onClose}
-      maxWidthClass="md:max-w-4xl"
-    >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid gap-3 sm:grid-cols-3">
+    <Modal title={`Edit Bill ${bill.bill_number}`} open={open} onClose={onClose} maxWidthClass="md:max-w-2xl">
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="grid grid-cols-2 gap-3">
           {/*
             Hand-rolled rather than a <Field> because the label row carries the
             lock toggle. Locked uses readOnly, not disabled, so the number can
             still be selected and copied while it can't be typed over.
           */}
-          <div>
-            <span className="mb-1 flex items-center justify-between gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-              <label htmlFor="edit-bill-number">Bill Number</label>
+          <div className="min-w-0">
+            <span className="mb-1 flex items-center justify-between gap-1 text-sm font-medium text-slate-700 dark:text-slate-300">
+              <label htmlFor="edit-bill-number">Bill No.</label>
               <button
                 type="button"
                 onClick={() => {
@@ -347,20 +357,14 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
                     setBillNumberUnlocked(true)
                   }
                 }}
-                aria-label={
-                  billNumberUnlocked ? 'Lock bill number' : 'Unlock bill number for editing'
-                }
-                className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${
+                aria-label={billNumberUnlocked ? 'Lock bill number' : 'Unlock bill number for editing'}
+                className={`-my-1 flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-semibold ${
                   billNumberUnlocked
                     ? 'text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/50'
                     : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
                 }`}
               >
-                {billNumberUnlocked ? (
-                  <Unlock className="h-3.5 w-3.5" />
-                ) : (
-                  <Lock className="h-3.5 w-3.5" />
-                )}
+                {billNumberUnlocked ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
                 {billNumberUnlocked ? 'Lock' : 'Edit'}
               </button>
             </span>
@@ -371,7 +375,7 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
               readOnly={!billNumberUnlocked}
               value={billNumber}
               onChange={(e) => setBillNumber(e.target.value)}
-              className={`min-h-[44px] w-full rounded-lg border px-3 py-2.5 font-mono text-base font-bold outline-none ${
+              className={`min-h-[44px] w-full min-w-0 rounded-lg border px-3 py-2.5 font-mono text-base font-bold outline-none ${
                 billNumberUnlocked
                   ? 'border-amber-400 bg-white text-slate-900 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 dark:border-amber-600 dark:bg-slate-900 dark:text-slate-100'
                   : 'border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
@@ -380,189 +384,227 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
           </div>
 
           <Field
-            label="Invoice Date"
+            label="Bill Date"
             type="date"
             required
             value={billDate}
             max={todayISODate()}
             onChange={(e) => setBillDate(e.target.value)}
+            className="min-h-[44px] min-w-0 px-2"
           />
-
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
-              Select Registered Customer
-            </span>
-            <select
-              value={selectedCustomerId}
-              onChange={(e) => handleCustomerSelect(e.target.value)}
-              className="min-h-[44px] w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            >
-              <option value="">-- Custom / Cash Customer --</option>
-              {(customers ?? []).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
 
         {billNumberUnlocked && (
           <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
-            Invoice numbers are meant to run in one unbroken series — change this
-            only to correct a mistake, not on a bill already shared or filed.
+            Invoice numbers are meant to run in one unbroken series — change this only to correct a
+            mistake, not on a bill already shared or filed.
           </p>
         )}
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Field
-            label="Customer Name"
-            type="text"
-            required
-            value={customerName}
-            onChange={(e) => setCustomerName(e.target.value)}
-            placeholder="e.g. Susheel Polymers"
-          />
-
-          <Field
-            label="Customer Phone"
-            type="text"
-            value={customerPhone}
-            onChange={(e) => setCustomerPhone(e.target.value)}
-            placeholder="10-digit number"
-          />
-
-          <Field
-            label="Customer Address"
-            type="text"
-            value={customerAddress}
-            onChange={(e) => setCustomerAddress(e.target.value)}
-            placeholder="City, District, State"
-          />
-        </div>
-
-        {/* Global Rate Auto-Fill */}
-        <div className="rounded-xl border border-teal-200 bg-teal-50/70 p-3 dark:border-teal-900/60 dark:bg-teal-950/40">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <span className="text-xs font-bold text-teal-900 dark:text-teal-200">
-                Rate per Kg (Auto-fill all items)
+        {/* Customer — one-line summary, expands to edit */}
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800">
+          <button
+            type="button"
+            onClick={() => setCustomerOpen((v) => !v)}
+            aria-expanded={customerOpen}
+            className="flex min-h-[52px] w-full items-center justify-between gap-3 px-3 py-2 text-left"
+          >
+            <span className="min-w-0">
+              <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">Customer</span>
+              <span className="block truncate font-semibold text-slate-900 dark:text-slate-100">
+                {customerName.trim() || 'Not set'}
               </span>
-              <p className="text-[11px] text-teal-700 dark:text-teal-300">
-                Entering a rate here automatically calculates price for all products in this bill.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-teal-800 dark:text-teal-200">₹</span>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={globalRate}
-                onChange={(e) => handleApplyGlobalRate(e.target.value)}
-                placeholder="Rate/kg (e.g. 75)"
-                className="min-h-[44px] w-32 rounded-lg border border-teal-300 bg-white px-3 py-1.5 font-mono text-sm font-bold text-teal-900 outline-none focus:ring-2 focus:ring-teal-500 dark:border-teal-700 dark:bg-slate-900 dark:text-teal-100"
+              {!customerOpen && customerSummary && (
+                <span className="block truncate text-xs text-slate-500 dark:text-slate-400">{customerSummary}</span>
+              )}
+            </span>
+            <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-teal-600 dark:text-teal-400">
+              {customerOpen ? 'Done' : 'Change'}
+              {customerOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </span>
+          </button>
+
+          {customerOpen && (
+            <div className="space-y-3 border-t border-slate-200 p-3 dark:border-slate-800">
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Pick a saved customer
+                </span>
+                <select
+                  value={selectedCustomerId}
+                  onChange={(e) => handleCustomerSelect(e.target.value)}
+                  className="min-h-[44px] w-full rounded-lg border border-slate-300 px-3 py-2.5 text-base text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                >
+                  <option value="">-- Cash / not saved --</option>
+                  {(customers ?? []).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Field
+                label="Name on Bill"
+                type="text"
+                required
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                placeholder="e.g. Susheel Polymers"
               />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field
+                  label="Phone"
+                  type="text"
+                  inputMode="tel"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  placeholder="10-digit number"
+                />
+                <Field
+                  label="Address"
+                  type="text"
+                  value={customerAddress}
+                  onChange={(e) => setCustomerAddress(e.target.value)}
+                  placeholder="City, District"
+                />
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Items Table */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Bill Line Items
+        {/* Items */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+              Items ({lineItems.length})
             </h4>
             <button
               type="button"
               onClick={handleAddLineItem}
-              className="flex min-h-[44px] items-center gap-1 rounded-lg bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-700 hover:bg-teal-100 dark:bg-teal-950/60 dark:text-teal-300"
+              className="flex min-h-[44px] items-center gap-1 rounded-lg bg-teal-50 px-3 py-1 text-sm font-semibold text-teal-700 hover:bg-teal-100 dark:bg-teal-950/60 dark:text-teal-300"
             >
-              <Plus className="h-3.5 w-3.5" />
-              + Add Item to Bill
+              <Plus className="h-4 w-4" />
+              Add Item
             </button>
           </div>
 
-          {/*
-            Was a hard `grid-cols-12`, which on a phone gave each numeric
-            field two columns — about 38px, too narrow to read a rate in.
-            Now: one field per row on mobile, the original dense row from
-            `sm` up.
-          */}
-          <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
-            {lineItems.map((item, idx) => (
-              <div
-                key={idx}
-                className="grid grid-cols-2 items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs sm:grid-cols-12 sm:items-center dark:border-slate-800 dark:bg-slate-900"
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Changing pieces or items here also updates this bill's sale entries and stock.
+          </p>
+
+          {lineItems.length > 1 && (
+            <div className="flex items-end gap-2 rounded-lg bg-slate-50 p-2.5 dark:bg-slate-900">
+              <label className="block min-w-0 flex-1">
+                <span className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
+                  Same rate for all items (₹/kg)
+                </span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  inputMode="decimal"
+                  value={globalRate}
+                  onChange={(e) => setGlobalRate(e.target.value)}
+                  placeholder="e.g. 95"
+                  className={numberInputClass}
+                />
+              </label>
+              <button
+                type="button"
+                onClick={applyRateToAll}
+                className="min-h-[44px] shrink-0 rounded-lg border border-teal-300 bg-white px-3 text-sm font-semibold text-teal-700 hover:bg-teal-50 dark:border-teal-800 dark:bg-slate-900 dark:text-teal-300"
               >
-                {/*
-                  Product Select / Description — picking a product already
-                  sets description to its label (handlePipeProductSelect), so
-                  a free-text box underneath it just let the two drift apart:
-                  the dropdown says one size, the printed description another.
-                  Only a custom line (no product picked) needs typed text.
-                */}
-                <div className="col-span-2 space-y-1 sm:col-span-4">
-                  <select
-                    aria-label="Pipe product"
-                    value={item.pipe_product_id || ''}
-                    onChange={(e) => handlePipeProductSelect(idx, e.target.value)}
-                    className="min-h-[44px] w-full min-w-0 rounded-md border border-slate-300 px-2 py-2 text-xs text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-                  >
-                    <option value="">-- Select Pipe Product --</option>
-                    {(pipeProducts ?? []).map((p) => {
-                      const isSelectedElsewhere = lineItems.some(
-                        (l, i) => i !== idx && l.pipe_product_id === p.id,
-                      )
-                      return (
-                        <option key={p.id} value={p.id} disabled={isSelectedElsewhere}>
-                          {formatPipeProductLabel(p.diameter_inches, p.weight_kg)}
-                          {isSelectedElsewhere ? ' (Already added)' : ''}
-                        </option>
-                      )
-                    })}
-                  </select>
+                Apply to all
+              </button>
+            </div>
+          )}
 
-                  {!item.pipe_product_id && (
-                    <input
-                      type="text"
-                      aria-label="Description"
-                      value={item.description || ''}
-                      onChange={(e) => handleDescriptionChange(idx, e.target.value)}
-                      placeholder="Description"
-                      className="min-h-[44px] w-full min-w-0 rounded-md border border-slate-200 px-2 py-2 text-xs text-slate-700 outline-none dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
-                    />
-                  )}
-                </div>
+          {/*
+            No inner scroll box: a fixed-height scrolling list inside the
+            already-scrolling sheet showed ~1.5 items on a phone, and a swipe
+            scrolled whichever of the two it happened to land on.
+          */}
+          {lineItems.map((item, idx) => (
+            <div
+              key={idx}
+              className="space-y-2.5 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                  Item {idx + 1}
+                </span>
+                <button
+                  type="button"
+                  aria-label={`Remove item ${idx + 1}`}
+                  disabled={lineItems.length <= 1}
+                  onClick={() => handleRemoveLineItem(idx)}
+                  className="-my-1 -mr-1 flex min-h-[40px] items-center gap-1 rounded-lg px-2 text-xs font-semibold text-slate-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-30 dark:text-slate-400 dark:hover:bg-red-950/50"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Remove
+                </button>
+              </div>
 
-                {/* Qty Pcs */}
-                <label className="block min-w-0 sm:col-span-2">
-                  <span className="mb-0.5 block text-xs text-slate-500 dark:text-slate-400">Pcs</span>
+              {/*
+                Picking a product already sets description to its label
+                (handlePipeProductSelect), so a free-text box underneath it just
+                let the two drift apart. Only a custom line (no product picked)
+                needs typed text.
+              */}
+              <select
+                aria-label="Pipe product"
+                value={item.pipe_product_id || ''}
+                onChange={(e) => handlePipeProductSelect(idx, e.target.value)}
+                className="min-h-[44px] w-full min-w-0 rounded-md border border-slate-300 bg-white px-2 py-2 text-base font-semibold text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              >
+                <option value="">-- Other (type description) --</option>
+                {(pipeProducts ?? []).map((p) => {
+                  const isSelectedElsewhere = lineItems.some((l, i) => i !== idx && l.pipe_product_id === p.id)
+                  return (
+                    <option key={p.id} value={p.id} disabled={isSelectedElsewhere}>
+                      {formatPipeProductLabel(p.diameter_inches, p.weight_kg)}
+                      {isSelectedElsewhere ? ' (Already added)' : ''}
+                    </option>
+                  )
+                })}
+              </select>
+
+              {!item.pipe_product_id && (
+                <input
+                  type="text"
+                  aria-label="Description"
+                  value={item.description || ''}
+                  onChange={(e) => handleDescriptionChange(idx, e.target.value)}
+                  placeholder="Description"
+                  className="min-h-[44px] w-full min-w-0 rounded-md border border-slate-300 px-2 py-2 text-base text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                />
+              )}
+
+              <div className="grid grid-cols-3 gap-2">
+                <label className="block min-w-0">
+                  <span className="mb-0.5 block text-xs text-slate-500 dark:text-slate-400">Pieces</span>
                   <input
                     type="number"
                     min="0"
                     inputMode="numeric"
                     value={item.quantity_pcs ?? ''}
                     onChange={(e) => handleQuantityChange(idx, e.target.value)}
-                    placeholder="Pcs"
-                    className="w-full min-w-0 rounded-md border border-slate-300 px-2 py-2 font-mono text-xs text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    placeholder="0"
+                    className={numberInputClass}
                   />
                 </label>
 
                 {/*
                   Weight is derived (pcs x the product's per-piece weight) for
                   any line with a pipe product selected, so it's shown rather
-                  than typed — a hand-edited weight could silently disagree
-                  with the quantity. Custom lines with no product selected have
-                  nothing to derive from, so those keep a real input.
+                  than typed. Custom lines have nothing to derive from, so
+                  those keep a real input.
                 */}
-                <label className="block min-w-0 sm:col-span-2">
-                  <span className="mb-0.5 block text-xs text-slate-500 dark:text-slate-400">
-                    Weight (kg)
-                  </span>
+                <label className="block min-w-0">
+                  <span className="mb-0.5 block text-xs text-slate-500 dark:text-slate-400">Weight (kg)</span>
                   {item.pipe_product_id ? (
-                    <span className="flex min-h-[38px] w-full items-center rounded-md border border-transparent bg-slate-100 px-2 py-2 font-mono text-xs text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
-                      {formatINR(item.weight_kg)}
+                    <span className="flex min-h-[44px] w-full items-center rounded-md bg-slate-100 px-2 font-mono text-base text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+                      {formatQty(item.weight_kg)}
                     </span>
                   ) : (
                     <input
@@ -572,17 +614,14 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
                       inputMode="decimal"
                       value={item.weight_kg || ''}
                       onChange={(e) => handleWeightChange(idx, e.target.value)}
-                      placeholder="Total kg"
-                      className="w-full min-w-0 rounded-md border border-slate-300 px-2 py-2 font-mono text-xs text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                      placeholder="0"
+                      className={numberInputClass}
                     />
                   )}
                 </label>
 
-                {/* Price / Kg */}
-                <label className="block min-w-0 sm:col-span-2">
-                  <span className="mb-0.5 block text-xs text-slate-500 dark:text-slate-400">
-                    Rate (₹/kg)
-                  </span>
+                <label className="block min-w-0">
+                  <span className="mb-0.5 block text-xs text-slate-500 dark:text-slate-400">Rate ₹/kg</span>
                   <input
                     type="number"
                     step="0.01"
@@ -590,106 +629,106 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
                     inputMode="decimal"
                     value={item.price_per_kg || ''}
                     onChange={(e) => handlePriceChange(idx, e.target.value)}
-                    placeholder="₹/kg"
-                    className="w-full min-w-0 rounded-md border border-slate-300 px-2 py-2 font-mono text-xs text-slate-900 outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                    placeholder="0"
+                    className={numberInputClass}
                   />
                 </label>
-
-                {/* Amount & Trash */}
-                <div className="col-span-2 flex min-w-0 items-center justify-between gap-2 border-t border-slate-200 pt-2 sm:col-span-2 sm:border-0 sm:pt-0 sm:pl-1 dark:border-slate-800">
-                  <span className="truncate font-mono font-bold text-slate-900 dark:text-slate-100">
-                    ₹{formatINR(item.amount)}
-                  </span>
-
-                  <button
-                    type="button"
-                    aria-label={`Remove line ${idx + 1}`}
-                    disabled={lineItems.length <= 1}
-                    onClick={() => handleRemoveLineItem(idx)}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-30 sm:h-8 sm:w-8 dark:hover:bg-red-950/50"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
               </div>
-            ))}
-          </div>
+
+              <div className="flex items-baseline justify-between gap-2 border-t border-slate-100 pt-2 dark:border-slate-800">
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  {formatQty(item.weight_kg)} kg × ₹{formatQty(item.price_per_kg)}
+                </span>
+                <span className="font-mono text-base font-bold text-slate-900 dark:text-slate-100">
+                  ₹{formatINR(item.amount)}
+                </span>
+              </div>
+            </div>
+          ))}
         </div>
 
-        {/* Totals Summary */}
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2 dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex justify-between text-xs text-slate-600 dark:text-slate-400 font-medium">
-            <span>Subtotal:</span>
-            <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
-              ₹{formatINR(subtotal)}
-            </span>
+        {/* Charges */}
+        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex justify-between text-sm font-medium text-slate-600 dark:text-slate-400">
+            <span>Items total</span>
+            <span className="font-mono font-bold text-slate-900 dark:text-slate-100">₹{formatINR(subtotal)}</span>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 pt-1 border-t border-slate-200 sm:grid-cols-3 dark:border-slate-800">
-            <Field
-              label="Discount (₹)"
-              type="number"
-              step="0.01"
-              min="0"
-              value={discount}
-              onChange={(e) => setDiscount(e.target.value)}
-              className="font-mono text-xs"
-            />
-
-            <Field
-              label="Tax / GST (₹)"
-              type="number"
-              step="0.01"
-              min="0"
-              value={tax}
-              onChange={(e) => setTax(e.target.value)}
-              className="font-mono text-xs"
-            />
-
-            <Field
-              label="Transport (₹)"
-              type="number"
-              step="0.01"
-              min="0"
-              value={transport}
-              onChange={(e) => setTransport(e.target.value)}
-              className="font-mono text-xs"
-            />
-          </div>
-
-          <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-slate-800">
-            <span className="text-sm font-bold text-slate-800 dark:text-slate-200">
-              Grand Total:
-            </span>
-            <span className="font-mono text-lg font-bold text-teal-600 dark:text-teal-400">
-              ₹{formatINR(grandTotal)}
-            </span>
+          <div className="grid grid-cols-3 gap-2">
+            <label className="block min-w-0">
+              <span className="mb-0.5 block text-xs text-slate-500 dark:text-slate-400">Discount ₹</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                inputMode="decimal"
+                value={discount}
+                onChange={(e) => setDiscount(e.target.value)}
+                className={numberInputClass}
+              />
+            </label>
+            <label className="block min-w-0">
+              <span className="mb-0.5 block text-xs text-slate-500 dark:text-slate-400">GST ₹</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                inputMode="decimal"
+                value={tax}
+                onChange={(e) => setTax(e.target.value)}
+                className={numberInputClass}
+              />
+            </label>
+            <label className="block min-w-0">
+              <span className="mb-0.5 block text-xs text-slate-500 dark:text-slate-400">Transport ₹</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                inputMode="decimal"
+                value={transport}
+                onChange={(e) => setTransport(e.target.value)}
+                className={numberInputClass}
+              />
+            </label>
           </div>
         </div>
 
         <Field
-          label="Notes / Terms on Bill"
+          label="Notes on Bill (optional)"
           type="text"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="e.g. Payment due in 15 days"
         />
 
-        <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="min-h-[44px] rounded-lg px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            Cancel
-          </button>
+        {/*
+          Pinned to the bottom of the sheet so the running total and Save are
+          always in reach while editing items, instead of a scroll away. The
+          negative offset/margin cancel Modal's bottom padding, so nothing
+          scrolls by underneath the bar; the safe-area inset moves inside it.
+        */}
+        <div
+          className="sticky -mx-5 flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 pt-3 dark:border-slate-800 dark:bg-slate-900"
+          style={{
+            bottom: 'calc(-1.25rem - env(safe-area-inset-bottom, 0px))',
+            marginBottom: 'calc(-1.25rem - env(safe-area-inset-bottom, 0px))',
+            paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))',
+          }}
+        >
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Grand Total</p>
+            <p className="truncate font-mono text-lg font-bold text-teal-600 dark:text-teal-400">
+              ₹{formatINR(grandTotal)}
+            </p>
+          </div>
           <button
             type="submit"
             disabled={updateBill.isPending}
-            className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-lg bg-teal-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-teal-700 disabled:opacity-50"
+            className="flex min-h-[48px] shrink-0 items-center justify-center gap-1.5 rounded-lg bg-teal-600 px-5 py-2 text-base font-bold text-white shadow-sm hover:bg-teal-700 disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
-            {updateBill.isPending ? 'Saving...' : 'Save Bill Changes'}
+            {updateBill.isPending ? 'Saving…' : 'Save Bill'}
           </button>
         </div>
       </form>

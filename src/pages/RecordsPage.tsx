@@ -10,6 +10,7 @@ import {
   Layers,
   Download,
   Share2,
+  CalendarClock,
 } from 'lucide-react'
 import {
   useRecords,
@@ -30,6 +31,7 @@ import { Chip } from '../components/Chip'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { AmountKgPcs } from '../components/AmountKgPcs'
 import { EditRecordModal } from './records/EditRecordModal'
+import { ChangeEntriesDateModal } from './records/ChangeEntriesDateModal'
 import { CreateBillModal } from '../components/CreateBillModal'
 import { EditBillModal } from '../components/EditBillModal'
 import { BillPdfModal } from '../components/BillPdfModal'
@@ -59,6 +61,9 @@ const KIND_BADGE: Record<RecordKind, string> = {
   expense: 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300',
 }
 
+/** Kinds whose Records cards offer "Change Date" for a whole session at once. */
+const REDATABLE_KINDS: RecordKind[] = ['production', 'recycling']
+
 const RANGE_PRESETS = [
   { label: 'Today', days: 0 },
   { label: 'Last 7 days', days: 6 },
@@ -73,6 +78,11 @@ export function RecordsPage() {
 
   const [editing, setEditing] = useState<EntryRecord | null>(null)
   const [deleting, setDeleting] = useState<EntryRecord | null>(null)
+  const [changingDate, setChangingDate] = useState<{
+    date: string
+    candidates: EntryRecord[]
+    initialSelectedIds: string[]
+  } | null>(null)
   const [sharing, setSharing] = useState(false)
 
   // Track collapsed groups (true = collapsed)
@@ -134,6 +144,17 @@ export function RecordsPage() {
         onError: () => showToast('Could not delete entry', 'error'),
       },
     )
+  }
+
+  /** Opens Change Date listing every production / recycling entry on that
+   *  day, with the clicked group pre-ticked — a session saved in two sittings
+   *  lands in two groups, and both can be moved together. */
+  function openChangeDate(date: string, dayGroups: GroupedTransaction[], group: GroupedTransaction) {
+    setChangingDate({
+      date,
+      candidates: dayGroups.filter((g) => REDATABLE_KINDS.includes(g.kind)).flatMap((g) => g.items),
+      initialSelectedIds: group.items.map((i) => i.row.id),
+    })
   }
 
   function handleCreateBillForGroup(group: GroupedTransaction) {
@@ -471,6 +492,17 @@ export function RecordsPage() {
                             </button>
                           )
                         )}
+
+                        {REDATABLE_KINDS.includes(group.kind) && (
+                          <button
+                            type="button"
+                            onClick={() => openChangeDate(date, groups, group)}
+                            className="inline-flex min-h-[44px] items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                          >
+                            <CalendarClock className="h-3.5 w-3.5" />
+                            Change Date
+                          </button>
+                        )}
                       </div>
 
                       {/* Header Right Side (Total + Expand Toggle) */}
@@ -575,6 +607,15 @@ export function RecordsPage() {
       </div>
 
       <EditRecordModal record={editing} onClose={() => setEditing(null)} />
+
+      {changingDate && (
+        <ChangeEntriesDateModal
+          date={changingDate.date}
+          candidates={changingDate.candidates}
+          initialSelectedIds={changingDate.initialSelectedIds}
+          onClose={() => setChangingDate(null)}
+        />
+      )}
 
       <CreateBillModal
         open={createBillModalData !== null}

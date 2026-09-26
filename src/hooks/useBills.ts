@@ -162,6 +162,41 @@ export function useCreateBill() {
   })
 }
 
+export type NewSaleBillInput = Omit<CreateBillInput, 'bill_number' | 'sale_entry_ids'>
+
+/**
+ * The Sale screen's single save: bill and sale entries in one transaction
+ * (create_bill_with_sales), so a sale can never exist without the bill it was
+ * entered for, and the bill number is assigned by the DB trigger.
+ */
+export function useCreateSaleWithBill() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: NewSaleBillInput): Promise<BillRow> => {
+      const { data, error } = await supabase.rpc('create_bill_with_sales', { p_bill: input })
+      if (error) throw error
+      return data as unknown as BillRow
+    },
+    onSuccess: () => {
+      for (const key of [
+        'bills',
+        'next_bill_number',
+        'company_settings',
+        'records',
+        'finished_goods_stock',
+        'dashboard',
+        // Recent-customer chips on the Sale screen read sales_entries.
+        'sales_entries',
+        'ledger_balances',
+        'bill_payment_status',
+        'ledger_passbook',
+      ]) {
+        queryClient.invalidateQueries({ queryKey: [key] })
+      }
+    },
+  })
+}
+
 export type UpdateBillInput = {
   id: string
   /** Only set when the number is actually being changed — see useUpdateBill. */

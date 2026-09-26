@@ -1232,7 +1232,46 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_bill_with_sales: {
+        Args: { p_bill: Json }
+        Returns: {
+          bill_date: string
+          bill_number: string
+          created_at: string
+          customer_address: string | null
+          customer_id: string | null
+          customer_name: string
+          customer_phone: string | null
+          discount: number
+          grand_total: number
+          id: string
+          line_items: Json
+          notes: string | null
+          status: string
+          subtotal: number
+          tax: number
+          transport_charges: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "bills"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       generate_next_bill_number: { Args: never; Returns: string }
+      move_entries_date: {
+        Args: {
+          p_new_date: string
+          p_production_ids: string[]
+          p_recycling_ids: string[]
+        }
+        Returns: {
+          merged: number
+          moved: number
+        }[]
+      }
       next_free_bill_number: { Args: never; Returns: string }
       normalize_phone: { Args: { raw: string }; Returns: string }
       rpc_collections_by_mode: {

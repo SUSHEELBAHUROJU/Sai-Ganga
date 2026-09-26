@@ -114,3 +114,28 @@ export function useDeleteRecord() {
     },
   })
 }
+
+/**
+ * Re-date a batch of production / recycling entries at once (e.g. a day's
+ * output logged under the wrong date). Production rows that land on a date
+ * already holding the same pipe are merged into it, the same way adding
+ * production merges — see move_entries_date.
+ */
+export function useMoveEntriesDate() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { productionIds: string[]; recyclingIds: string[]; newDate: string }) => {
+      const { data, error } = await supabase.rpc('move_entries_date', {
+        p_production_ids: input.productionIds,
+        p_recycling_ids: input.recyclingIds,
+        p_new_date: input.newDate,
+      })
+      if (error) throw error
+      return data?.[0] ?? { moved: 0, merged: 0 }
+    },
+    onSuccess: () => {
+      invalidateForKind(queryClient, 'production')
+      invalidateForKind(queryClient, 'recycling')
+    },
+  })
+}
