@@ -8,10 +8,12 @@ import {
   balanceEffect,
   supplierBalanceText,
   SUPPLIER_PAYMENT_MODE_LABEL,
+  SUPPLIER_PAYMENT_APP_LABEL,
   type SupplierEntryType,
   type SupplierLedgerBalance,
   type SupplierLedgerEntryFields,
   type SupplierPassbookEntry,
+  type SupplierPaymentApp,
   type SupplierPaymentMode,
 } from '../hooks/useSupplierLedger'
 import { useToast } from '../lib/toast'
@@ -28,6 +30,8 @@ type SupplierPaymentModalProps = {
   initialType: SupplierEntryType
   /** Names money has gone to before for this party — offered as one-tap picks. */
   knownPayees: string[]
+  /** Our-side names that have paid this party before. */
+  knownPayers: string[]
 }
 
 const ENTRY_TYPES: { value: SupplierEntryType; label: string }[] = [
@@ -37,6 +41,7 @@ const ENTRY_TYPES: { value: SupplierEntryType; label: string }[] = [
 ]
 
 const PAYMENT_MODES = Object.entries(SUPPLIER_PAYMENT_MODE_LABEL) as [SupplierPaymentMode, string][]
+const PAYMENT_APPS = Object.entries(SUPPLIER_PAYMENT_APP_LABEL) as [SupplierPaymentApp, string][]
 
 const TYPE_HINT: Record<SupplierEntryType, string> = {
   payment: 'Money you paid — advance, part payment or settlement.',
@@ -51,6 +56,7 @@ export function SupplierPaymentModal({
   editing,
   initialType,
   knownPayees,
+  knownPayers,
 }: SupplierPaymentModalProps) {
   const addEntry = useAddSupplierLedgerEntry()
   const updateEntry = useUpdateSupplierLedgerEntry()
@@ -59,6 +65,7 @@ export function SupplierPaymentModal({
   const [type, setType] = useState<SupplierEntryType>(initialType)
   const [amount, setAmount] = useState('')
   const [mode, setMode] = useState<SupplierPaymentMode | null>(null)
+  const [app, setApp] = useState<SupplierPaymentApp | null>(null)
   const [paidTo, setPaidTo] = useState('')
   const [referenceNo, setReferenceNo] = useState('')
   const [bankAccount, setBankAccount] = useState('')
@@ -72,6 +79,7 @@ export function SupplierPaymentModal({
       setType(editing.kind)
       setAmount(String(editing.amount))
       setMode(editing.payment_mode)
+      setApp(editing.payment_app)
       setPaidTo(editing.paid_to ?? '')
       setReferenceNo(editing.reference_no ?? '')
       setBankAccount(editing.bank_account ?? '')
@@ -82,6 +90,7 @@ export function SupplierPaymentModal({
       setType(initialType)
       setAmount('')
       setMode(null)
+      setApp(null)
       setPaidTo(party.name)
       setReferenceNo('')
       setBankAccount('')
@@ -115,8 +124,16 @@ export function SupplierPaymentModal({
       showToast('Choose Cash, Online or Cash Deposit', 'error')
       return
     }
+    if (isPayment && mode === 'online' && !app) {
+      showToast('Choose PhonePe, GPay, Paytm or Other', 'error')
+      return
+    }
     if (isPayment && !paidTo.trim()) {
-      showToast('Enter who the money was given to', 'error')
+      showToast('Enter who the money was given to (Paid To)', 'error')
+      return
+    }
+    if (isPayment && !paidBy.trim()) {
+      showToast('Enter who paid from our side (Paid By)', 'error')
       return
     }
 
@@ -125,10 +142,11 @@ export function SupplierPaymentModal({
       amount: amountVal,
       date,
       payment_mode: isPayment ? mode : null,
+      payment_app: isPayment && mode === 'online' ? app : null,
       paid_to: isPayment ? paidTo.trim() : null,
       reference_no: showTransferFields ? referenceNo.trim() || null : null,
       bank_account: showTransferFields ? bankAccount.trim() || null : null,
-      paid_by: isPayment ? paidBy.trim() || null : null,
+      paid_by: isPayment ? paidBy.trim() : null,
       note: note.trim() || null,
     }
 
@@ -152,6 +170,7 @@ export function SupplierPaymentModal({
   }
 
   const payeeChoices = knownPayees.filter((name) => name !== paidTo.trim()).slice(0, 6)
+  const payerChoices = knownPayers.filter((name) => name !== paidBy.trim()).slice(0, 6)
 
   return (
     <Modal title={editing ? 'Edit Entry' : 'Supplier Payment'} open={open} onClose={onClose}>
@@ -202,6 +221,17 @@ export function SupplierPaymentModal({
               </div>
             </div>
 
+            {mode === 'online' && (
+              <div>
+                <span className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">Via</span>
+                <div className="flex flex-wrap gap-2">
+                  {PAYMENT_APPS.map(([value, label]) => (
+                    <Chip key={value} label={label} selected={app === value} onClick={() => setApp(value)} />
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div>
               <Field
                 label="Paid To (person)"
@@ -213,6 +243,22 @@ export function SupplierPaymentModal({
                 <div className="mt-2 flex flex-wrap gap-2">
                   {payeeChoices.map((name) => (
                     <Chip key={name} label={name} onClick={() => setPaidTo(name)} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <Field
+                label="Paid By"
+                value={paidBy}
+                onChange={(e) => setPaidBy(e.target.value)}
+                placeholder="Who paid from our side"
+              />
+              {payerChoices.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {payerChoices.map((name) => (
+                    <Chip key={name} label={name} onClick={() => setPaidBy(name)} />
                   ))}
                 </div>
               )}
@@ -234,13 +280,6 @@ export function SupplierPaymentModal({
                 />
               </>
             )}
-
-            <Field
-              label="Paid By (optional)"
-              value={paidBy}
-              onChange={(e) => setPaidBy(e.target.value)}
-              placeholder="Who paid from our side"
-            />
           </>
         )}
 

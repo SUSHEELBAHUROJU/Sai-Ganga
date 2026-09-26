@@ -7,7 +7,7 @@ import {
   useSupplierPassbook,
   useDeleteSupplierLedgerEntry,
   supplierBalanceText,
-  SUPPLIER_PAYMENT_MODE_LABEL,
+  supplierPaymentModeText,
   type SupplierEntryType,
   type SupplierLedgerBalance,
   type SupplierPassbookEntry,
@@ -32,12 +32,16 @@ function balanceColor(balance: number): string {
       : 'text-green-600 dark:text-green-400'
 }
 
+function distinctNames(values: (string | null)[]): string[] {
+  return Array.from(new Set(values.map((v) => v?.trim()).filter((n): n is string => Boolean(n))))
+}
+
 function entryTitle(entry: SupplierPassbookEntry): string {
   switch (entry.kind) {
     case 'purchase':
       return `Purchase · ${entry.item_name ?? 'Material'}`
     case 'payment': {
-      const mode = entry.payment_mode ? SUPPLIER_PAYMENT_MODE_LABEL[entry.payment_mode] : 'Payment'
+      const mode = supplierPaymentModeText(entry.payment_mode, entry.payment_app)
       return entry.paid_to ? `Paid · ${mode} → ${entry.paid_to}` : `Paid · ${mode}`
     }
     case 'refund':
@@ -141,10 +145,8 @@ export function SupplierPassbookModal({ open, party, onClose }: SupplierPassbook
   const [sharing, setSharing] = useState(false)
 
   // Most recent first — the friend paid last week is the likeliest next payee.
-  const knownPayees = useMemo(() => {
-    const names = (entries ?? []).map((e) => e.paid_to?.trim()).filter((n): n is string => Boolean(n))
-    return Array.from(new Set(names))
-  }, [entries])
+  const knownPayees = useMemo(() => distinctNames((entries ?? []).map((e) => e.paid_to)), [entries])
+  const knownPayers = useMemo(() => distinctNames((entries ?? []).map((e) => e.paid_by)), [entries])
 
   if (!party) return null
 
@@ -271,6 +273,7 @@ export function SupplierPassbookModal({ open, party, onClose }: SupplierPassbook
         editing={entryModal?.editing ?? null}
         initialType={entryModal?.initialType ?? 'payment'}
         knownPayees={knownPayees}
+        knownPayers={knownPayers}
       />
 
       <ConfirmDialog

@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase'
 /** Which master table a ledger party lives in — raw_material_suppliers or scrap_dealers. */
 export type PartyType = 'supplier' | 'scrap_dealer'
 export type SupplierPaymentMode = 'cash' | 'online' | 'cash_deposit'
+/** Which app an online payment went through. */
+export type SupplierPaymentApp = 'phonepe' | 'gpay' | 'paytm' | 'other'
 /** payment: we paid them. due: payable not tied to a purchase (opening
  *  balance). refund: they returned money to us. */
 export type SupplierEntryType = 'payment' | 'due' | 'refund'
@@ -32,6 +34,7 @@ export type SupplierPassbookEntry = {
   quantity_kg: number | null
   price_per_kg: number | null
   payment_mode: SupplierPaymentMode | null
+  payment_app: SupplierPaymentApp | null
   paid_to: string | null
   reference_no: string | null
   bank_account: string | null
@@ -44,6 +47,23 @@ export const SUPPLIER_PAYMENT_MODE_LABEL: Record<SupplierPaymentMode, string> = 
   cash: 'Cash',
   online: 'Online',
   cash_deposit: 'Cash Deposit',
+}
+
+export const SUPPLIER_PAYMENT_APP_LABEL: Record<SupplierPaymentApp, string> = {
+  phonepe: 'PhonePe',
+  gpay: 'GPay',
+  paytm: 'Paytm',
+  other: 'Other',
+}
+
+/** "Online · GPay" / "Cash Deposit" — mode plus app when there is one. */
+export function supplierPaymentModeText(
+  mode: SupplierPaymentMode | null,
+  app: SupplierPaymentApp | null,
+): string {
+  if (!mode) return 'Payment'
+  const label = SUPPLIER_PAYMENT_MODE_LABEL[mode]
+  return mode === 'online' && app ? `${label} · ${SUPPLIER_PAYMENT_APP_LABEL[app]}` : label
 }
 
 /** "₹12,000 Payable" / "₹5,000 Advance" / "Settled" — the one wording used on every supplier-ledger screen. */
@@ -101,6 +121,7 @@ export type SupplierLedgerEntryFields = {
   amount: number
   date: string
   payment_mode: SupplierPaymentMode | null
+  payment_app: SupplierPaymentApp | null
   paid_to: string | null
   reference_no: string | null
   bank_account: string | null

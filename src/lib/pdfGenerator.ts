@@ -2,7 +2,7 @@ import jsPDF from 'jspdf'
 import type { BillLineItem, BillRow } from '../hooks/useBills'
 import type { CustomerLedgerBalance, PassbookEntry } from '../hooks/useLedger'
 import {
-  SUPPLIER_PAYMENT_MODE_LABEL,
+  supplierPaymentModeText,
   type SupplierLedgerBalance,
   type SupplierPassbookEntry,
 } from '../hooks/useSupplierLedger'
@@ -1240,7 +1240,7 @@ function supplierParticulars(entry: SupplierPassbookEntry): string {
   }
   if (entry.kind === 'payment') {
     const parts = [
-      `Paid - ${entry.payment_mode ? SUPPLIER_PAYMENT_MODE_LABEL[entry.payment_mode] : 'Payment'}`,
+      `Paid - ${supplierPaymentModeText(entry.payment_mode, entry.payment_app)}`,
       entry.paid_to ? `to ${entry.paid_to}` : null,
     ].filter(Boolean)
     const extras = [

@@ -978,6 +978,7 @@ export type Database = {
           paid_by: string | null
           paid_to: string | null
           party_type: string
+          payment_app: string | null
           payment_mode: string | null
           reference_no: string | null
           scrap_dealer_id: string | null
@@ -996,6 +997,7 @@ export type Database = {
           paid_by?: string | null
           paid_to?: string | null
           party_type: string
+          payment_app?: string | null
           payment_mode?: string | null
           reference_no?: string | null
           scrap_dealer_id?: string | null
@@ -1014,6 +1016,7 @@ export type Database = {
           paid_by?: string | null
           paid_to?: string | null
           party_type?: string
+          payment_app?: string | null
           payment_mode?: string | null
           reference_no?: string | null
           scrap_dealer_id?: string | null
@@ -1322,6 +1325,7 @@ export type Database = {
           note: string
           paid_by: string
           paid_to: string
+          payment_app: string
           payment_mode: string
           price_per_kg: number
           quantity_kg: number
