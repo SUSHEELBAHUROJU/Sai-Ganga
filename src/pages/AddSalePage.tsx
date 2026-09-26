@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { usePipeProducts } from '../hooks/usePipeProducts'
 import { useFinishedGoodsStock } from '../hooks/useStock'
 import { useCustomers } from '../hooks/useCustomers'
@@ -7,14 +7,14 @@ import { DateField } from '../components/DateField'
 import { CustomerPicker } from '../components/CustomerPicker'
 import { PipeLineItemForm, type PendingLine } from '../components/PipeLineItemForm'
 import { LineItemsList } from '../components/LineItemsList'
-import { SaleBillItems, lineAmount, type SaleLine } from '../components/SaleBillItems'
 import { SaleBillPreview } from '../components/SaleBillPreview'
+import { saleLineAmount, saleLineKg, type SaleLine } from '../lib/saleBill'
 import { StickyActionBar } from '../components/StickyActionBar'
 import { BillPdfModal } from '../components/BillPdfModal'
 import { useEntryDate } from '../hooks/useEntryDate'
 import { useToast } from '../lib/toast'
 import { formatDateLabel, isFutureISODate } from '../lib/date'
-import { piecesToKg, formatPipeProductLabel } from '../lib/format'
+import { formatPipeProductLabel, formatQty } from '../lib/format'
 import { ACTION_STYLES } from '../lib/actionColors'
 import { ChevronLeft, ChevronRight, Receipt } from 'lucide-react'
 
@@ -22,7 +22,7 @@ type Step = 1 | 2 | 3
 
 const STEPS: { step: Step; label: string }[] = [
   { step: 1, label: 'Pipes' },
-  { step: 2, label: 'Rates & Charges' },
+  { step: 2, label: 'Rate & Charges' },
   { step: 3, label: 'Review Bill' },
 ]
 
@@ -60,7 +60,8 @@ function StepIndicator({ current }: { current: Step }) {
 /**
  * Sale as three steps, nothing saved until the last one:
  *   1. Pipes — who bought it, and what (Add to List)
- *   2. Rates & Charges — rate per pipe, transport / discount / GST / note
+ *   2. Rate & Charges — one rate per kg for every pipe (sales are priced by
+ *      weight), plus transport / discount / GST / note
  *   3. Review Bill — the bill as it will be generated → Generate Bill,
  *      which saves the sale and its bill together and opens Share / Print.
  * Previous goes back a step with everything kept.
@@ -77,8 +78,8 @@ export function AddSalePage() {
   const [entryDate, setEntryDate] = useEntryDate()
   const [customerId, setCustomerId] = useState<string>('')
   const [lines, setLines] = useState<SaleLine[]>([])
-  const [focusLineId, setFocusLineId] = useState<string | null>(null)
-  const [sameRate, setSameRate] = useState('')
+  const [rate, setRate] = useState('')
+  const rateInputRef = useRef<HTMLInputElement>(null)
   const [transport, setTransport] = useState('')
   const [discount, setDiscount] = useState('')
   const [tax, setTax] = useState('')
@@ -97,31 +98,29 @@ export function AddSalePage() {
   }
 
   function handleAddLine(line: PendingLine) {
-    setLines((prev) => [...prev, { ...line, localId: crypto.randomUUID(), rate: '' }])
+    setLines((prev) => [...prev, { ...line, localId: crypto.randomUUID() }])
   }
 
-  function handleChangeLine(localId: string, patch: Partial<Pick<SaleLine, 'quantity' | 'rate'>>) {
-    setLines((prev) => prev.map((l) => (l.localId === localId ? { ...l, ...patch } : l)))
+  function handleChangeQuantity(localId: string, quantity: number) {
+    setLines((prev) => prev.map((l) => (l.localId === localId ? { ...l, quantity } : l)))
   }
 
   function handleRemoveLine(localId: string) {
     setLines((prev) => prev.filter((l) => l.localId !== localId))
   }
 
-  function applySameRate() {
-    if (!(Number(sameRate) > 0)) {
-      showToast('Enter a rate to apply', 'error')
-      return
-    }
-    setLines((prev) => prev.map((l) => ({ ...l, rate: sameRate })))
-  }
+  // Ask for the price as soon as step 2 opens.
+  useEffect(() => {
+    if (step === 2) rateInputRef.current?.focus()
+  }, [step])
 
-  const itemsTotal = lines.reduce((sum, l) => sum + lineAmount(l), 0)
+  const rateVal = Number(rate) || 0
+  const itemsTotal = lines.reduce((sum, l) => sum + saleLineAmount(l, rateVal), 0)
+  const totalKg = lines.reduce((sum, l) => sum + saleLineKg(l), 0)
   const transportVal = Number(transport) || 0
   const discountVal = Number(discount) || 0
   const taxVal = Number(tax) || 0
   const grandTotal = Math.max(0, itemsTotal - discountVal + taxVal + transportVal)
-  const missingRates = lines.filter((l) => !(Number(l.rate) > 0)).length
 
   // What stops the current step from moving on, said plainly above the button.
   const blocker =
@@ -134,17 +133,13 @@ export function AddSalePage() {
       : step === 2
         ? lines.length === 0
           ? 'Go back and add a pipe'
-          : missingRates > 0
-            ? `Enter the rate for ${missingRates} pipe${missingRates === 1 ? '' : 's'}`
+          : rateVal <= 0
+            ? 'Enter the rate per kg'
             : null
         : null
 
   function goTo(next: Step) {
     setStep(next)
-    if (next === 2) {
-      // Ask for the price straight away: focus the first pipe still without one.
-      setFocusLineId(lines.find((l) => !(Number(l.rate) > 0))?.localId ?? null)
-    }
     window.scrollTo({ top: 0 })
   }
 
@@ -152,8 +147,7 @@ export function AddSalePage() {
     setStep(1)
     setLines([])
     setCustomerId('')
-    setFocusLineId(null)
-    setSameRate('')
+    setRate('')
     setTransport('')
     setDiscount('')
     setTax('')
@@ -165,7 +159,7 @@ export function AddSalePage() {
       showToast('Sale date cannot be in the future', 'error')
       return
     }
-    if (!customer || lines.length === 0 || missingRates > 0) {
+    if (!customer || lines.length === 0 || rateVal <= 0) {
       showToast('Something is missing — go back and check', 'error')
       return
     }
@@ -176,9 +170,9 @@ export function AddSalePage() {
         pipe_product_id: l.pipeProductId,
         description: product ? formatPipeProductLabel(product.diameter_inches, product.weight_kg) : l.label,
         quantity_pcs: l.quantity,
-        weight_kg: piecesToKg(l.quantity, l.weightKg),
-        price_per_kg: Number(l.rate),
-        amount: lineAmount(l),
+        weight_kg: saleLineKg(l),
+        price_per_kg: rateVal,
+        amount: saleLineAmount(l, rateVal),
       }
     })
 
@@ -247,48 +241,56 @@ export function AddSalePage() {
             </div>
           </div>
 
-          <LineItemsList lines={lines} onRemove={handleRemoveLine} onUpdateQuantity={(id, q) => handleChangeLine(id, { quantity: q })} />
+          <LineItemsList lines={lines} onRemove={handleRemoveLine} onUpdateQuantity={handleChangeQuantity} />
         </>
       )}
 
       {step === 2 && (
         <>
-          <div className="space-y-3">
-            <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400">Rate for Each Pipe</h3>
+          <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+            <label className="block">
+              <span className="mb-1 block text-base font-semibold text-slate-800 dark:text-slate-200">
+                Rate per kg (₹)
+              </span>
+              <input
+                ref={rateInputRef}
+                type="number"
+                min="0"
+                step="0.01"
+                inputMode="decimal"
+                value={rate}
+                onChange={(e) => setRate(e.target.value)}
+                placeholder="e.g. 95"
+                className="min-h-[52px] w-full rounded-lg border-2 border-green-500 bg-white px-3 py-2 font-mono text-2xl font-bold text-slate-900 outline-none focus:ring-2 focus:ring-green-500 dark:bg-slate-800 dark:text-slate-100"
+              />
+              <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+                Applies to every pipe — the bill is by weight ({formatQty(totalKg)} kg).
+              </span>
+            </label>
 
-            {lines.length > 1 && (
-              <div className="flex items-end gap-2 rounded-lg bg-slate-100 p-2.5 dark:bg-slate-900">
-                <label className="block min-w-0 flex-1">
-                  <span className="mb-1 block text-xs font-medium text-slate-600 dark:text-slate-400">
-                    Same rate for all pipes (₹/kg)
+            <ul className="divide-y divide-slate-100 border-t border-slate-100 dark:divide-slate-800 dark:border-slate-800">
+              {lines.map((line, idx) => (
+                <li key={line.localId} className="flex items-center justify-between gap-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-slate-900 dark:text-slate-100">
+                      <span className="mr-1.5 text-xs text-slate-400">{idx + 1}.</span>
+                      {line.label}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {formatQty(line.quantity)} pcs · {formatQty(saleLineKg(line))} kg
+                    </p>
+                  </div>
+                  <span className="shrink-0 font-mono text-sm font-bold text-slate-900 dark:text-slate-100">
+                    ₹{rupees(saleLineAmount(line, rateVal))}
                   </span>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    inputMode="decimal"
-                    value={sameRate}
-                    onChange={(e) => setSameRate(e.target.value)}
-                    placeholder="e.g. 95"
-                    className={numberInputClass}
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={applySameRate}
-                  className="min-h-[44px] shrink-0 rounded-lg border border-green-300 bg-white px-3 text-sm font-semibold text-green-700 hover:bg-green-50 dark:border-green-800 dark:bg-slate-900 dark:text-green-400"
-                >
-                  Apply to all
-                </button>
-              </div>
-            )}
+                </li>
+              ))}
+            </ul>
 
-            <SaleBillItems
-              lines={lines}
-              focusLineId={focusLineId}
-              onChange={handleChangeLine}
-              onRemove={handleRemoveLine}
-            />
+            <div className="flex justify-between border-t border-slate-200 pt-2 text-sm font-medium text-slate-600 dark:border-slate-800 dark:text-slate-400">
+              <span>Items total</span>
+              <span className="font-mono font-bold text-slate-900 dark:text-slate-100">₹{rupees(itemsTotal)}</span>
+            </div>
           </div>
 
           <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
@@ -362,6 +364,7 @@ export function AddSalePage() {
             billDate={entryDate}
             customer={customer}
             lines={lines}
+            rate={rateVal}
             transport={transportVal}
             discount={discountVal}
             tax={taxVal}

@@ -1,12 +1,14 @@
 import { formatDateLabel } from '../lib/date'
-import { formatQty, piecesToKg } from '../lib/format'
-import { lineAmount, type SaleLine } from './SaleBillItems'
+import { formatQty } from '../lib/format'
+import { saleLineAmount, saleLineKg, type SaleLine } from '../lib/saleBill'
 
 type SaleBillPreviewProps = {
   billNumber: string | null
   billDate: string
   customer: { name: string; phone: string | null; address: string | null } | null
   lines: SaleLine[]
+  /** One rate per kg for every pipe on the bill. */
+  rate: number
   transport: number
   discount: number
   tax: number
@@ -25,15 +27,16 @@ export function SaleBillPreview({
   billDate,
   customer,
   lines,
+  rate,
   transport,
   discount,
   tax,
   notes,
 }: SaleBillPreviewProps) {
-  const itemsTotal = lines.reduce((sum, l) => sum + lineAmount(l), 0)
+  const itemsTotal = lines.reduce((sum, l) => sum + saleLineAmount(l, rate), 0)
   const grandTotal = Math.max(0, itemsTotal - discount + tax + transport)
   const totalPcs = lines.reduce((sum, l) => sum + l.quantity, 0)
-  const totalKg = lines.reduce((sum, l) => sum + piecesToKg(l.quantity, l.weightKg), 0)
+  const totalKg = lines.reduce((sum, l) => sum + saleLineKg(l), 0)
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -55,7 +58,7 @@ export function SaleBillPreview({
 
       <ul className="divide-y divide-slate-100 dark:divide-slate-800">
         {lines.map((line, idx) => {
-          const kg = piecesToKg(line.quantity, line.weightKg)
+          const kg = saleLineKg(line)
           return (
             <li key={line.localId} className="flex items-start justify-between gap-3 px-4 py-2.5">
               <div className="min-w-0">
@@ -64,11 +67,11 @@ export function SaleBillPreview({
                   {line.label}
                 </p>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {formatQty(line.quantity)} pcs · {formatQty(kg)} kg × ₹{formatQty(Number(line.rate) || 0)}
+                  {formatQty(line.quantity)} pcs · {formatQty(kg)} kg × ₹{formatQty(rate)}
                 </p>
               </div>
               <span className="shrink-0 font-mono text-sm font-bold text-slate-900 dark:text-slate-100">
-                ₹{rupees(lineAmount(line))}
+                ₹{rupees(saleLineAmount(line, rate))}
               </span>
             </li>
           )
