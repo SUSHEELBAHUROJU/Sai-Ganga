@@ -145,6 +145,15 @@ export function formatInvoiceDate(dateStr: string): string {
   return `${day}-${month}-${year}`
 }
 
+/** e.g. "30-JUL-2026" — the ledger statement's date column, where the full
+ *  month name made rows uneven and crowded the particulars. */
+export function formatStatementDate(dateStr: string): string {
+  const full = formatInvoiceDate(dateStr)
+  const [day, month, year] = full.split('-')
+  if (!year) return full
+  return `${day}-${month.slice(0, 3).toUpperCase()}-${year}`
+}
+
 /** e.g. "Monday, 27 July 2026" — the dashboard header. */
 export function formatFullDate(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00`)

@@ -7,7 +7,7 @@ import {
   type SupplierPassbookEntry,
 } from '../hooks/useSupplierLedger'
 import type { RecordKind } from '../hooks/useRecords'
-import { formatInvoiceDate } from './date'
+import { formatInvoiceDate, formatStatementDate } from './date'
 import { formatQty } from './format'
 
 /* ==========================================================================
@@ -563,7 +563,7 @@ export function generateLedgerStatementDoc(
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(8)
     doc.setTextColor(...DARK_TEXT)
-    doc.text(formatInvoiceDate(entry.entry_date), colX.date, y + 5)
+    doc.text(formatStatementDate(entry.entry_date), colX.date, y + 5)
     doc.text(particulars, colX.desc, y + 5)
 
     doc.setFont('helvetica', 'bold')
