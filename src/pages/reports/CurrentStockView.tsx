@@ -3,6 +3,7 @@ import { useFinishedGoodsStock, useRawMaterialStock, useScrapStock } from '../..
 import { LoadingState } from '../../components/States'
 import { StockFlag, StockValue, StockValueKgPcs, stockHealthBorderClass } from '../../components/StockBadges'
 import { formatPipeProductLabel, piecesToKg } from '../../lib/format'
+import { formatShortDate } from '../../lib/date'
 
 export function CurrentStockView() {
   const { data: finishedGoods, isLoading: loadingFinished } = useFinishedGoodsStock()
@@ -117,6 +118,12 @@ export function CurrentStockView() {
                   {m.name}
                   {m.is_recycled_output && (
                     <span className="ml-1.5 text-xs font-normal text-slate-400">(from recycling)</span>
+                  )}
+                  {m.last_count_date && (
+                    // Live stock starts from the latest Stock Check count.
+                    <span className="block text-xs font-normal text-slate-400">
+                      Counted {formatShortDate(m.last_count_date)}
+                    </span>
                   )}
                 </span>
                 <div className="flex shrink-0 items-center gap-2">

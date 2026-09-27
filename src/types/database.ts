@@ -514,6 +514,47 @@ export type Database = {
           },
         ]
       }
+      raw_material_purchase_returns: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          purchase_id: string
+          quantity_kg: number
+          reason: string
+          return_date: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          purchase_id: string
+          quantity_kg: number
+          reason: string
+          return_date?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          purchase_id?: string
+          quantity_kg?: number
+          reason?: string
+          return_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "raw_material_purchase_returns_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "raw_material_purchases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       raw_material_purchases: {
         Row: {
           cost: number | null
@@ -966,6 +1007,91 @@ export type Database = {
         }
         Relationships: []
       }
+      stock_count_items: {
+        Row: {
+          count_id: string
+          created_at: string
+          entry_mode: string
+          id: string
+          num_bags: number | null
+          pack_kg: number | null
+          quantity_kg: number
+          raw_material_type_id: string
+          updated_at: string
+        }
+        Insert: {
+          count_id: string
+          created_at?: string
+          entry_mode: string
+          id?: string
+          num_bags?: number | null
+          pack_kg?: number | null
+          quantity_kg: number
+          raw_material_type_id: string
+          updated_at?: string
+        }
+        Update: {
+          count_id?: string
+          created_at?: string
+          entry_mode?: string
+          id?: string
+          num_bags?: number | null
+          pack_kg?: number | null
+          quantity_kg?: number
+          raw_material_type_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_count_items_count_id_fkey"
+            columns: ["count_id"]
+            isOneToOne: false
+            referencedRelation: "stock_counts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_count_items_raw_material_type_id_fkey"
+            columns: ["raw_material_type_id"]
+            isOneToOne: false
+            referencedRelation: "raw_material_stock"
+            referencedColumns: ["raw_material_type_id"]
+          },
+          {
+            foreignKeyName: "stock_count_items_raw_material_type_id_fkey"
+            columns: ["raw_material_type_id"]
+            isOneToOne: false
+            referencedRelation: "raw_material_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_counts: {
+        Row: {
+          count_date: string
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          count_date: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          count_date?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       supplier_ledger_transactions: {
         Row: {
           amount: number
@@ -1102,12 +1228,15 @@ export type Database = {
           is_active: boolean | null
           is_low_stock: boolean | null
           is_recycled_output: boolean | null
+          last_count_date: string | null
+          last_count_kg: number | null
           low_stock_threshold: number | null
           name: string | null
           opening_kg: number | null
           purchased_kg: number | null
           raw_material_type_id: string | null
           recycled_output_kg: number | null
+          returned_kg: number | null
         }
         Relationships: []
       }
@@ -1274,6 +1403,19 @@ export type Database = {
       }
       next_free_bill_number: { Args: never; Returns: string }
       normalize_phone: { Args: { raw: string }; Returns: string }
+      purchase_return_amount: {
+        Args: {
+          p_cost: number
+          p_price_per_kg: number
+          p_qty: number
+          p_total_qty: number
+        }
+        Returns: number
+      }
+      raw_material_inflow_kg: {
+        Args: { p_material_id: string; p_upto: string }
+        Returns: number
+      }
       rpc_collections_by_mode: {
         Args: { p_from: string; p_to: string }
         Returns: {
@@ -1305,6 +1447,13 @@ export type Database = {
           entry_date: string
           produced_kg: number
           sold_kg: number
+        }[]
+      }
+      rpc_expected_raw_material_stock: {
+        Args: { p_date: string }
+        Returns: {
+          expected_kg: number
+          raw_material_type_id: string
         }[]
       }
       rpc_production_totals_by_product: {
@@ -1353,6 +1502,39 @@ export type Database = {
           weight_kg: number
         }[]
       }
+      rpc_stock_check_production: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          count_id: string
+          diameter_inches: number
+          kg: number
+          pcs: number
+          pipe_product_id: string
+          weight_kg: number
+        }[]
+      }
+      rpc_stock_check_report: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          closing_kg: number
+          consumed_cost: number
+          consumed_kg: number
+          count_date: string
+          count_id: string
+          factory_waste_kg: number
+          is_recycled_output: boolean
+          material_name: string
+          opening_count_date: string
+          opening_kg: number
+          prev_count_date: string
+          produced_kg: number
+          purchased_kg: number
+          raw_material_type_id: string
+          recycled_kg: number
+          returned_kg: number
+          unpriced_kg: number
+        }[]
+      }
       rpc_supplier_passbook: {
         Args: { p_party_id: string; p_party_type: string }
         Returns: {
@@ -1393,6 +1575,23 @@ export type Database = {
           sold_kg: number
           sold_pcs: number
         }[]
+      }
+      save_stock_count: {
+        Args: { p_date: string; p_items: Json; p_notes: string }
+        Returns: {
+          count_date: string
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "stock_counts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
     }
     Enums: {

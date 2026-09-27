@@ -23,6 +23,7 @@ export type RecyclingRecordRow = Tables['recycling_entries']['Row'] & {
 export type RawPurchaseRecordRow = Tables['raw_material_purchases']['Row'] & {
   raw_material_types: NameRef
   raw_material_suppliers: NameRef
+  raw_material_purchase_returns: { quantity_kg: number }[] | null
 }
 export type ScrapPurchaseRecordRow = Tables['scrap_purchases']['Row'] & {
   scrap_dealers: NameRef
@@ -57,6 +58,11 @@ export const RECORD_KIND_LABEL: Record<RecordKind, string> = {
   scrap_purchase: 'Scrap Purchase',
   factory_waste: 'Factory Waste',
   expense: 'Expense',
+}
+
+/** Kg of a raw-material purchase already sent back to the supplier. */
+export function rawPurchaseReturnedKg(row: RawPurchaseRecordRow): number {
+  return (row.raw_material_purchase_returns ?? []).reduce((sum, r) => sum + (Number(r.quantity_kg) || 0), 0)
 }
 
 /** A raw-material purchase's supplier: the structured one, falling back to the
@@ -221,7 +227,9 @@ export function useRecords({ fromDate, toDate, kinds }: RecordsFilter) {
             ? inRange(
                 supabase
                   .from('raw_material_purchases')
-                  .select('*, raw_material_types(name), raw_material_suppliers(name)'),
+                  .select(
+                    '*, raw_material_types(name), raw_material_suppliers(name), raw_material_purchase_returns(quantity_kg)',
+                  ),
               )
             : null,
           wants('scrap_purchase')

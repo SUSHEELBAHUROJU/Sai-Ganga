@@ -75,7 +75,7 @@ export function SupplierPaymentModal({
 
   useEffect(() => {
     if (!open) return
-    if (editing && editing.kind !== 'purchase') {
+    if (editing && editing.kind !== 'purchase' && editing.kind !== 'return') {
       setType(editing.kind)
       setAmount(String(editing.amount))
       setMode(editing.payment_mode)

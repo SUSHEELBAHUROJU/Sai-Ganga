@@ -11,6 +11,7 @@ import {
   Download,
   Share2,
   CalendarClock,
+  Undo2,
 } from 'lucide-react'
 import {
   useRecords,
@@ -19,8 +20,10 @@ import {
   describeRecord,
   describeRecordAmountText,
   RECORD_KIND_LABEL,
+  rawPurchaseReturnedKg,
   type EntryRecord,
   type RecordKind,
+  type RawPurchaseRecordRow,
   type SaleRecordRow,
   type GroupedTransaction,
 } from '../hooks/useRecords'
@@ -35,6 +38,7 @@ import { ChangeEntriesDateModal } from './records/ChangeEntriesDateModal'
 import { CreateBillModal } from '../components/CreateBillModal'
 import { EditBillModal } from '../components/EditBillModal'
 import { BillPdfModal } from '../components/BillPdfModal'
+import { ReturnPurchaseModal } from '../components/ReturnPurchaseModal'
 import { useToast } from '../lib/toast'
 import {
   formatDateLabel,
@@ -77,6 +81,7 @@ export function RecordsPage() {
   const [kinds, setKinds] = useState<RecordKind[]>([])
 
   const [editing, setEditing] = useState<EntryRecord | null>(null)
+  const [returning, setReturning] = useState<RawPurchaseRecordRow | null>(null)
   const [deleting, setDeleting] = useState<EntryRecord | null>(null)
   const [changingDate, setChangingDate] = useState<{
     date: string
@@ -547,6 +552,8 @@ export function RecordsPage() {
                           // group header names once — repeating it on each
                           // line was pure noise.
                           const { title: itemTitle, amount, amountKgPcs } = describeRecord(item)
+                          const returnedKg =
+                            item.kind === 'raw_material_purchase' ? rawPurchaseReturnedKg(item.row) : 0
 
                           return (
                             <div
@@ -557,6 +564,12 @@ export function RecordsPage() {
                                 <span className="font-medium text-slate-800 dark:text-slate-200">
                                   {isMultiItem ? itemTitle : group.subtitle || itemTitle}
                                 </span>
+
+                                {returnedKg > 0 && (
+                                  <p className="font-semibold text-orange-700 dark:text-orange-400">
+                                    Returned {formatQty(returnedKg)} kg
+                                  </p>
+                                )}
 
                                 {item.row.notes && (
                                   <p className="truncate italic text-slate-400 dark:text-slate-500">
@@ -575,6 +588,17 @@ export function RecordsPage() {
                                 </span>
 
                                 <div className="-mr-1 ml-1 flex items-center">
+                                  {item.kind === 'raw_material_purchase' && (
+                                    <button
+                                      type="button"
+                                      aria-label="Return to supplier"
+                                      title="Return to supplier"
+                                      onClick={() => setReturning(item.row)}
+                                      className="flex h-11 w-11 items-center justify-center rounded-full text-slate-400 hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-950/50"
+                                    >
+                                      <Undo2 className="h-4 w-4" />
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     aria-label={`Edit ${RECORD_KIND_LABEL[item.kind]} entry`}
@@ -607,6 +631,8 @@ export function RecordsPage() {
       </div>
 
       <EditRecordModal record={editing} onClose={() => setEditing(null)} />
+
+      <ReturnPurchaseModal purchase={returning} onClose={() => setReturning(null)} />
 
       {changingDate && (
         <ChangeEntriesDateModal
@@ -641,7 +667,11 @@ export function RecordsPage() {
         title={`Delete ${deleting ? RECORD_KIND_LABEL[deleting.kind] : ''}?`}
         message={
           deleting
-            ? `Are you sure you want to delete this ${RECORD_KIND_LABEL[deleting.kind]} entry (${describeRecordAmountText(deleting)})? This will reverse the stock adjustments made by this entry.`
+            ? `Are you sure you want to delete this ${RECORD_KIND_LABEL[deleting.kind]} entry (${describeRecordAmountText(deleting)})? This will reverse the stock adjustments made by this entry.${
+                deleting.kind === 'raw_material_purchase' && rawPurchaseReturnedKg(deleting.row) > 0
+                  ? ` Its ${formatQty(rawPurchaseReturnedKg(deleting.row))} kg of returns will be removed too.`
+                  : ''
+              }`
             : ''
         }
         confirmLabel="Delete"

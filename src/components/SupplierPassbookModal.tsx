@@ -40,6 +40,8 @@ function entryTitle(entry: SupplierPassbookEntry): string {
   switch (entry.kind) {
     case 'purchase':
       return `Purchase · ${entry.item_name ?? 'Material'}`
+    case 'return':
+      return `Returned · ${entry.item_name ?? 'Material'}`
     case 'payment': {
       const mode = supplierPaymentModeText(entry.payment_mode, entry.payment_app)
       return entry.paid_to ? `Paid · ${mode} → ${entry.paid_to}` : `Paid · ${mode}`
@@ -52,7 +54,7 @@ function entryTitle(entry: SupplierPassbookEntry): string {
 }
 
 function entryDetail(entry: SupplierPassbookEntry): string | null {
-  if (entry.kind === 'purchase') {
+  if (entry.kind === 'purchase' || entry.kind === 'return') {
     const qty = entry.quantity_kg != null ? `${formatQty(entry.quantity_kg)} kg` : null
     const rate = entry.price_per_kg != null ? `@ ₹${formatQty(entry.price_per_kg)}/kg` : null
     return [qty, rate].filter(Boolean).join(' ') || null
@@ -74,11 +76,14 @@ function TransactionRow({
   onEdit: (entry: SupplierPassbookEntry) => void
   onDelete: (entry: SupplierPassbookEntry) => void
 }) {
-  const isPurchase = entry.kind === 'purchase'
-  // What the factory owes goes up (purchase, due, refund) in red; payments in green.
-  const raisesBalance = entry.kind !== 'payment'
+  // Purchases and returns are managed from Records, not from the ledger.
+  const isPurchase = entry.kind === 'purchase' || entry.kind === 'return'
+  // What the factory owes goes up (purchase, due, refund) in red; payments and returns in green.
+  const raisesBalance = entry.kind !== 'payment' && entry.kind !== 'return'
   const detail = entryDetail(entry)
-  const amountLabel = { purchase: 'Purchase', payment: 'Paid', refund: 'Refund', due: 'Due' }[entry.kind]
+  const amountLabel = { purchase: 'Purchase', return: 'Returned', payment: 'Paid', refund: 'Refund', due: 'Due' }[
+    entry.kind
+  ]
 
   const body = (
     <div className="min-w-0">

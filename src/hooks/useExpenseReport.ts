@@ -52,7 +52,7 @@ export function useExpenseReport(fromDate: string, toDate: string) {
   return useQuery({
     queryKey: ['reports', 'expenses', fromDate, toDate],
     queryFn: async (): Promise<ExpenseReport> => {
-      const [rawPurchases, scrapPurchases, expenses] = await Promise.all([
+      const [rawPurchases, scrapPurchases, expenses, returns] = await Promise.all([
         supabase
           .from('raw_material_purchases')
           .select(
@@ -75,9 +75,18 @@ export function useExpenseReport(fromDate: string, toDate: string) {
           .gte('entry_date', fromDate)
           .lte('entry_date', toDate)
           .order('entry_date', { ascending: true }),
+        // Material sent back comes off the money spent, on the day it went back.
+        supabase
+          .from('raw_material_purchase_returns')
+          .select(
+            'return_date, quantity_kg, raw_material_purchases(total_qty_kg, cost, price_per_kg, supplier_name, raw_material_types(name), raw_material_suppliers(name))',
+          )
+          .gte('return_date', fromDate)
+          .lte('return_date', toDate)
+          .order('return_date', { ascending: true }),
       ])
 
-      for (const result of [rawPurchases, scrapPurchases, expenses]) {
+      for (const result of [rawPurchases, scrapPurchases, expenses, returns]) {
         if (result.error) throw result.error
       }
 
@@ -135,6 +144,26 @@ export function useExpenseReport(fromDate: string, toDate: string) {
             r.price_per_kg,
           ),
         ),
+        ...((returns.data ?? []) as any[]).map((r) => {
+          const p = r.raw_material_purchases
+          const qty = Number(r.quantity_kg) || 0
+          const rate =
+            p?.price_per_kg != null
+              ? Number(p.price_per_kg)
+              : p?.cost != null && Number(p.total_qty_kg) > 0
+                ? Number(p.cost) / Number(p.total_qty_kg)
+                : null
+          // Negative quantity and price, so the purchase totals net it off.
+          return toLine(
+            r.return_date,
+            p?.raw_material_suppliers?.name ?? p?.supplier_name ?? '—',
+            `Returned: ${p?.raw_material_types?.name ?? 'Raw material'}`,
+            -qty,
+            rate === null ? null : -Math.round(qty * rate * 100) / 100,
+            0,
+            rate,
+          )
+        }),
       ].sort((a, b) => a.entry_date.localeCompare(b.entry_date))
 
       const salaries: ExpenseReportLine[] = []

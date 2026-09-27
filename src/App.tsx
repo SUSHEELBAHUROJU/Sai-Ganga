@@ -23,6 +23,9 @@ const LedgerPage = lazy(() => import('./pages/LedgerPage').then((m) => ({ defaul
 const ExpensesPage = lazy(() =>
   import('./pages/ExpensesPage').then((m) => ({ default: m.ExpensesPage })),
 )
+const StockCheckPage = lazy(() =>
+  import('./pages/StockCheckPage').then((m) => ({ default: m.StockCheckPage })),
+)
 const ReportsPage = lazy(() => import('./pages/ReportsPage').then((m) => ({ default: m.ReportsPage })))
 const SettingsPage = lazy(() =>
   import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })),
@@ -71,6 +74,7 @@ function App() {
             <Route path="records" element={<RecordsPage />} />
             <Route path="expenses" element={<ExpensesPage />} />
             <Route path="ledger" element={<LedgerPage />} />
+            <Route path="stock-check" element={<StockCheckPage />} />
             <Route path="reports" element={<ReportsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>

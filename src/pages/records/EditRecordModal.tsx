@@ -34,6 +34,9 @@ function editErrorMessage(kind: RecordKind, error: unknown): string {
         ? 'An entry already exists for that date, product and customer — edit that entry instead.'
         : 'An entry already exists for that combination — edit that entry instead.'
   }
+  // Raised by a database check, e.g. a purchase edited below what was returned.
+  const message = (error as { message?: string } | null | undefined)?.message
+  if (code === 'P0001' && message) return message
   return 'Could not update entry'
 }
 

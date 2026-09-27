@@ -26,7 +26,8 @@ export type SupplierLedgerBalance = {
 
 export type SupplierPassbookEntry = {
   id: string
-  kind: 'purchase' | SupplierEntryType
+  /** 'return': bad material sent back against a purchase — lowers what we owe. */
+  kind: 'purchase' | 'return' | SupplierEntryType
   entry_date: string
   amount: number
   running_balance: number
@@ -73,9 +74,9 @@ export function supplierBalanceText(balance: number, format: (n: number) => stri
   return 'Settled'
 }
 
-/** How an entry moves the balance: purchases, dues and refunds raise what we owe, payments lower it. */
+/** How an entry moves the balance: purchases, dues and refunds raise what we owe; payments and returns lower it. */
 export function balanceEffect(kind: SupplierPassbookEntry['kind'], amount: number): number {
-  return kind === 'payment' ? -amount : amount
+  return kind === 'payment' || kind === 'return' ? -amount : amount
 }
 
 const BALANCES_KEY = ['supplier_ledger_balances']

@@ -132,6 +132,52 @@ const EXPORTS: ExportDef[] = [
     },
   },
   {
+    key: 'purchase_returns',
+    label: 'Purchase Returns',
+    description: 'Raw material sent back to suppliers',
+    table: 'raw_material_purchase_returns',
+    select:
+      '*, raw_material_purchases(entry_date, total_qty_kg, price_per_kg, raw_material_types(name), raw_material_suppliers(name))',
+    columns: ['return_date', 'material', 'supplier_name', 'purchase_date', 'returned_kg', 'price_per_kg', 'reason', 'created_at'],
+    flatten: (row) => {
+      const p = nested(row, 'raw_material_purchases')
+      const t = p ? nested(p, 'raw_material_types') : null
+      const sp = p ? nested(p, 'raw_material_suppliers') : null
+      return {
+        return_date: row.return_date,
+        material: t?.name ?? '',
+        supplier_name: sp?.name ?? '',
+        purchase_date: p?.entry_date ?? '',
+        returned_kg: row.quantity_kg,
+        price_per_kg: p?.price_per_kg ?? '',
+        reason: row.reason,
+        created_at: row.created_at,
+      }
+    },
+  },
+  {
+    key: 'stock_counts',
+    label: 'Stock Counts',
+    description: 'Every weekly raw material count, one row per material',
+    table: 'stock_count_items',
+    select: '*, stock_counts(count_date, notes), raw_material_types(name)',
+    columns: ['count_date', 'material', 'entry_mode', 'pack_kg', 'num_bags', 'quantity_kg', 'notes', 'created_at'],
+    flatten: (row) => {
+      const c = nested(row, 'stock_counts')
+      const t = nested(row, 'raw_material_types')
+      return {
+        count_date: c?.count_date ?? '',
+        material: t?.name ?? '',
+        entry_mode: row.entry_mode,
+        pack_kg: row.pack_kg ?? '',
+        num_bags: row.num_bags ?? '',
+        quantity_kg: row.quantity_kg,
+        notes: c?.notes ?? '',
+        created_at: row.created_at,
+      }
+    },
+  },
+  {
     key: 'scrap_purchases',
     label: 'Scrap Purchases',
     description: 'Scrap bought from dealers',

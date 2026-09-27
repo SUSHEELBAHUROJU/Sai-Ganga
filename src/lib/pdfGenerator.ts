@@ -7,8 +7,9 @@ import {
   type SupplierPassbookEntry,
 } from '../hooks/useSupplierLedger'
 import type { RecordKind } from '../hooks/useRecords'
+import { costPerKgProduced, yieldPercent, type StockCheckPeriod } from '../hooks/useStockChecks'
 import { formatInvoiceDate, formatStatementDate } from './date'
-import { formatQty } from './format'
+import { formatPipeProductLabel, formatQty } from './format'
 
 /* ==========================================================================
  * Bill PDF — compact two-copy A4 layout
@@ -1231,6 +1232,103 @@ export function generateRecordsReportBlob(report: RecordsReportData, periodLabel
   )
 }
 
+/**
+ * Weekly stock check: what was consumed (FIFO cost per material), what was
+ * produced (per pipe size), and the result — cost per kg of pipe and waste.
+ */
+export function generateStockCheckReportDoc(period: StockCheckPeriod): jsPDF {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  const periodLabel = stockCheckPeriodLabel(period)
+  let y = drawReportHeader(doc, 'Stock Check Report', periodLabel)
+
+  y = drawSectionTitle(doc, y, 'Materials Consumed')
+  y = drawReportTable(
+    doc,
+    y,
+    [
+      { header: 'MATERIAL', x: 2, width: 34 },
+      { header: 'OPENING', x: 56, align: 'right' },
+      { header: 'PURCHASED', x: 76, align: 'right' },
+      { header: 'RETURNED', x: 94, align: 'right' },
+      { header: 'RECYCLED', x: 112, align: 'right' },
+      { header: 'CLOSING', x: 130, align: 'right' },
+      { header: 'USED (KG)', x: 149, align: 'right' },
+      { header: 'RATE', x: 164, align: 'right' },
+      { header: 'COST (Rs.)', x: 184, align: 'right' },
+    ],
+    [
+      ...period.materials.map((m) => [
+        m.material_name,
+        num(m.opening_kg),
+        num(m.purchased_kg),
+        m.returned_kg ? `-${num(m.returned_kg)}` : '0',
+        num(m.recycled_kg),
+        num(m.closing_kg),
+        num(m.consumed_kg),
+        m.consumed_kg ? money(m.consumed_cost / m.consumed_kg) : '-',
+        money(m.consumed_cost),
+      ]),
+      ['TOTAL', '', '', '', '', '', num(period.consumed_kg), '', money(period.consumed_cost)],
+    ],
+    'No materials counted.',
+  )
+
+  y = drawSectionTitle(doc, y, 'Pipes Produced')
+  y = drawReportTable(
+    doc,
+    y,
+    [
+      { header: 'S.NO', x: 2 },
+      { header: 'PIPE SIZE', x: 14 },
+      { header: 'PIECES', x: 150, align: 'right' },
+      { header: 'WEIGHT (KG)', x: 184, align: 'right' },
+    ],
+    [
+      ...period.production.map((p, i) => [
+        String(i + 1),
+        // The PDF font has no "×" glyph.
+        formatPipeProductLabel(p.diameter_inches, p.weight_kg).replace('×', 'x'),
+        num(p.pcs),
+        num(p.kg),
+      ]),
+      ...(period.production.length ? [['', 'TOTAL', num(period.produced_pcs), num(period.produced_kg)]] : []),
+    ],
+    'No production recorded in this period.',
+  )
+
+  const yieldPct = yieldPercent(period)
+  const costPerKg = costPerKgProduced(period)
+  const wastePct = period.consumed_kg > 0 ? (period.waste_kg / period.consumed_kg) * 100 : null
+
+  y = drawSectionTitle(doc, y, 'Result')
+  drawSummaryBlock(
+    doc,
+    y,
+    [
+      { label: 'Material Consumed', value: `${num(period.consumed_kg)} kg` },
+      { label: 'Material Cost', value: `Rs. ${money(period.consumed_cost)}` },
+      { label: 'Pipe Produced', value: `${num(period.produced_kg)} kg` },
+      { label: 'Yield', value: yieldPct === null ? '-' : `${num(yieldPct)}%` },
+      {
+        label: 'Waste (consumed - produced)',
+        value: `${num(period.waste_kg)} kg${wastePct === null ? '' : ` (${num(wastePct)}%)`}`,
+      },
+      { label: 'Factory Waste Recorded', value: `${num(period.factory_waste_kg)} kg` },
+    ],
+    { label: 'COST / KG PIPE', value: costPerKg === null ? '-' : `Rs. ${money(costPerKg)}` },
+  )
+
+  return doc
+}
+
+export function stockCheckPeriodLabel(period: StockCheckPeriod): string {
+  return `${formatStatementDate(period.prev_count_date)} to ${formatStatementDate(period.count_date)}`
+}
+
+export function generateStockCheckReportBlob(period: StockCheckPeriod) {
+  return reportBlob(generateStockCheckReportDoc(period), `Stock_Check_${period.count_date}.pdf`)
+}
+
 /** Balance wording for the supplier statement — "Payable" / "Advance" rather
  *  than accounting Cr/Dr, since the owner and supplier both read it. */
 function supplierBalanceLabel(balance: number): string {
@@ -1243,6 +1341,11 @@ function supplierParticulars(entry: SupplierPassbookEntry): string {
   if (entry.kind === 'purchase') {
     const rate = entry.price_per_kg != null ? ` @ Rs. ${money(entry.price_per_kg)}` : ''
     return `Purchase - ${entry.item_name ?? 'Material'} ${num(entry.quantity_kg)} kg${rate}`
+  }
+  if (entry.kind === 'return') {
+    const rate = entry.price_per_kg != null ? ` @ Rs. ${money(entry.price_per_kg)}` : ''
+    const base = `Returned - ${entry.item_name ?? 'Material'} ${num(entry.quantity_kg)} kg${rate}`
+    return entry.note ? `${base} - ${entry.note}` : base
   }
   if (entry.kind === 'payment') {
     const parts = [
@@ -1303,8 +1406,14 @@ export function generateSupplierStatementDoc(
       { header: 'BALANCE', x: 184, align: 'right' },
     ],
     sortedAsc.map((entry) => {
-      // A refund reverses a payment, so it sits in the Paid column as a negative.
-      const purchaseCol = entry.kind === 'purchase' || entry.kind === 'due' ? money(entry.amount) : ''
+      // A refund reverses a payment, so it sits in the Paid column as a
+      // negative; a return reverses a purchase, so it sits in Purchase.
+      const purchaseCol =
+        entry.kind === 'purchase' || entry.kind === 'due'
+          ? money(entry.amount)
+          : entry.kind === 'return'
+            ? `-${money(entry.amount)}`
+            : ''
       const paidCol =
         entry.kind === 'payment' ? money(entry.amount) : entry.kind === 'refund' ? `-${money(entry.amount)}` : ''
       return [
