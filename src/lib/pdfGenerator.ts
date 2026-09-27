@@ -7,7 +7,14 @@ import {
   type SupplierPassbookEntry,
 } from '../hooks/useSupplierLedger'
 import type { RecordKind } from '../hooks/useRecords'
-import { costPerKgProduced, yieldPercent, type StockCheckPeriod } from '../hooks/useStockChecks'
+import type { ProductionCostReport } from '../hooks/useProductionCost'
+import {
+  costPerKgProduced,
+  materialCostPerKg,
+  runningCostPerKg,
+  yieldPercent,
+  type StockCheckPeriod,
+} from '../hooks/useStockChecks'
 import { formatInvoiceDate, formatStatementDate } from './date'
 import { formatPipeProductLabel, formatQty } from './format'
 
@@ -864,11 +871,13 @@ export function generateExpenseReportDoc(
     y,
     [
       { header: 'DATE', x: 2 },
-      { header: 'AMOUNT (Rs.)', x: 60, align: 'right' },
-      { header: 'DESCRIPTION', x: 68, width: 116 },
+      { header: 'TYPE', x: 24, width: 40 },
+      { header: 'AMOUNT (Rs.)', x: 100, align: 'right' },
+      { header: 'DESCRIPTION', x: 108, width: 78 },
     ],
     report.salaries.map((s) => [
       reportDate(s.entry_date),
+      s.category,
       money(s.amount),
       s.notes ?? '',
     ]),
@@ -1296,8 +1305,31 @@ export function generateStockCheckReportDoc(period: StockCheckPeriod): jsPDF {
     'No production recorded in this period.',
   )
 
+  const perKg = (amount: number) => (period.produced_kg > 0 ? money(amount / period.produced_kg) : '-')
+  y = drawSectionTitle(doc, y, 'Running Costs')
+  y = drawReportTable(
+    doc,
+    y,
+    [
+      { header: 'EXPENSE', x: 2, width: 90 },
+      { header: 'AMOUNT (Rs.)', x: 150, align: 'right' },
+      { header: 'PER KG (Rs.)', x: 184, align: 'right' },
+    ],
+    [
+      ...period.overheads.map((o) => [
+        o.units != null ? `${o.category_name} (${num(Number(o.units))} units)` : o.category_name,
+        money(Number(o.amount)),
+        perKg(Number(o.amount)),
+      ]),
+      ...(period.overheads.length ? [['TOTAL', money(period.overhead_cost), perKg(period.overhead_cost)]] : []),
+    ],
+    'No salaries, rent or bills recorded for these days.',
+  )
+
   const yieldPct = yieldPercent(period)
   const costPerKg = costPerKgProduced(period)
+  const materialPerKg = materialCostPerKg(period)
+  const runningPerKg = runningCostPerKg(period)
   const wastePct = period.consumed_kg > 0 ? (period.waste_kg / period.consumed_kg) * 100 : null
 
   y = drawSectionTitle(doc, y, 'Result')
@@ -1307,7 +1339,13 @@ export function generateStockCheckReportDoc(period: StockCheckPeriod): jsPDF {
     [
       { label: 'Material Consumed', value: `${num(period.consumed_kg)} kg` },
       { label: 'Material Cost', value: `Rs. ${money(period.consumed_cost)}` },
+      { label: 'Running Costs', value: `Rs. ${money(period.overhead_cost)}` },
       { label: 'Pipe Produced', value: `${num(period.produced_kg)} kg` },
+      { label: 'Material / kg', value: materialPerKg === null ? '-' : `Rs. ${money(materialPerKg)}` },
+      { label: 'Running costs / kg', value: runningPerKg === null ? '-' : `Rs. ${money(runningPerKg)}` },
+      ...(period.units !== null && period.produced_kg > 0
+        ? [{ label: 'Electricity units / kg', value: num(period.units / period.produced_kg) }]
+        : []),
       { label: 'Yield', value: yieldPct === null ? '-' : `${num(yieldPct)}%` },
       {
         label: 'Waste (consumed - produced)',
@@ -1327,6 +1365,128 @@ export function stockCheckPeriodLabel(period: StockCheckPeriod): string {
 
 export function generateStockCheckReportBlob(period: StockCheckPeriod) {
   return reportBlob(generateStockCheckReportDoc(period), `Stock_Check_${period.count_date}.pdf`)
+}
+
+/**
+ * Cost to make 1 kg of pipe over a month: material (FIFO, from stock counts),
+ * running costs (expenses counted in the month they're for), and production.
+ */
+export function generateProductionCostReportDoc(report: ProductionCostReport, periodLabel: string): jsPDF {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  let y = drawReportHeader(doc, 'Production Cost Report', periodLabel)
+
+  const notes: string[] = []
+  if (!report.coveredFrom) notes.push('No stock counts cover this period - material cost is not known.')
+  else if (report.coveredTo) {
+    notes.push(
+      `Material counted for ${reportDate(report.coveredFrom)} to ${reportDate(report.coveredTo)}; material per kg uses the ${num(report.coveredProducedKg)} kg of pipe made on those days.`,
+    )
+  }
+  if (report.isEstimated) notes.push('Part of the material is a by-days share of a stock-check week crossing the month - estimated.')
+  if (report.unpricedKg > 0.01) notes.push(`${num(report.unpricedKg)} kg used has no purchase price and is not in the cost.`)
+  if (notes.length) {
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(7.5)
+    doc.setTextColor(...MUTED_TEXT)
+    notes.forEach((n) => {
+      const lines = doc.splitTextToSize(n, PAGE_W - REPORT_MARGIN * 2) as string[]
+      lines.forEach((line) => {
+        y += 3.6
+        doc.text(line, REPORT_MARGIN, y)
+      })
+    })
+    y += 1
+  }
+
+  y = drawSectionTitle(doc, y, 'Materials Consumed')
+  y = drawReportTable(
+    doc,
+    y,
+    [
+      { header: 'MATERIAL', x: 2, width: 70 },
+      { header: 'USED (KG)', x: 120, align: 'right' },
+      { header: 'RATE', x: 150, align: 'right' },
+      { header: 'COST (Rs.)', x: 184, align: 'right' },
+    ],
+    [
+      ...report.materials.map((m) => [
+        m.material_name,
+        num(m.consumed_kg),
+        m.consumed_kg ? money(m.consumed_cost / m.consumed_kg) : '-',
+        money(m.consumed_cost),
+      ]),
+      ...(report.materials.length ? [['TOTAL', num(report.materialKg), '', money(report.materialCost)]] : []),
+    ],
+    'No stock counts cover this period.',
+  )
+
+  const perKg = (amount: number) => (report.producedKg > 0 ? money(amount / report.producedKg) : '-')
+  y = drawSectionTitle(doc, y, 'Running Costs')
+  y = drawReportTable(
+    doc,
+    y,
+    [
+      { header: 'EXPENSE', x: 2, width: 90 },
+      { header: 'AMOUNT (Rs.)', x: 150, align: 'right' },
+      { header: 'PER KG (Rs.)', x: 184, align: 'right' },
+    ],
+    [
+      ...report.overheads.map((o) => [
+        o.units !== null ? `${o.name} (${num(o.units)} units)` : o.name,
+        money(o.amount),
+        perKg(o.amount),
+      ]),
+      ...(report.overheads.length ? [['TOTAL', money(report.overheadCost), perKg(report.overheadCost)]] : []),
+    ],
+    'No salaries, rent or bills recorded for this period.',
+  )
+
+  y = drawSectionTitle(doc, y, 'Pipes Produced')
+  y = drawReportTable(
+    doc,
+    y,
+    [
+      { header: 'S.NO', x: 2 },
+      { header: 'PIPE SIZE', x: 14 },
+      { header: 'PIECES', x: 150, align: 'right' },
+      { header: 'WEIGHT (KG)', x: 184, align: 'right' },
+    ],
+    [
+      ...report.production.map((p, i) => [
+        String(i + 1),
+        formatPipeProductLabel(p.diameter_inches, p.weight_kg).replace('×', 'x'),
+        num(p.pcs),
+        num(p.kg),
+      ]),
+      ...(report.production.length ? [['', 'TOTAL', num(report.producedPcs), num(report.producedKg)]] : []),
+    ],
+    'No production recorded in this period.',
+  )
+
+  const materialPerKg = report.coveredProducedKg > 0 && report.coveredFrom ? report.materialCost / report.coveredProducedKg : null
+  const runningPerKg = report.producedKg > 0 ? report.overheadCost / report.producedKg : null
+  const total = materialPerKg !== null && runningPerKg !== null ? materialPerKg + runningPerKg : null
+
+  y = drawSectionTitle(doc, y, 'Result')
+  drawSummaryBlock(
+    doc,
+    y,
+    [
+      { label: 'Pipe Produced', value: `${num(report.producedKg)} kg` },
+      { label: 'Material / kg', value: materialPerKg === null ? '-' : `Rs. ${money(materialPerKg)}` },
+      { label: 'Running costs / kg', value: runningPerKg === null ? '-' : `Rs. ${money(runningPerKg)}` },
+      ...(report.units !== null && report.producedKg > 0
+        ? [{ label: 'Electricity units / kg', value: num(report.units / report.producedKg) }]
+        : []),
+    ],
+    { label: 'COST / KG PIPE', value: total === null ? '-' : `Rs. ${money(total)}` },
+  )
+
+  return doc
+}
+
+export function generateProductionCostReportBlob(report: ProductionCostReport, periodLabel: string) {
+  return reportBlob(generateProductionCostReportDoc(report, periodLabel), `Production_Cost_${slug(periodLabel)}.pdf`)
 }
 
 /** Balance wording for the supplier statement — "Payable" / "Advance" rather

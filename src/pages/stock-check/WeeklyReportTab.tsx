@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AlertTriangle, ChevronDown, ChevronUp, Share2 } from 'lucide-react'
 import { DateRangeField } from '../../components/DateRangeField'
+import { CostPerKgBreakdown } from '../../components/CostPerKgBreakdown'
 import { LoadingState, EmptyNote } from '../../components/States'
 import {
   useStockCheckReport,
@@ -162,6 +163,20 @@ function PeriodDetail({ period }: { period: StockCheckPeriod }) {
       </div>
 
       <div>
+        <SectionTitle>Cost to Produce</SectionTitle>
+        <CostPerKgBreakdown
+          materialCost={period.consumed_cost}
+          materialProducedKg={period.produced_kg}
+          overheads={period.overheads.map((o) => ({ name: o.category_name, amount: Number(o.amount) || 0 }))}
+          producedKg={period.produced_kg}
+          units={period.units}
+        />
+        <p className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+          Monthly bills, rent and salaries are shared by days — this stretch gets the days it covers.
+        </p>
+      </div>
+
+      <div>
         <SectionTitle>Result</SectionTitle>
         <p className="mb-2 text-sm text-slate-700 dark:text-slate-300">
           Consumed <span className="font-bold">{formatQty(period.consumed_kg)} kg</span> (₹
@@ -169,7 +184,7 @@ function PeriodDetail({ period }: { period: StockCheckPeriod }) {
           <span className="font-bold">{formatQty(period.produced_kg)} kg</span> of pipe
         </p>
         <div className="grid grid-cols-2 gap-2">
-          <Stat label="Cost / kg pipe" value={costPerKg === null ? '—' : `₹${formatQty(costPerKg)}`} />
+          <Stat label="Cost / kg pipe" value={costPerKg === null ? '—' : `₹${formatQty(costPerKg)}`} sub="material + running" />
           <Stat label="Yield" value={pct(yieldPercent(period))} />
           <Stat label="Waste" value={`${formatQty(period.waste_kg)} kg`} sub={pct(wastePercent(period))} />
           <Stat label="Factory waste recorded" value={`${formatQty(period.factory_waste_kg)} kg`} />
@@ -221,7 +236,11 @@ function PeriodCard({
       <div className="grid grid-cols-2 gap-2">
         <Stat label="Consumed" value={`${formatQty(period.consumed_kg)} kg`} sub={`₹${formatQty(period.consumed_cost)}`} />
         <Stat label="Produced" value={`${formatQty(period.produced_kg)} kg`} sub={`${formatQty(period.produced_pcs)} pcs`} />
-        <Stat label="Cost / kg pipe" value={costPerKg === null ? '—' : `₹${formatQty(costPerKg)}`} />
+        <Stat
+          label="Cost / kg pipe"
+          value={costPerKg === null ? '—' : `₹${formatQty(costPerKg)}`}
+          sub={period.overhead_cost > 0 ? 'material + running' : 'material only'}
+        />
         <Stat label="Waste" value={`${formatQty(period.waste_kg)} kg`} sub={pct(wastePercent(period))} />
       </div>
 

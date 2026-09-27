@@ -11,6 +11,14 @@ import {
   useAddExpenseCategory,
 } from '../hooks/useExpenseCategories'
 import { useAddExpense, useExpensesInRange } from '../hooks/useExpenses'
+import { ExpensePeriodFields } from '../components/ExpensePeriodFields'
+import {
+  formatExpensePeriod,
+  initialExpensePeriod,
+  parseUnits,
+  resolveExpensePeriod,
+  type ExpensePeriodType,
+} from '../lib/expensePeriod'
 import { useToast } from '../lib/toast'
 import { firstError, validateCost, validateRequiredText } from '../lib/validate'
 import { todayISODate, startOfMonth, formatDateLabel } from '../lib/date'
@@ -28,6 +36,7 @@ export function ExpensesPage() {
   const [categoryId, setCategoryId] = useState('')
   const [amount, setAmount] = useState('')
   const [notes, setNotes] = useState('')
+  const [periodInput, setPeriodInput] = useState(() => initialExpensePeriod(todayISODate()))
 
   const [addTypeOpen, setAddTypeOpen] = useState(false)
   const [newTypeName, setNewTypeName] = useState('')
@@ -44,14 +53,27 @@ export function ExpensesPage() {
   )
 
   const monthTotal = (monthExpenses ?? []).reduce((sum, e) => sum + e.amount, 0)
+  const selectedCategory = activeCategories.find((c) => c.id === categoryId)
+
+  function selectCategory(id: string) {
+    setCategoryId(id)
+    // Start each type's period from the paid date: its month, or the week ending on it.
+    setPeriodInput(initialExpensePeriod(entryDate))
+  }
 
   function handleSave() {
+    const period = selectedCategory
+      ? resolveExpensePeriod(selectedCategory.period_type as ExpensePeriodType, entryDate, periodInput)
+      : null
+    const units = parseUnits(periodInput.units)
     const problem = firstError(
       categoryId ? null : 'Choose an expense type',
       validateCost(amount, 'an amount'),
+      period && 'error' in period ? period.error : null,
+      units !== null && (Number.isNaN(units) || units < 0) ? 'Enter valid units consumed' : null,
     )
-    if (problem) {
-      showToast(problem, 'error')
+    if (problem || !period || 'error' in period) {
+      showToast(problem ?? 'Choose an expense type', 'error')
       return
     }
 
@@ -61,12 +83,17 @@ export function ExpensesPage() {
         category_id: categoryId,
         amount: Number(amount),
         notes: notes.trim() || null,
+        period_start: period.period_start,
+        period_end: period.period_end,
+        units: selectedCategory?.tracks_units ? units : null,
       },
       {
         onSuccess: () => {
-          showToast('Expense Added!')
+          const label = formatExpensePeriod(period.period_start, period.period_end, entryDate)
+          showToast(label ? `Expense Added — ${label}` : 'Expense Added!')
           setAmount('')
           setNotes('')
+          setPeriodInput((prev) => ({ ...prev, units: '' }))
         },
         onError: () => showToast('Could not save expense', 'error'),
       },
@@ -84,7 +111,7 @@ export function ExpensesPage() {
       {
         onSuccess: (created) => {
           showToast(`${created.name} added`)
-          setCategoryId(created.id)
+          selectCategory(created.id)
           setNewTypeName('')
           setAddTypeOpen(false)
         },
@@ -103,7 +130,10 @@ export function ExpensesPage() {
     <div className="space-y-6 pb-2">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Add an Expense</h2>
-        <DateField value={entryDate} onChange={setEntryDate} />
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 text-sm font-medium text-slate-500 dark:text-slate-400">Paid on</span>
+          <DateField value={entryDate} onChange={setEntryDate} />
+        </div>
       </div>
 
       <div className="space-y-5 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
@@ -121,7 +151,7 @@ export function ExpensesPage() {
                   label={c.name}
                   selected={categoryId === c.id}
                   selectedClass={EXPENSE_CHIP_SELECTED}
-                  onClick={() => setCategoryId(c.id)}
+                  onClick={() => selectCategory(c.id)}
                 />
               ))}
               <button
@@ -135,6 +165,13 @@ export function ExpensesPage() {
             </div>
           )}
         </div>
+
+        <ExpensePeriodFields
+          category={selectedCategory}
+          paidDate={entryDate}
+          value={periodInput}
+          onChange={setPeriodInput}
+        />
 
         <Field
           label="Amount (₹)"
@@ -193,6 +230,9 @@ export function ExpensesPage() {
                 </p>
                 <p className="truncate text-xs text-slate-400 dark:text-slate-500">
                   {formatDateLabel(e.entry_date)}
+                  {formatExpensePeriod(e.period_start, e.period_end, e.entry_date)
+                    ? ` · ${formatExpensePeriod(e.period_start, e.period_end, e.entry_date)}`
+                    : ''}
                   {e.notes ? ` · ${e.notes}` : ''}
                 </p>
               </div>

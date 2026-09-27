@@ -27,6 +27,14 @@ import { CustomerPicker } from '../../components/CustomerPicker'
 import { ScrapDealerPicker } from '../../components/ScrapDealerPicker'
 import { SupplierPicker } from '../../components/SupplierPicker'
 import { PurchaseCostSummary } from '../../components/PurchaseCostSummary'
+import { ExpensePeriodFields } from '../../components/ExpensePeriodFields'
+import {
+  expensePeriodFromRow,
+  parseUnits,
+  resolveExpensePeriod,
+  type ExpensePeriodInput,
+  type ExpensePeriodType,
+} from '../../lib/expensePeriod'
 import { formatQty, purchaseCost } from '../../lib/format'
 
 /** A form reports its patch (or null when invalid) via `onValidChange`. */
@@ -773,6 +781,7 @@ export function EditExpenseForm({ row, onChange }: EditFormProps<ExpenseRecordRo
   const [categoryId, setCategoryId] = useState(row.category_id)
   const [amount, setAmount] = useState(String(row.amount))
   const [notes, setNotes] = useState(row.notes ?? '')
+  const [periodInput, setPeriodInput] = useState<ExpensePeriodInput>(() => expensePeriodFromRow(row))
 
   // A category that has since been removed still shows while it's the one
   // this expense uses — editing an old record must not silently re-bucket it.
@@ -785,20 +794,33 @@ export function EditExpenseForm({ row, onChange }: EditFormProps<ExpenseRecordRo
     categoryId?: string
     amount?: string
     notes?: string
+    period?: ExpensePeriodInput
   }) {
     const date = next.entryDate ?? entryDate
     const category = next.categoryId ?? categoryId
     const amountText = next.amount ?? amount
     const note = next.notes ?? notes
+    const periodValue = next.period ?? periodInput
     const amountValue = Number(amountText)
+    const categoryRow = (categories ?? []).find((c) => c.id === category)
+    const period = resolveExpensePeriod(
+      (categoryRow?.period_type ?? 'one_time') as ExpensePeriodType,
+      date,
+      periodValue,
+    )
+    const units = parseUnits(periodValue.units)
+    const unitsOk = units === null || (!Number.isNaN(units) && units >= 0)
 
     onChange(
-      category && amountText.trim() !== '' && amountValue > 0
+      category && amountText.trim() !== '' && amountValue > 0 && !('error' in period) && unitsOk
         ? {
             entry_date: date,
             category_id: category,
             amount: amountValue,
             notes: note.trim() || null,
+            period_start: period.period_start,
+            period_end: period.period_end,
+            units: categoryRow?.tracks_units ? units : null,
           }
         : null,
     )
@@ -831,6 +853,16 @@ export function EditExpenseForm({ row, onChange }: EditFormProps<ExpenseRecordRo
           ))}
         </div>
       </div>
+      <ExpensePeriodFields
+        category={(categories ?? []).find((c) => c.id === categoryId)}
+        paidDate={entryDate}
+        value={periodInput}
+        editingId={row.id}
+        onChange={(next) => {
+          setPeriodInput(next)
+          emit({ period: next })
+        }}
+      />
       <Field
         label="Amount (₹)"
         type="number"

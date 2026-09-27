@@ -50,6 +50,17 @@ export type StockCheckProductionRow = {
   kg: number
 }
 
+/** One expense type's share of a count period — salaries, rent, electricity. */
+export type StockCheckOverheadRow = {
+  count_id: string
+  category_id: string
+  category_name: string
+  is_salary: boolean
+  amount: number
+  /** Meter units' share (electricity); null for types that don't record units. */
+  units: number | null
+}
+
 /** A count period (previous count → this count) with its materials and pipes. */
 export type StockCheckPeriod = {
   count_id: string
@@ -57,6 +68,11 @@ export type StockCheckPeriod = {
   count_date: string
   materials: StockCheckMaterialRow[]
   production: StockCheckProductionRow[]
+  /** Running costs of the period, largest first — only types counted in production cost. */
+  overheads: StockCheckOverheadRow[]
+  overhead_cost: number
+  /** Meter units in the period, when any type records them. */
+  units: number | null
   consumed_kg: number
   consumed_cost: number
   produced_kg: number
@@ -142,15 +158,18 @@ export function useStockCheckReport(fromDate: string, toDate: string) {
     // Same as above: production and purchases change it without invalidating it.
     staleTime: 0,
     queryFn: async (): Promise<StockCheckPeriod[]> => {
-      const [materialsRes, productionRes] = await Promise.all([
+      const [materialsRes, productionRes, overheadsRes] = await Promise.all([
         supabase.rpc('rpc_stock_check_report', { p_from: fromDate, p_to: toDate }),
         supabase.rpc('rpc_stock_check_production', { p_from: fromDate, p_to: toDate }),
+        supabase.rpc('rpc_stock_check_overheads', { p_from: fromDate, p_to: toDate }),
       ])
       if (materialsRes.error) throw materialsRes.error
       if (productionRes.error) throw productionRes.error
+      if (overheadsRes.error) throw overheadsRes.error
       return buildPeriods(
         (materialsRes.data ?? []) as StockCheckMaterialRow[],
         (productionRes.data ?? []) as StockCheckProductionRow[],
+        (overheadsRes.data ?? []) as StockCheckOverheadRow[],
       )
     },
   })
@@ -159,6 +178,7 @@ export function useStockCheckReport(fromDate: string, toDate: string) {
 function buildPeriods(
   materialRows: StockCheckMaterialRow[],
   productionRows: StockCheckProductionRow[],
+  overheadRows: StockCheckOverheadRow[],
 ): StockCheckPeriod[] {
   const byCount = new Map<string, StockCheckPeriod>()
 
@@ -171,6 +191,9 @@ function buildPeriods(
         count_date: row.count_date,
         materials: [],
         production: productionRows.filter((p) => p.count_id === row.count_id),
+        overheads: overheadRows.filter((o) => o.count_id === row.count_id),
+        overhead_cost: 0,
+        units: null,
         consumed_kg: 0,
         consumed_cost: 0,
         // Production and factory waste are per period, repeated on every material row.
@@ -181,6 +204,9 @@ function buildPeriods(
         unpriced_kg: 0,
       }
       period.produced_pcs = period.production.reduce((sum, p) => sum + (Number(p.pcs) || 0), 0)
+      period.overhead_cost = period.overheads.reduce((sum, o) => sum + (Number(o.amount) || 0), 0)
+      const unitRows = period.overheads.filter((o) => o.units != null)
+      period.units = unitRows.length ? unitRows.reduce((sum, o) => sum + Number(o.units), 0) : null
       byCount.set(row.count_id, period)
     }
     period.materials.push(row)
@@ -199,8 +225,18 @@ function buildPeriods(
 }
 
 /** Material cost per kg of pipe produced; null when nothing was produced. */
-export function costPerKgProduced(period: StockCheckPeriod): number | null {
+export function materialCostPerKg(period: StockCheckPeriod): number | null {
   return period.produced_kg > 0 ? period.consumed_cost / period.produced_kg : null
+}
+
+/** Running costs (salaries, rent, electricity…) per kg of pipe produced. */
+export function runningCostPerKg(period: StockCheckPeriod): number | null {
+  return period.produced_kg > 0 ? period.overhead_cost / period.produced_kg : null
+}
+
+/** Everything it cost to make 1 kg of pipe: material + running costs. */
+export function costPerKgProduced(period: StockCheckPeriod): number | null {
+  return period.produced_kg > 0 ? (period.consumed_cost + period.overhead_cost) / period.produced_kg : null
 }
 
 /** Share of consumed material that became pipe; null when nothing was consumed. */

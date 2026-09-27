@@ -7,7 +7,8 @@ import {
   type ReportPeriod,
 } from '../../components/MonthRangeField'
 import { LoadingState } from '../../components/States'
-import { useExpenseReport } from '../../hooks/useExpenseReport'
+import { useExpenseReport, type ExpenseBasis } from '../../hooks/useExpenseReport'
+import { Chip } from '../../components/Chip'
 import { generateExpenseReportBlob } from '../../lib/pdfGenerator'
 import { useToast } from '../../lib/toast'
 import { todayISODate, formatRangeLabel, formatShortDate } from '../../lib/date'
@@ -52,12 +53,15 @@ function SummaryRow({
 
 export function ExpenseReportTab() {
   const [period, setPeriod] = useState<ReportPeriod>(() => currentMonthPeriod(todayISODate()))
-  const { data: report, isLoading } = useExpenseReport(period.fromDate, period.toDate)
+  const [basis, setBasis] = useState<ExpenseBasis>('cost')
+  const { data: report, isLoading } = useExpenseReport(period.fromDate, period.toDate, basis)
   const { showToast } = useToast()
 
-  const periodLabel = period.month
+  const rangeLabel = period.month
     ? formatMonthLabel(period.month)
     : formatRangeLabel(period.fromDate, period.toDate)
+  // Printed on the PDF too, so a shared copy says which view it is.
+  const periodLabel = basis === 'cost' ? `${rangeLabel} (cost for the period)` : `${rangeLabel} (paid in the period)`
 
   function handleDownload() {
     if (!report) return
@@ -86,13 +90,25 @@ export function ExpenseReportTab() {
     <div className="space-y-4">
       <MonthRangeField value={period} onChange={setPeriod} />
 
+      <div>
+        <div className="flex flex-wrap gap-2">
+          <Chip label="Cost for this period" selected={basis === 'cost'} onClick={() => setBasis('cost')} />
+          <Chip label="Paid in this period" selected={basis === 'paid'} onClick={() => setBasis('paid')} />
+        </div>
+        <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+          {basis === 'cost'
+            ? 'Bills, rent and salaries count in the month they are for, whenever they were paid.'
+            : 'Every expense counts on the day the money was paid.'}
+        </p>
+      </div>
+
       {isLoading && <LoadingState />}
 
       {report && (
         <>
           <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 dark:border-rose-900 dark:bg-rose-950/30">
             <p className="text-xs font-semibold uppercase tracking-wider text-rose-700 dark:text-rose-300">
-              Total Money Out — {periodLabel}
+              {basis === 'cost' ? 'Total Cost' : 'Total Money Out'} — {rangeLabel}
             </p>
             <p className="mt-1 text-3xl font-bold text-rose-600 dark:text-rose-400">
               ₹{formatQty(report.totals.grandTotal)}

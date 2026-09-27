@@ -332,13 +332,16 @@ const EXPORTS: ExportDef[] = [
     description: 'Salaries, bills and every other expense logged',
     table: 'expenses',
     select: '*, expense_categories(name)',
-    columns: ['entry_date', 'expense_type', 'amount', 'notes', 'created_at'],
+    columns: ['paid_date', 'expense_type', 'amount', 'for_from', 'for_to', 'units', 'notes', 'created_at'],
     flatten: (row) => {
       const c = nested(row, 'expense_categories')
       return {
-        entry_date: row.entry_date,
+        paid_date: row.entry_date,
         expense_type: c?.name ?? '',
         amount: row.amount,
+        for_from: row.period_start,
+        for_to: row.period_end,
+        units: row.units ?? '',
         notes: row.notes,
         created_at: row.created_at,
       }
@@ -350,7 +353,7 @@ const EXPORTS: ExportDef[] = [
     description: 'Expense categories, active or removed',
     table: 'expense_categories',
     select: '*',
-    columns: ['name', 'is_active', 'created_at'],
+    columns: ['name', 'period_type', 'in_production_cost', 'tracks_units', 'is_active', 'created_at'],
     flatten: (row) => row,
   },
 ]

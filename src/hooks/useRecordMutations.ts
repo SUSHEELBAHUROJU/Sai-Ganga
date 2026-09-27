@@ -34,6 +34,9 @@ function invalidateForKind(queryClient: QueryClient, kind: RecordKind) {
   queryClient.invalidateQueries({ queryKey: ['production_entries'] })
   // Purchases and expenses both feed the expense report's totals.
   queryClient.invalidateQueries({ queryKey: ['reports'] })
+  // Every kind feeds the stock check: inflows, production, or running costs.
+  queryClient.invalidateQueries({ queryKey: ['stock_check_report'] })
+  queryClient.invalidateQueries({ queryKey: ['stock_counts'] })
   for (const queryKey of STOCK_KEYS_FOR_KIND[kind]) {
     queryClient.invalidateQueries({ queryKey })
   }

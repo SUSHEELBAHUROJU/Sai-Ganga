@@ -1,5 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { formatExpensePeriod } from '../lib/expensePeriod'
+import { formatShortDate } from '../lib/date'
+import { formatQty } from '../lib/format'
+
+/**
+ * cost: expenses counted in the period they pay for (August's electricity
+ *   bill is in August even if paid in September), shared by days when a
+ *   period runs past the report's range.
+ * paid: expenses counted on the day the money went out — the cash view.
+ * Purchases are counted on their purchase date either way.
+ */
+export type ExpenseBasis = 'cost' | 'paid'
 
 export type PurchaseReportLine = {
   entry_date: string
@@ -48,9 +60,9 @@ export type ExpenseReport = {
  * mandatory, and suppliers were free text, so both are coalesced rather than
  * assumed present.
  */
-export function useExpenseReport(fromDate: string, toDate: string) {
+export function useExpenseReport(fromDate: string, toDate: string, basis: ExpenseBasis = 'cost') {
   return useQuery({
-    queryKey: ['reports', 'expenses', fromDate, toDate],
+    queryKey: ['reports', 'expenses', fromDate, toDate, basis],
     queryFn: async (): Promise<ExpenseReport> => {
       const [rawPurchases, scrapPurchases, expenses, returns] = await Promise.all([
         supabase
@@ -69,12 +81,14 @@ export function useExpenseReport(fromDate: string, toDate: string) {
           .gte('entry_date', fromDate)
           .lte('entry_date', toDate)
           .order('entry_date', { ascending: true }),
-        supabase
-          .from('expenses')
-          .select('entry_date, amount, notes, expense_categories(name, is_salary)')
-          .gte('entry_date', fromDate)
-          .lte('entry_date', toDate)
-          .order('entry_date', { ascending: true }),
+        basis === 'cost'
+          ? supabase.rpc('expense_allocations', { p_from: fromDate, p_to: toDate })
+          : supabase
+              .from('expenses')
+              .select('entry_date, period_start, period_end, amount, units, notes, expense_categories(name, is_salary)')
+              .gte('entry_date', fromDate)
+              .lte('entry_date', toDate)
+              .order('entry_date', { ascending: true }),
         // Material sent back comes off the money spent, on the day it went back.
         supabase
           .from('raw_material_purchase_returns')
@@ -169,13 +183,32 @@ export function useExpenseReport(fromDate: string, toDate: string) {
       const salaries: ExpenseReportLine[] = []
       const otherExpenses: ExpenseReportLine[] = []
       for (const row of (expenses.data ?? []) as any[]) {
+        const fullAmount = Number(row.amount) || 0
+        const isCost = basis === 'cost'
+        const amount = isCost ? Number(row.allocated_amount) || 0 : fullAmount
+        const partial = isCost && row.overlap_days < row.period_days
+        // One description line carrying everything the owner needs to
+        // recognise the entry: what it's for, what share is counted here,
+        // when it was paid, meter units, and the typed note.
+        const detail = [
+          formatExpensePeriod(row.period_start, row.period_end, row.entry_date),
+          partial ? `${row.overlap_days} of ${row.period_days} days of ₹${formatQty(fullAmount)}` : null,
+          isCost && (row.entry_date < fromDate || row.entry_date > toDate)
+            ? `paid ${formatShortDate(row.entry_date)}`
+            : null,
+          row.units != null ? `${formatQty(Number(row.units))} units` : null,
+          row.notes,
+        ]
+          .filter(Boolean)
+          .join(' · ')
         const line: ExpenseReportLine = {
           entry_date: row.entry_date,
-          category: row.expense_categories?.name ?? 'Uncategorised',
-          amount: Number(row.amount) || 0,
-          notes: row.notes,
+          category: (isCost ? row.category_name : row.expense_categories?.name) ?? 'Uncategorised',
+          amount: Math.round(amount * 100) / 100,
+          notes: detail || null,
         }
-        if (row.expense_categories?.is_salary) salaries.push(line)
+        const isSalary = isCost ? row.is_salary : row.expense_categories?.is_salary
+        if (isSalary) salaries.push(line)
         else otherExpenses.push(line)
       }
 

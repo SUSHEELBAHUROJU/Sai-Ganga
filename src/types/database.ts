@@ -185,27 +185,36 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          in_production_cost: boolean
           is_active: boolean
           is_salary: boolean
           name: string
+          period_type: string
+          tracks_units: boolean
           updated_at: string
         }
         Insert: {
           created_at?: string
           created_by?: string | null
           id?: string
+          in_production_cost?: boolean
           is_active?: boolean
           is_salary?: boolean
           name: string
+          period_type?: string
+          tracks_units?: boolean
           updated_at?: string
         }
         Update: {
           created_at?: string
           created_by?: string | null
           id?: string
+          in_production_cost?: boolean
           is_active?: boolean
           is_salary?: boolean
           name?: string
+          period_type?: string
+          tracks_units?: boolean
           updated_at?: string
         }
         Relationships: []
@@ -219,6 +228,9 @@ export type Database = {
           entry_date: string
           id: string
           notes: string | null
+          period_end: string
+          period_start: string
+          units: number | null
           updated_at: string
         }
         Insert: {
@@ -229,6 +241,9 @@ export type Database = {
           entry_date?: string
           id?: string
           notes?: string | null
+          period_end: string
+          period_start: string
+          units?: number | null
           updated_at?: string
         }
         Update: {
@@ -239,6 +254,9 @@ export type Database = {
           entry_date?: string
           id?: string
           notes?: string | null
+          period_end?: string
+          period_start?: string
+          units?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -1389,6 +1407,27 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      expense_allocations: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          allocated_amount: number
+          allocated_units: number
+          amount: number
+          category_id: string
+          category_name: string
+          entry_date: string
+          expense_id: string
+          in_production_cost: boolean
+          is_salary: boolean
+          notes: string
+          overlap_days: number
+          period_days: number
+          period_end: string
+          period_start: string
+          period_type: string
+          units: number
+        }[]
+      }
       generate_next_bill_number: { Args: never; Returns: string }
       move_entries_date: {
         Args: {
@@ -1456,6 +1495,20 @@ export type Database = {
           raw_material_type_id: string
         }[]
       }
+      rpc_period_material_cost: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          consumed_cost: number
+          consumed_kg: number
+          covered_from: string
+          covered_produced_kg: number
+          covered_to: string
+          is_estimated: boolean
+          material_name: string
+          raw_material_type_id: string
+          unpriced_kg: number
+        }[]
+      }
       rpc_production_totals_by_product: {
         Args: { p_from: string; p_to: string }
         Returns: {
@@ -1500,6 +1553,17 @@ export type Database = {
           pipe_product_id: string
           total_pcs: number
           weight_kg: number
+        }[]
+      }
+      rpc_stock_check_overheads: {
+        Args: { p_from: string; p_to: string }
+        Returns: {
+          amount: number
+          category_id: string
+          category_name: string
+          count_id: string
+          is_salary: boolean
+          units: number
         }[]
       }
       rpc_stock_check_production: {

@@ -27,13 +27,20 @@ export function useExpenseCategories() {
   })
 }
 
+/** How a type asks for its period, whether it's part of production cost, and whether it records meter units. */
+export type ExpenseCategorySettings = {
+  period_type: 'one_time' | 'date_range' | 'month'
+  in_production_cost: boolean
+  tracks_units: boolean
+}
+
 export function useAddExpenseCategory() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (input: { name: string }) => {
+    mutationFn: async (input: { name: string } & Partial<ExpenseCategorySettings>) => {
       const { data, error } = await supabase
         .from('expense_categories')
-        .insert({ name: input.name })
+        .insert(input)
         .select()
         .single()
       if (error) throw error
@@ -57,6 +64,23 @@ export function useSetExpenseCategoryActive() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY })
+    },
+  })
+}
+
+export function useUpdateExpenseCategory() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { id: string } & ExpenseCategorySettings) => {
+      const { id, ...settings } = input
+      const { error } = await supabase.from('expense_categories').update(settings).eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEY })
+      // Running costs in the stock check depend on which types count.
+      queryClient.invalidateQueries({ queryKey: ['stock_check_report'] })
+      queryClient.invalidateQueries({ queryKey: ['reports'] })
     },
   })
 }

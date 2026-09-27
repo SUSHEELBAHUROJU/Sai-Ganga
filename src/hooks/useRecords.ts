@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { formatExpensePeriod } from '../lib/expensePeriod'
 import type { Database } from '../types/database'
 import { formatQty, formatPipeProductLabel, piecesToKg } from '../lib/format'
 
@@ -150,7 +151,13 @@ export function describeRecord(record: EntryRecord): {
     case 'expense':
       return {
         title: record.row.expense_categories?.name ?? 'Expense',
-        subtitle: record.row.notes,
+        subtitle:
+          [
+            formatExpensePeriod(record.row.period_start, record.row.period_end, record.row.entry_date),
+            record.row.notes,
+          ]
+            .filter(Boolean)
+            .join(' · ') || null,
         amount: `₹${formatQty(record.row.amount)}`,
         amountKgPcs: null,
       }
@@ -596,6 +603,7 @@ export function groupRecordsByTransaction(records: EntryRecord[]): [string, Grou
         subtitle = supplierName ? `Supplier: ${supplierName}` : null
       } else if (record.kind === 'expense') {
         title = record.row.expense_categories?.name ?? 'Expense'
+        subtitle = formatExpensePeriod(record.row.period_start, record.row.period_end, record.row.entry_date)
       } else if (record.kind === 'scrap_purchase') {
         title = 'Scrap Purchase'
         subtitle = record.row.scrap_dealers?.name ? `Dealer: ${record.row.scrap_dealers.name}` : null
