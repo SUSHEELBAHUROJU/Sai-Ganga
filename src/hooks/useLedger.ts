@@ -21,7 +21,9 @@ export type PassbookEntry = {
   running_balance: number
   payment_mode: PaymentMode | null
   payment_app: PaymentApp | null
+  bill_id: string | null
   bill_number: string | null
+  bill_total_kg: number | null
   note: string | null
   created_at: string
 }

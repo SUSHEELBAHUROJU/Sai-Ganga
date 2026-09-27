@@ -1286,7 +1286,9 @@ export type Database = {
         Args: { p_customer_id: string }
         Returns: {
           amount: number
+          bill_id: string
           bill_number: string
+          bill_total_kg: number
           created_at: string
           entry_date: string
           id: string

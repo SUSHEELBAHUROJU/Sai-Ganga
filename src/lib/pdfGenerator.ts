@@ -552,7 +552,13 @@ export function generateLedgerStatementDoc(
     }
 
     const isDue = entry.type === 'due'
-    const particulars = entry.bill_number ? `Bill ${entry.bill_number}` : isDue ? 'Due' : 'Payment'
+    // Bills show only their total weight here — the customer gets the full
+    // itemised bill separately; the statement just needs to tie out.
+    const particulars = entry.bill_number
+      ? `Bill ${entry.bill_number}${entry.bill_total_kg ? ` (${formatQty(entry.bill_total_kg)} kg)` : ''}`
+      : isDue
+        ? 'Due'
+        : 'Payment'
 
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(8)

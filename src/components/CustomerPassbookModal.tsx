@@ -3,6 +3,7 @@ import { Modal } from './Modal'
 import { ConfirmDialog } from './ConfirmDialog'
 import { RecordPaymentModal } from './RecordPaymentModal'
 import { AddManualDueModal } from './AddManualDueModal'
+import { BillPdfModal } from './BillPdfModal'
 import { Trash2, Receipt, Share2 } from 'lucide-react'
 import {
   useCustomerPassbook,
@@ -10,6 +11,7 @@ import {
   type CustomerLedgerBalance,
   type PassbookEntry,
 } from '../hooks/useLedger'
+import { useBill } from '../hooks/useBills'
 import { LoadingState, EmptyNote } from './States'
 import { useToast } from '../lib/toast'
 import { formatDateLabel } from '../lib/date'
@@ -27,9 +29,11 @@ const PAYMENT_APP_LABEL: Record<string, string> = { phonepe: 'PhonePe', gpay: 'G
 function TransactionRow({
   entry,
   onDelete,
+  onViewBill,
 }: {
   entry: PassbookEntry
   onDelete: (entry: PassbookEntry) => void
+  onViewBill: (billId: string) => void
 }) {
   const isDue = entry.type === 'due'
   const modeLabel =
@@ -42,12 +46,24 @@ function TransactionRow({
   return (
     <div className="flex items-start justify-between gap-3 rounded-lg border border-slate-200/70 bg-white px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900">
       <div className="min-w-0">
-        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-          {entry.bill_number ? `Bill ${entry.bill_number}` : isDue ? 'Due' : 'Payment Received'}
-        </p>
+        {entry.bill_id && entry.bill_number ? (
+          <button
+            type="button"
+            onClick={() => onViewBill(entry.bill_id!)}
+            className="mb-0.5 inline-flex min-h-[36px] items-center gap-1 rounded-md bg-teal-100 px-2.5 py-1 font-mono text-xs font-bold text-teal-800 hover:bg-teal-200 dark:bg-teal-950/80 dark:text-teal-300 dark:hover:bg-teal-900"
+          >
+            <Receipt className="h-3.5 w-3.5" />
+            {entry.bill_number}
+          </button>
+        ) : (
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            {entry.bill_number ? `Bill ${entry.bill_number}` : isDue ? 'Due' : 'Payment Received'}
+          </p>
+        )}
         <p className="text-xs text-slate-500 dark:text-slate-400">
           {formatDateLabel(entry.entry_date)}
           {modeLabel ? ` · ${modeLabel}` : ''}
+          {entry.bill_total_kg ? ` · ${formatQty(entry.bill_total_kg)} kg` : ''}
         </p>
         {entry.note && (
           <p className="mt-0.5 truncate text-xs italic text-slate-400 dark:text-slate-500">{entry.note}</p>
@@ -91,6 +107,8 @@ export function CustomerPassbookModal({ open, customer, onClose }: CustomerPassb
   const [manualDueOpen, setManualDueOpen] = useState(false)
   const [deleting, setDeleting] = useState<PassbookEntry | null>(null)
   const [sharing, setSharing] = useState(false)
+  const [viewBillId, setViewBillId] = useState<string | null>(null)
+  const { data: viewBill } = useBill(viewBillId)
 
   if (!customer) return null
 
@@ -198,12 +216,14 @@ export function CustomerPassbookModal({ open, customer, onClose }: CustomerPassb
 
             <div className="space-y-1.5">
               {(entries ?? []).map((entry) => (
-                <TransactionRow key={entry.id} entry={entry} onDelete={setDeleting} />
+                <TransactionRow key={entry.id} entry={entry} onDelete={setDeleting} onViewBill={setViewBillId} />
               ))}
             </div>
           </div>
         </div>
       </Modal>
+
+      <BillPdfModal open={viewBillId !== null} bill={viewBill ?? null} onClose={() => setViewBillId(null)} />
 
       <RecordPaymentModal
         open={paymentOpen}
