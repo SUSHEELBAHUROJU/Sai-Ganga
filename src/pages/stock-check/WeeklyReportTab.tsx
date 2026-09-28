@@ -117,8 +117,8 @@ function PeriodDetail({ period }: { period: StockCheckPeriod }) {
                 )}
                 {m.unpriced_kg > 0.01 && (
                   <p className="mt-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
-                    {formatQty(m.unpriced_kg)} kg has no purchase price (opening stock or an old purchase without a
-                    rate), so it isn't in the cost.
+                    {formatQty(m.unpriced_kg)} kg has no purchase price (opening stock, an old purchase without a
+                    rate, or granules made beyond the scrap bought), so it isn't in the cost.
                   </p>
                 )}
                 {m.consumed_kg < 0 && (

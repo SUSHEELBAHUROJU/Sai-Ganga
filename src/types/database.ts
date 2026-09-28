@@ -1004,6 +1004,7 @@ export type Database = {
           created_by: string | null
           id: string
           is_active: boolean
+          loss_pct: number
           name: string
           updated_at: string
         }
@@ -1012,6 +1013,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           is_active?: boolean
+          loss_pct?: number
           name: string
           updated_at?: string
         }
@@ -1020,6 +1022,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           is_active?: boolean
+          loss_pct?: number
           name?: string
           updated_at?: string
         }
