@@ -10,9 +10,11 @@ import type { RecordKind } from '../hooks/useRecords'
 import type { ProductionCostReport } from '../hooks/useProductionCost'
 import {
   costPerKgProduced,
+  manualCostSummary,
   materialCostPerKg,
   runningCostPerKg,
   yieldPercent,
+  type ManualRates,
   type StockCheckPeriod,
 } from '../hooks/useStockChecks'
 import { formatInvoiceDate, formatStatementDate } from './date'
@@ -1245,7 +1247,7 @@ export function generateRecordsReportBlob(report: RecordsReportData, periodLabel
  * Weekly stock check: what was consumed (FIFO cost per material), what was
  * produced (per pipe size), and the result — cost per kg of pipe and waste.
  */
-export function generateStockCheckReportDoc(period: StockCheckPeriod): jsPDF {
+export function generateStockCheckReportDoc(period: StockCheckPeriod, manualRates?: ManualRates): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const periodLabel = stockCheckPeriodLabel(period)
   let y = drawReportHeader(doc, 'Stock Check Report', periodLabel)
@@ -1333,7 +1335,7 @@ export function generateStockCheckReportDoc(period: StockCheckPeriod): jsPDF {
   const wastePct = period.consumed_kg > 0 ? (period.waste_kg / period.consumed_kg) * 100 : null
 
   y = drawSectionTitle(doc, y, 'Result')
-  drawSummaryBlock(
+  y = drawSummaryBlock(
     doc,
     y,
     [
@@ -1356,6 +1358,45 @@ export function generateStockCheckReportDoc(period: StockCheckPeriod): jsPDF {
     { label: 'COST / KG PIPE', value: costPerKg === null ? '-' : `Rs. ${money(costPerKg)}` },
   )
 
+  // The owner's own prices, beside the app's figure — only when they entered some.
+  if (manualRates && manualRates.size > 0) {
+    const manual = manualCostSummary(period, manualRates)
+    y = drawSectionTitle(doc, y, 'With Your Prices')
+    y = drawReportTable(
+      doc,
+      y,
+      [
+        { header: 'MATERIAL', x: 2, width: 70 },
+        { header: 'USED (KG)', x: 110, align: 'right' },
+        { header: 'APP RATE', x: 134, align: 'right' },
+        { header: 'YOUR RATE', x: 158, align: 'right' },
+        { header: 'COST (Rs.)', x: 184, align: 'right' },
+      ],
+      [
+        ...manual.lines.map((l) => [
+          l.material.material_name,
+          num(l.material.consumed_kg),
+          money(l.appRate),
+          l.manualRate === null ? '-' : money(l.manualRate),
+          money(l.cost),
+        ]),
+        ['TOTAL', num(manual.usedKg), '', '', money(manual.materialCost)],
+      ],
+      'No material used.',
+    )
+    drawSummaryBlock(
+      doc,
+      y,
+      [
+        { label: 'Material Cost (your prices)', value: `Rs. ${money(manual.materialCost)}` },
+        { label: 'Running Costs', value: `Rs. ${money(period.overhead_cost)}` },
+        { label: 'Pipe Produced', value: `${num(period.produced_kg)} kg` },
+        { label: 'Cost / kg (app)', value: costPerKg === null ? '-' : `Rs. ${money(costPerKg)}` },
+      ],
+      { label: 'COST / KG (YOURS)', value: manual.costPerKg === null ? '-' : `Rs. ${money(manual.costPerKg)}` },
+    )
+  }
+
   return doc
 }
 
@@ -1363,8 +1404,8 @@ export function stockCheckPeriodLabel(period: StockCheckPeriod): string {
   return `${formatStatementDate(period.prev_count_date)} to ${formatStatementDate(period.count_date)}`
 }
 
-export function generateStockCheckReportBlob(period: StockCheckPeriod) {
-  return reportBlob(generateStockCheckReportDoc(period), `Stock_Check_${period.count_date}.pdf`)
+export function generateStockCheckReportBlob(period: StockCheckPeriod, manualRates?: ManualRates) {
+  return reportBlob(generateStockCheckReportDoc(period, manualRates), `Stock_Check_${period.count_date}.pdf`)
 }
 
 /**
@@ -1468,7 +1509,7 @@ export function generateProductionCostReportDoc(report: ProductionCostReport, pe
   const total = materialPerKg !== null && runningPerKg !== null ? materialPerKg + runningPerKg : null
 
   y = drawSectionTitle(doc, y, 'Result')
-  drawSummaryBlock(
+  y = drawSummaryBlock(
     doc,
     y,
     [

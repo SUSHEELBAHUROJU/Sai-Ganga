@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Trash2 } from 'lucide-react'
 import { Chip } from '../../components/Chip'
 import { Field } from '../../components/Field'
 import { DateField } from '../../components/DateField'
@@ -7,13 +6,11 @@ import { NumberStepper } from '../../components/NumberStepper'
 import { PackSizeField } from '../../components/PackSizeField'
 import { StickyActionBar } from '../../components/StickyActionBar'
 import { SaveButton } from '../../components/SaveButton'
-import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { LoadingState, EmptyNote } from '../../components/States'
 import { useRawMaterialTypes, type RawMaterialType } from '../../hooks/useRawMaterialTypes'
 import {
   useStockCounts,
   useSaveStockCount,
-  useDeleteStockCount,
   useExpectedRawMaterialStock,
   type StockCount,
   type StockCountItem,
@@ -48,43 +45,60 @@ function lineKg(line: LineInput): number | null {
   return line.kg.trim() === '' ? null : Number(line.kg)
 }
 
-function countTotalKg(count: StockCount): number {
-  return count.items.reduce((sum, i) => sum + (Number(i.quantity_kg) || 0), 0)
-}
-
-export function EnterCountTab() {
+/**
+ * A new count by default, or the saved count in `editing` (opened from Saved
+ * Counts). After saving, `onSaved` takes the user to the saved list — the form
+ * never turns into an edit of what was just saved.
+ */
+export function EnterCountTab({
+  editing,
+  onEdit,
+  onCancelEdit,
+  onSaved,
+}: {
+  editing: StockCount | null
+  onEdit: (count: StockCount) => void
+  onCancelEdit: () => void
+  onSaved: (countDate: string) => void
+}) {
   const { data: materialTypes, isLoading: typesLoading } = useRawMaterialTypes()
   const { data: counts } = useStockCounts()
   const saveCount = useSaveStockCount()
-  const deleteCount = useDeleteStockCount()
   const { showToast } = useToast()
 
-  const [countDate, setCountDate] = useState(todayISODate())
+  const [countDate, setCountDate] = useState(editing?.count_date ?? todayISODate())
   const [lines, setLines] = useState<Record<string, LineInput>>({})
-  const [notes, setNotes] = useState('')
-  const [deleting, setDeleting] = useState<StockCount | null>(null)
+  const [notes, setNotes] = useState(editing?.notes ?? '')
   const { data: expected } = useExpectedRawMaterialStock(countDate)
 
   const activeTypes = useMemo(() => (materialTypes ?? []).filter((t) => t.is_active), [materialTypes])
-  const existing = (counts ?? []).find((c) => c.count_date === countDate) ?? null
+  // save_stock_count replaces whatever is saved for the date, so a new count
+  // on a date that already has one would silently overwrite it.
+  const clash = editing ? null : ((counts ?? []).find((c) => c.count_date === countDate) ?? null)
 
-  // Picking a date that already has a count opens it for editing; any other
-  // date starts blank. Re-runs when the saved counts arrive or change.
+  // Fill in lines only for materials that don't have one yet, so a background
+  // refetch never wipes numbers the user is typing.
   useEffect(() => {
-    const next: Record<string, LineInput> = {}
-    for (const type of activeTypes) {
-      const item = existing?.items.find((i) => i.raw_material_type_id === type.id)
-      next[type.id] = item ? lineFromItem(item) : emptyLine(type)
-    }
-    setLines(next)
-    setNotes(existing?.notes ?? '')
-  }, [activeTypes, existing])
+    setLines((prev) => {
+      const next = { ...prev }
+      for (const type of activeTypes) {
+        if (next[type.id]) continue
+        const item = editing?.items.find((i) => i.raw_material_type_id === type.id)
+        next[type.id] = item ? lineFromItem(item) : emptyLine(type)
+      }
+      return next
+    })
+  }, [activeTypes, editing])
 
   function updateLine(id: string, patch: Partial<LineInput>) {
     setLines((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }))
   }
 
   function handleSave() {
+    if (clash) {
+      showToast(`A count for ${formatDateLabel(countDate)} is already saved — edit that one instead`, 'error')
+      return
+    }
     const items: StockCountItem[] = []
     for (const type of activeTypes) {
       const line = lines[type.id]
@@ -105,34 +119,63 @@ export function EnterCountTab() {
     saveCount.mutate(
       { count_date: countDate, notes: notes.trim() || null, items },
       {
-        onSuccess: () => showToast(existing ? 'Stock count updated' : 'Stock count saved'),
+        onSuccess: () => {
+          showToast(editing ? 'Stock count updated' : 'Stock count saved')
+          // Back to a blank form for the next count.
+          setCountDate(todayISODate())
+          setLines(Object.fromEntries(activeTypes.map((t) => [t.id, emptyLine(t)])))
+          setNotes('')
+          onSaved(countDate)
+        },
         onError: () => showToast('Could not save stock count', 'error'),
       },
     )
-  }
-
-  function handleDelete() {
-    if (!deleting) return
-    deleteCount.mutate(deleting.id, {
-      onSuccess: () => {
-        showToast('Stock count removed')
-        setDeleting(null)
-      },
-      onError: () => showToast('Could not remove stock count', 'error'),
-    })
   }
 
   if (typesLoading) return <LoadingState />
 
   return (
     <div className="space-y-6 pb-2">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-slate-600 dark:text-slate-400">
-          {existing ? 'Editing the count saved for this date.' : 'Count what is left of each material.'} Count at the
-          end of the day — purchases and production dated that day are treated as before the count.
-        </p>
-        <DateField value={countDate} onChange={setCountDate} />
-      </div>
+      {editing ? (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-purple-300 bg-purple-50 px-4 py-3 dark:border-purple-800 dark:bg-purple-950/30">
+          <p className="text-sm text-purple-900 dark:text-purple-200">
+            Editing the count of <span className="font-semibold">{formatDateLabel(editing.count_date)}</span>. Change
+            the numbers and tap Update Count.
+          </p>
+          <button
+            type="button"
+            onClick={onCancelEdit}
+            className="min-h-[44px] shrink-0 rounded-lg border border-purple-300 bg-white px-3 text-sm font-semibold text-purple-700 hover:bg-purple-100 dark:border-purple-800 dark:bg-slate-900 dark:text-purple-300"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Count what is left of each material at the end of the day — purchases and production dated that day
+              are treated as before the count.
+            </p>
+            <DateField value={countDate} onChange={setCountDate} />
+          </div>
+          {clash && (
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/30">
+              <p className="text-sm text-amber-900 dark:text-amber-200">
+                A count for <span className="font-semibold">{formatDateLabel(countDate)}</span> is already saved.
+                Pick another date, or edit that count.
+              </p>
+              <button
+                type="button"
+                onClick={() => onEdit(clash)}
+                className="min-h-[44px] shrink-0 rounded-lg border border-amber-300 bg-white px-3 text-sm font-semibold text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:bg-slate-900 dark:text-amber-300"
+              >
+                Edit it
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {activeTypes.length === 0 ? (
         <EmptyNote>No active raw material types. Add some in Settings → Raw Materials first.</EmptyNote>
@@ -222,73 +265,17 @@ export function EnterCountTab() {
         </div>
       )}
 
-      <div className="space-y-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          Past Counts
-        </h3>
-        {(counts ?? []).length === 0 ? (
-          <EmptyNote>No counts yet. The first count is the starting point — the report begins from the second.</EmptyNote>
-        ) : (
-          <div className="space-y-1.5">
-            {(counts ?? []).map((count) => (
-              <div
-                key={count.id}
-                className={`flex items-center justify-between gap-3 rounded-lg border bg-white px-3 py-2 dark:bg-slate-900 ${
-                  count.count_date === countDate
-                    ? 'border-purple-400 dark:border-purple-700'
-                    : 'border-slate-200/70 dark:border-slate-800'
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => setCountDate(count.count_date)}
-                  className="min-h-[44px] min-w-0 flex-1 text-left"
-                >
-                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                    {formatDateLabel(count.count_date)}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {count.items.length} materials · {formatQty(countTotalKg(count))} kg in stock
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  aria-label="Delete count"
-                  onClick={() => setDeleting(count)}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
       {activeTypes.length > 0 && (
         <StickyActionBar>
           <SaveButton
             accent="stock"
             onClick={handleSave}
+            disabled={clash !== null}
             pending={saveCount.isPending}
-            label={existing ? 'Update Count' : 'Save Count'}
+            label={editing ? 'Update Count' : 'Save Count'}
           />
         </StickyActionBar>
       )}
-
-      <ConfirmDialog
-        open={deleting !== null}
-        title="Remove this stock count?"
-        message={
-          deleting
-            ? `Remove the count of ${formatDateLabel(deleting.count_date)}? The weekly report and live stock will be recalculated without it.`
-            : ''
-        }
-        confirmLabel="Remove"
-        danger
-        onConfirm={handleDelete}
-        onCancel={() => setDeleting(null)}
-      />
     </div>
   )
 }

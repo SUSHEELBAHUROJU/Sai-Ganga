@@ -1025,6 +1025,48 @@ export type Database = {
         }
         Relationships: []
       }
+      stock_check_manual_rates: {
+        Row: {
+          count_id: string
+          created_at: string
+          created_by: string | null
+          rate_per_kg: number
+          raw_material_type_id: string
+          updated_at: string
+        }
+        Insert: {
+          count_id: string
+          created_at?: string
+          created_by?: string | null
+          rate_per_kg: number
+          raw_material_type_id: string
+          updated_at?: string
+        }
+        Update: {
+          count_id?: string
+          created_at?: string
+          created_by?: string | null
+          rate_per_kg?: number
+          raw_material_type_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_check_manual_rates_count_id_fkey"
+            columns: ["count_id"]
+            isOneToOne: false
+            referencedRelation: "stock_counts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_check_manual_rates_raw_material_type_id_fkey"
+            columns: ["raw_material_type_id"]
+            isOneToOne: false
+            referencedRelation: "raw_material_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stock_count_items: {
         Row: {
           count_id: string
@@ -1639,6 +1681,10 @@ export type Database = {
           sold_kg: number
           sold_pcs: number
         }[]
+      }
+      save_stock_check_manual_rates: {
+        Args: { p_count_id: string; p_rates: Json }
+        Returns: undefined
       }
       save_stock_count: {
         Args: { p_date: string; p_items: Json; p_notes: string }

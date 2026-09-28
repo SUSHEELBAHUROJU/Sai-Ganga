@@ -243,3 +243,64 @@ export function costPerKgProduced(period: StockCheckPeriod): number | null {
 export function yieldPercent(period: StockCheckPeriod): number | null {
   return period.consumed_kg > 0 ? (period.produced_kg / period.consumed_kg) * 100 : null
 }
+
+/** Prices the user typed in for one week, keyed by material id. */
+export type ManualRates = Map<string, number>
+
+const MANUAL_RATES_KEY = ['stock_check_manual_rates']
+
+export function useManualRates(countId: string) {
+  return useQuery({
+    queryKey: [...MANUAL_RATES_KEY, countId],
+    queryFn: async (): Promise<ManualRates> => {
+      const { data, error } = await supabase
+        .from('stock_check_manual_rates')
+        .select('raw_material_type_id, rate_per_kg')
+        .eq('count_id', countId)
+      if (error) throw error
+      return new Map((data ?? []).map((row) => [row.raw_material_type_id, Number(row.rate_per_kg)]))
+    },
+  })
+}
+
+export function useSaveManualRates() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { countId: string; rates: ManualRates }) => {
+      const { error } = await supabase.rpc('save_stock_check_manual_rates', {
+        p_count_id: input.countId,
+        p_rates: [...input.rates].map(([raw_material_type_id, rate_per_kg]) => ({ raw_material_type_id, rate_per_kg })),
+      })
+      if (error) throw error
+    },
+    onSuccess: (_data, input) => queryClient.invalidateQueries({ queryKey: [...MANUAL_RATES_KEY, input.countId] }),
+  })
+}
+
+export type ManualCostLine = {
+  material: StockCheckMaterialRow
+  /** The app's rate — its FIFO cost ÷ kg used. */
+  appRate: number
+  /** The user's price, or null to use the app's rate. */
+  manualRate: number | null
+  cost: number
+}
+
+/**
+ * The week's cost redone with the user's prices. Only materials actually used
+ * (more than 0 kg) are priced; a material without a typed price keeps the
+ * app's rate. Running costs are the same as the app's.
+ */
+export function manualCostSummary(period: StockCheckPeriod, rates: ManualRates) {
+  const lines: ManualCostLine[] = period.materials
+    .filter((m) => m.consumed_kg > 0)
+    .map((m) => {
+      const appRate = m.consumed_cost / m.consumed_kg
+      const manualRate = rates.get(m.raw_material_type_id) ?? null
+      return { material: m, appRate, manualRate, cost: m.consumed_kg * (manualRate ?? appRate) }
+    })
+  const materialCost = lines.reduce((sum, l) => sum + l.cost, 0)
+  const usedKg = lines.reduce((sum, l) => sum + Number(l.material.consumed_kg), 0)
+  const costPerKg = period.produced_kg > 0 ? (materialCost + period.overhead_cost) / period.produced_kg : null
+  return { lines, usedKg, materialCost, costPerKg }
+}

@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { AlertTriangle, ChevronDown, ChevronUp, Share2 } from 'lucide-react'
 import { DateRangeField } from '../../components/DateRangeField'
 import { CostPerKgBreakdown } from '../../components/CostPerKgBreakdown'
+import { ManualPricesSection } from './ManualPricesSection'
 import { LoadingState, EmptyNote } from '../../components/States'
 import {
   useStockCheckReport,
+  useManualRates,
   costPerKgProduced,
   yieldPercent,
   type StockCheckPeriod,
@@ -44,12 +46,13 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 function PeriodDetail({ period }: { period: StockCheckPeriod }) {
   const { showToast } = useToast()
   const [sharing, setSharing] = useState(false)
+  const { data: manualRates } = useManualRates(period.count_id)
   const costPerKg = costPerKgProduced(period)
 
   async function handleShare() {
     setSharing(true)
     try {
-      const { file, url, filename } = generateStockCheckReportBlob(period)
+      const { file, url, filename } = generateStockCheckReportBlob(period, manualRates)
       if (typeof navigator !== 'undefined' && 'share' in navigator && 'canShare' in navigator) {
         try {
           if (navigator.canShare({ files: [file] })) {
@@ -190,6 +193,8 @@ function PeriodDetail({ period }: { period: StockCheckPeriod }) {
           <Stat label="Factory waste recorded" value={`${formatQty(period.factory_waste_kg)} kg`} />
         </div>
       </div>
+
+      <ManualPricesSection period={period} />
 
       <button
         type="button"
