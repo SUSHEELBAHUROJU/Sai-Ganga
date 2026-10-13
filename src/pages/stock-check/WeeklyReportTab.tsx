@@ -9,14 +9,14 @@ import {
   yieldPercent,
   type StockCheckPeriod,
 } from '../../hooks/useStockChecks'
-import { stockCheckPeriodLabel } from '../../lib/pdfGenerator'
+import { generateStockCheckReportBlob, stockCheckPeriodLabel } from '../../lib/pdfGenerator'
 import { formatShortDate, todayISODate } from '../../lib/date'
 import { formatPipeProductLabel, formatQty } from '../../lib/format'
 import { SectionTitle, Stat } from './weekParts'
-import { pct, threeMonthsAgo, useSharePeriodPdf, wastePercent } from './weekUtils'
+import { pct, threeMonthsAgo, useSharePdf, wastePercent } from './weekUtils'
 
 function PeriodDetail({ period }: { period: StockCheckPeriod }) {
-  const { share: sharePdf, sharing } = useSharePeriodPdf(period)
+  const { share, sharing } = useSharePdf()
   const costPerKg = costPerKgProduced(period)
 
   return (
@@ -59,8 +59,8 @@ function PeriodDetail({ period }: { period: StockCheckPeriod }) {
                 )}
                 {m.unpriced_kg > 0.01 && (
                   <p className="mt-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
-                    {formatQty(m.unpriced_kg)} kg has no purchase price (opening stock, an old purchase without a
-                    rate, or granules made beyond the scrap bought), so it isn't in the cost.
+                    {formatQty(m.unpriced_kg)} kg has no price — no purchase of this material (or, for recycled
+                    material, of its scrap) has a rate — so it isn't in the cost.
                   </p>
                 )}
                 {m.consumed_kg < 0 && (
@@ -138,7 +138,7 @@ function PeriodDetail({ period }: { period: StockCheckPeriod }) {
 
       <button
         type="button"
-        onClick={sharePdf}
+        onClick={() => share(generateStockCheckReportBlob(period), `Stock Check — ${stockCheckPeriodLabel(period)}`)}
         disabled={sharing}
         className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
       >

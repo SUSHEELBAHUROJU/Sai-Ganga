@@ -24,7 +24,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 /**
  * Cost to make 1 kg of pipe for a calendar month: material (from stock
- * counts, FIFO), running costs (expenses counted in the month they're for),
+ * counts, latest prices), running costs (expenses counted in the month they're for),
  * and the pipe produced.
  */
 export function CostPerKgTab() {

@@ -17,7 +17,7 @@ export type StockCount = {
   items: StockCountItem[]
 }
 
-/** One material's line in a count period — consumption and its FIFO cost, computed in Postgres. */
+/** One material's line in a count period — consumption priced at the latest rate, computed in Postgres. */
 export type StockCheckMaterialRow = {
   count_id: string
   prev_count_date: string
@@ -81,8 +81,8 @@ export type StockCheckPeriod = {
   /** consumed − produced. */
   waste_kg: number
   unpriced_kg: number
-  /** Granules made by recycling in the period. */
-  recycled_kg: number
+  /** Recycled material (granules) used in the period — the kg recycling pay and electricity are on. */
+  recycled_used_kg: number
 }
 
 const COUNTS_KEY = ['stock_counts']
@@ -205,7 +205,7 @@ function buildPeriods(
         factory_waste_kg: Number(row.factory_waste_kg) || 0,
         waste_kg: 0,
         unpriced_kg: 0,
-        recycled_kg: 0,
+        recycled_used_kg: 0,
       }
       period.produced_pcs = period.production.reduce((sum, p) => sum + (Number(p.pcs) || 0), 0)
       period.overhead_cost = period.overheads.reduce((sum, o) => sum + (Number(o.amount) || 0), 0)
@@ -217,7 +217,7 @@ function buildPeriods(
     period.consumed_kg += Number(row.consumed_kg) || 0
     period.consumed_cost += Number(row.consumed_cost) || 0
     period.unpriced_kg += Number(row.unpriced_kg) || 0
-    period.recycled_kg += Number(row.recycled_kg) || 0
+    if (row.is_recycled_output && row.consumed_kg > 0) period.recycled_used_kg += Number(row.consumed_kg)
   }
 
   const periods = [...byCount.values()]
@@ -355,7 +355,7 @@ export function useSaveMyCosts() {
 
 export type ManualCostLine = {
   material: StockCheckMaterialRow
-  /** The app's rate — its FIFO cost ÷ kg used. */
+  /** The app's rate — the material's latest price. */
   appRate: number
   /** The user's price, or null to use the app's rate. */
   manualRate: number | null
@@ -366,7 +366,7 @@ export type ManualCostLine = {
  * The week's cost per kg of pipe the owner's way. Only materials actually
  * used (more than 0 kg) are priced; one without a typed price keeps the
  * app's rate. Operator pay and electricity are per kg — pipe on the pipe
- * made, recycling on the granules made.
+ * made, recycling on the recycled material used in production.
  */
 export function myCostSummary(period: StockCheckPeriod, costs: MyCosts) {
   const lines: ManualCostLine[] = period.materials
@@ -379,9 +379,9 @@ export function myCostSummary(period: StockCheckPeriod, costs: MyCosts) {
   const materialCost = lines.reduce((sum, l) => sum + l.cost, 0)
   const usedKg = lines.reduce((sum, l) => sum + Number(l.material.consumed_kg), 0)
   const operatorPipe = period.produced_kg * costs.operatorPipeRate
-  const operatorRecycled = period.recycled_kg * costs.operatorRecycledRate
+  const operatorRecycled = period.recycled_used_kg * costs.operatorRecycledRate
   const electricityPipe = period.produced_kg * costs.electricityPipeRate
-  const electricityRecycled = period.recycled_kg * costs.electricityRecycledRate
+  const electricityRecycled = period.recycled_used_kg * costs.electricityRecycledRate
   const extrasCost = costs.extras.reduce((sum, e) => sum + e.amount, 0)
   const appExpenses = costs.includeAppExpenses ? period.overhead_cost : 0
   const totalCost =

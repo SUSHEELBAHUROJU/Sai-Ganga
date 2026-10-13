@@ -16,8 +16,8 @@ type TabKey = (typeof TABS)[number]['key']
 
 /**
  * Weekly physical count of raw material. Two consecutive counts give what was
- * consumed in between, priced first-in-first-out against the real purchase
- * lots, next to what was produced over the same days.
+ * consumed in between, priced at each material's latest purchase price,
+ * next to what was produced over the same days.
  */
 export function StockCheckPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('count')

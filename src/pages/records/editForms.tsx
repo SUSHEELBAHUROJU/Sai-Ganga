@@ -388,16 +388,16 @@ export function EditRawPurchaseForm({ row, onChange }: EditFormProps<RawPurchase
 
     const totalQty = mode === 'bag' ? (pack ?? 0) * Number(bags || 0) : Number(direct || 0)
     const priceValue = Number(priceText)
-    // The rate is mandatory, so an edit that clears it is not a valid patch —
+    // The rate and the supplier are mandatory, so an edit without them is not a valid patch —
     // the Save button stays disabled rather than writing a null cost the DB
     // check constraint would reject anyway. Cost is always recomputed here, so
     // changing the pack size or bag count re-prices the purchase.
     onChange(
-      material && totalQty > 0 && priceText.trim() !== '' && priceValue > 0
+      material && supplier && totalQty > 0 && priceText.trim() !== '' && priceValue > 0
         ? {
             entry_date: date,
             raw_material_type_id: material,
-            supplier_id: supplier || null,
+            supplier_id: supplier,
             entry_mode: mode,
             pack_kg: mode === 'bag' ? pack : null,
             num_bags: mode === 'bag' ? Number(bags) : null,
@@ -440,7 +440,7 @@ export function EditRawPurchaseForm({ row, onChange }: EditFormProps<RawPurchase
       </div>
       <div>
         <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Supplier (optional)
+          Supplier
         </span>
         <SupplierPicker
           value={supplierId || null}
@@ -449,9 +449,11 @@ export function EditRawPurchaseForm({ row, onChange }: EditFormProps<RawPurchase
             emit({ supplierId: v })
           }}
         />
-        {!supplierId && row.supplier_name && (
-          <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
-            Recorded earlier as “{row.supplier_name}” — pick a supplier above to link it.
+        {!supplierId && (
+          <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+            {row.supplier_name
+              ? `Recorded earlier as “${row.supplier_name}” — pick a supplier above to save.`
+              : 'Pick a supplier above to save.'}
           </p>
         )}
       </div>
@@ -593,11 +595,12 @@ export function EditScrapPurchaseForm({ row, onChange }: EditFormProps<ScrapPurc
     const note = next.notes ?? notes
     const priceValue = Number(priceText)
     // Cost follows the rate and the quantity — editing either re-prices it.
+    // The dealer is mandatory, like the rate.
     onChange(
-      scrapType && qty > 0 && priceText.trim() !== '' && priceValue > 0
+      dealer && scrapType && qty > 0 && priceText.trim() !== '' && priceValue > 0
         ? {
             entry_date: date,
-            scrap_dealer_id: dealer || null,
+            scrap_dealer_id: dealer,
             scrap_type_id: scrapType,
             quantity_kg: qty,
             price_per_kg: priceValue,
@@ -620,7 +623,7 @@ export function EditScrapPurchaseForm({ row, onChange }: EditFormProps<ScrapPurc
       />
       <div>
         <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Scrap Dealer (optional)
+          Scrap Dealer
         </span>
         <ScrapDealerPicker
           value={dealerId || null}
@@ -629,6 +632,9 @@ export function EditScrapPurchaseForm({ row, onChange }: EditFormProps<ScrapPurc
             emit({ dealerId: v })
           }}
         />
+        {!dealerId && (
+          <p className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">Pick a scrap dealer above to save.</p>
+        )}
       </div>
       <div>
         <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">

@@ -59,6 +59,7 @@ export function RawMaterialPurchaseForm({ entryDate }: { entryDate: string }) {
   function handleSave() {
     const problem = firstError(
       materialTypeId ? null : 'Select a material type',
+      supplierId ? null : 'Select a supplier',
       entryMode === 'bag'
         ? firstError(
             packKg && packKg > 0 ? null : 'Choose a valid pack size',
@@ -78,7 +79,7 @@ export function RawMaterialPurchaseForm({ entryDate }: { entryDate: string }) {
       {
         entry_date: entryDate,
         raw_material_type_id: materialTypeId,
-        supplier_id: supplierId || null,
+        supplier_id: supplierId,
         entry_mode: entryMode,
         pack_kg: entryMode === 'bag' ? packKg : null,
         num_bags: entryMode === 'bag' ? Number(numBags) : null,
@@ -132,7 +133,7 @@ export function RawMaterialPurchaseForm({ entryDate }: { entryDate: string }) {
 
         <div>
           <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Supplier (optional)
+            Supplier
           </span>
           <SupplierPicker value={supplierId || null} onChange={setSupplierId} />
         </div>

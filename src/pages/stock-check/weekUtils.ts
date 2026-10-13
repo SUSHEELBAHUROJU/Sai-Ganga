@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { useAllMyCosts, type StockCheckPeriod } from '../../hooks/useStockChecks'
-import { generateStockCheckReportBlob, stockCheckPeriodLabel } from '../../lib/pdfGenerator'
+import type { StockCheckPeriod } from '../../hooks/useStockChecks'
 import { useToast } from '../../lib/toast'
 import { isoDateFromDate } from '../../lib/date'
 import { formatQty } from '../../lib/format'
@@ -17,20 +16,19 @@ export const pct = (n: number | null) => (n === null ? '—' : `${formatQty(n)}%
 export const wastePercent = (p: StockCheckPeriod) =>
   p.consumed_kg > 0 ? (p.waste_kg / p.consumed_kg) * 100 : null
 
-/** The week's PDF (with the owner's saved costs when there are any), shared or downloaded. */
-export function useSharePeriodPdf(period: StockCheckPeriod) {
+/** Hands a generated PDF to the share sheet, or downloads it where sharing files isn't supported. */
+export function useSharePdf() {
   const { showToast } = useToast()
   const [sharing, setSharing] = useState(false)
-  const { data: allMyCosts } = useAllMyCosts()
 
-  async function share() {
+  async function share(pdf: { file: File; url: string; filename: string }, title: string) {
     setSharing(true)
     try {
-      const { file, url, filename } = generateStockCheckReportBlob(period, allMyCosts?.get(period.count_id))
+      const { file, url, filename } = pdf
       if (typeof navigator !== 'undefined' && 'share' in navigator && 'canShare' in navigator) {
         try {
           if (navigator.canShare({ files: [file] })) {
-            await navigator.share({ title: `Stock Check — ${stockCheckPeriodLabel(period)}`, files: [file] })
+            await navigator.share({ title, files: [file] })
             return
           }
         } catch (err: any) {

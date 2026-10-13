@@ -14,12 +14,12 @@ import {
   type MyCosts,
   type StockCheckPeriod,
 } from '../../hooks/useStockChecks'
-import { stockCheckPeriodLabel } from '../../lib/pdfGenerator'
+import { generateMyCostsReportBlob, stockCheckPeriodLabel } from '../../lib/pdfGenerator'
 import { useToast } from '../../lib/toast'
 import { formatShortDate, todayISODate } from '../../lib/date'
 import { formatQty } from '../../lib/format'
 import { SectionTitle, Stat } from './weekParts'
-import { threeMonthsAgo, useSharePeriodPdf } from './weekUtils'
+import { threeMonthsAgo, useSharePdf } from './weekUtils'
 
 const rupeesPerKg = (n: number | null) => (n === null ? '—' : `₹${formatQty(n)}`)
 
@@ -82,12 +82,15 @@ function PerKgRow({
   value,
   onChange,
   amount,
+  detail,
 }: {
   label: string
   kg: number
   value: string
   onChange: (value: string) => void
   amount: number
+  /** What the kg is made of, e.g. "Recycled LD Pipe 1000 kg + Recycled Drip Pipe 25 kg". */
+  detail?: string
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
@@ -96,6 +99,7 @@ function PerKgRow({
         <p className="text-[11px] text-slate-500 dark:text-slate-400">
           {kg > 0 ? `${formatQty(kg)} kg × ₹/kg` : 'None this week'}
         </p>
+        {kg > 0 && detail && <p className="text-[11px] text-slate-500 dark:text-slate-400">{detail}</p>}
         <p className="text-xs font-semibold text-purple-700 dark:text-purple-300">₹{formatQty(amount)}</p>
       </div>
       <RupeeInput value={value} onChange={onChange} label={`${label} rupees per kg`} />
@@ -115,6 +119,14 @@ function Box({ title, hint, children }: { title: string; hint?: string; children
   )
 }
 
+/** "Recycled LD Pipe 1000 kg + Recycled Drip Pipe 25 kg" — the recycled material used this week. */
+function recycledUsedDetail(period: StockCheckPeriod): string {
+  return period.materials
+    .filter((m) => m.is_recycled_output && m.consumed_kg > 0)
+    .map((m) => `${m.material_name} ${formatQty(m.consumed_kg)} kg`)
+    .join(' + ')
+}
+
 type ExtraInput = { key: number; name: string; amount: string }
 
 const STARTER_EXTRAS = ['Day wages', 'Machinery']
@@ -132,7 +144,7 @@ function MyCostsForm({
 }) {
   const saveCosts = useSaveMyCosts()
   const { showToast } = useToast()
-  const { share, sharing } = useSharePeriodPdf(period)
+  const { share, sharing } = useSharePdf()
 
   const [rateInputs, setRateInputs] = useState<Record<string, string>>(() =>
     Object.fromEntries([...seed.rates].map(([id, rate]) => [id, String(rate)])),
@@ -183,6 +195,7 @@ function MyCostsForm({
   const dirty = !saved || costsKey(costs) !== costsKey(saved)
   const appCostPerKg = costPerKgProduced(period)
   const showAppExpenses = period.overhead_cost > 0 || seed.includeAppExpenses
+  const recycledDetail = recycledUsedDetail(period)
 
   function handleSave() {
     saveCosts.mutate(
@@ -243,11 +256,12 @@ function MyCostsForm({
           amount={summary.operatorPipe}
         />
         <PerKgRow
-          label="Recycled made"
-          kg={period.recycled_kg}
+          label="Recycled used"
+          kg={period.recycled_used_kg}
           value={operatorRecycled}
           onChange={setOperatorRecycled}
           amount={summary.operatorRecycled}
+          detail={recycledDetail}
         />
       </Box>
 
@@ -260,11 +274,12 @@ function MyCostsForm({
           amount={summary.electricityPipe}
         />
         <PerKgRow
-          label="Recycled made"
-          kg={period.recycled_kg}
+          label="Recycled used"
+          kg={period.recycled_used_kg}
           value={electricityRecycled}
           onChange={setElectricityRecycled}
           amount={summary.electricityRecycled}
+          detail={recycledDetail}
         />
       </Box>
 
@@ -365,7 +380,7 @@ function MyCostsForm({
 
       <button
         type="button"
-        onClick={share}
+        onClick={() => saved && share(generateMyCostsReportBlob(period, saved), `My Costs — ${stockCheckPeriodLabel(period)}`)}
         disabled={sharing || dirty}
         className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
       >
@@ -407,7 +422,7 @@ function MyCostsCard({
 
       <div className="grid grid-cols-2 gap-2">
         <Stat label="Pipe made" value={`${formatQty(period.produced_kg)} kg`} sub={`${formatQty(period.produced_pcs)} pcs`} />
-        <Stat label="Recycled made" value={`${formatQty(period.recycled_kg)} kg`} />
+        <Stat label="Recycled used" value={`${formatQty(period.recycled_used_kg)} kg`} />
         <Stat label="App cost / kg" value={rupeesPerKg(costPerKgProduced(period))} />
         <Stat
           label="Your cost / kg"
@@ -468,7 +483,7 @@ export function MyCostsTab() {
                 <tr>
                   <th className="px-1 py-1 font-semibold">Week ending</th>
                   <th className="px-1 py-1 text-right font-semibold">Made</th>
-                  <th className="px-1 py-1 text-right font-semibold">Recycled</th>
+                  <th className="px-1 py-1 text-right font-semibold">Recycled used</th>
                   <th className="px-1 py-1 text-right font-semibold">App ₹/kg</th>
                   <th className="px-1 py-1 text-right font-semibold">Your ₹/kg</th>
                 </tr>
@@ -482,7 +497,7 @@ export function MyCostsTab() {
                     <tr key={p.count_id} className="border-t border-slate-100 dark:border-slate-800">
                       <td className="px-1 py-1.5">{formatShortDate(p.count_date)}</td>
                       <td className="px-1 py-1.5 text-right">{formatQty(p.produced_kg)}</td>
-                      <td className="px-1 py-1.5 text-right">{formatQty(p.recycled_kg)}</td>
+                      <td className="px-1 py-1.5 text-right">{formatQty(p.recycled_used_kg)}</td>
                       <td className="px-1 py-1.5 text-right">{appCpk === null ? '—' : formatQty(appCpk)}</td>
                       <td className="px-1 py-1.5 text-right font-semibold text-purple-700 dark:text-purple-300">
                         {yourCpk === null ? '—' : formatQty(yourCpk)}

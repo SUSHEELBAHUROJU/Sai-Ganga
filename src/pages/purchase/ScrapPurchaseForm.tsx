@@ -43,6 +43,7 @@ export function ScrapPurchaseForm({ entryDate }: { entryDate: string }) {
 
   function handleSave() {
     const problem = firstError(
+      dealerId ? null : 'Select a scrap dealer',
       scrapTypeId ? null : 'Select a scrap type',
       validateQuantity(quantityKg, 'quantity'),
       validateCost(pricePerKg),
@@ -56,7 +57,7 @@ export function ScrapPurchaseForm({ entryDate }: { entryDate: string }) {
     addPurchase.mutate(
       {
         entry_date: entryDate,
-        scrap_dealer_id: dealerId || null,
+        scrap_dealer_id: dealerId,
         scrap_type_id: scrapTypeId,
         quantity_kg: qtyValue,
         price_per_kg: Number(pricePerKg),
@@ -88,7 +89,7 @@ export function ScrapPurchaseForm({ entryDate }: { entryDate: string }) {
       <div className="space-y-5 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
         <div>
           <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-            Scrap Dealer (optional)
+            Scrap Dealer
           </span>
           <ScrapDealerPicker value={dealerId || null} onChange={setDealerId} />
         </div>
