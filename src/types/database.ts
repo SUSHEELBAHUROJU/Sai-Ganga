@@ -1070,6 +1070,53 @@ export type Database = {
           },
         ]
       }
+      stock_check_my_costs: {
+        Row: {
+          count_id: string
+          created_at: string
+          created_by: string | null
+          electricity_pipe_rate: number
+          electricity_recycled_rate: number
+          extra_costs: Json
+          include_app_expenses: boolean
+          operator_pipe_rate: number
+          operator_recycled_rate: number
+          updated_at: string
+        }
+        Insert: {
+          count_id: string
+          created_at?: string
+          created_by?: string | null
+          electricity_pipe_rate?: number
+          electricity_recycled_rate?: number
+          extra_costs?: Json
+          include_app_expenses?: boolean
+          operator_pipe_rate?: number
+          operator_recycled_rate?: number
+          updated_at?: string
+        }
+        Update: {
+          count_id?: string
+          created_at?: string
+          created_by?: string | null
+          electricity_pipe_rate?: number
+          electricity_recycled_rate?: number
+          extra_costs?: Json
+          include_app_expenses?: boolean
+          operator_pipe_rate?: number
+          operator_recycled_rate?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_check_my_costs_count_id_fkey"
+            columns: ["count_id"]
+            isOneToOne: true
+            referencedRelation: "stock_counts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stock_count_items: {
         Row: {
           count_id: string
@@ -1687,6 +1734,10 @@ export type Database = {
       }
       save_stock_check_manual_rates: {
         Args: { p_count_id: string; p_rates: Json }
+        Returns: undefined
+      }
+      save_stock_check_my_costs: {
+        Args: { p_costs: Json; p_count_id: string; p_rates: Json }
         Returns: undefined
       }
       save_stock_count: {

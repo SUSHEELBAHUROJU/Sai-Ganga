@@ -22,7 +22,7 @@ export type ProductionCostReport = {
   materialKg: number
   unpricedKg: number
   /** Part of the material comes from a stock-check week that runs past the
-   *  range, shared by days — an estimate. */
+   *  range, shared by pipe made each day — an estimate. */
   isEstimated: boolean
   /** Days the material figures stand for — null when no count covers the range. */
   coveredFrom: string | null
@@ -58,13 +58,16 @@ export function useProductionCost(fromDate: string, toDate: string) {
       if (productionRes.error) throw productionRes.error
 
       const materialRows = materialRes.data ?? []
-      const materials: ProductionCostMaterial[] = materialRows.map((m) => ({
-        raw_material_type_id: m.raw_material_type_id,
-        material_name: m.material_name,
-        consumed_kg: Number(m.consumed_kg) || 0,
-        consumed_cost: Number(m.consumed_cost) || 0,
-        unpriced_kg: Number(m.unpriced_kg) || 0,
-      }))
+      const materials: ProductionCostMaterial[] = materialRows
+        .map((m) => ({
+          raw_material_type_id: m.raw_material_type_id,
+          material_name: m.material_name,
+          consumed_kg: Number(m.consumed_kg) || 0,
+          consumed_cost: Number(m.consumed_cost) || 0,
+          unpriced_kg: Number(m.unpriced_kg) || 0,
+        }))
+        // A week that only reaches the range on no-production days gets no share.
+        .filter((m) => m.consumed_kg !== 0 || m.consumed_cost !== 0 || m.unpriced_kg !== 0)
       const first = materialRows[0]
 
       const byCategory = new Map<string, ProductionCostOverhead>()

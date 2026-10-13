@@ -10,11 +10,11 @@ import type { RecordKind } from '../hooks/useRecords'
 import type { ProductionCostReport } from '../hooks/useProductionCost'
 import {
   costPerKgProduced,
-  manualCostSummary,
+  myCostSummary,
   materialCostPerKg,
   runningCostPerKg,
   yieldPercent,
-  type ManualRates,
+  type MyCosts,
   type StockCheckPeriod,
 } from '../hooks/useStockChecks'
 import { formatInvoiceDate, formatStatementDate } from './date'
@@ -1247,7 +1247,7 @@ export function generateRecordsReportBlob(report: RecordsReportData, periodLabel
  * Weekly stock check: what was consumed (FIFO cost per material), what was
  * produced (per pipe size), and the result — cost per kg of pipe and waste.
  */
-export function generateStockCheckReportDoc(period: StockCheckPeriod, manualRates?: ManualRates): jsPDF {
+export function generateStockCheckReportDoc(period: StockCheckPeriod, myCosts?: MyCosts): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const periodLabel = stockCheckPeriodLabel(period)
   let y = drawReportHeader(doc, 'Stock Check Report', periodLabel)
@@ -1358,10 +1358,10 @@ export function generateStockCheckReportDoc(period: StockCheckPeriod, manualRate
     { label: 'COST / KG PIPE', value: costPerKg === null ? '-' : `Rs. ${money(costPerKg)}` },
   )
 
-  // The owner's own prices, beside the app's figure — only when they entered some.
-  if (manualRates && manualRates.size > 0) {
-    const manual = manualCostSummary(period, manualRates)
-    y = drawSectionTitle(doc, y, 'With Your Prices')
+  // The owner's own costing, beside the app's figure — only when they saved one.
+  if (myCosts) {
+    const mine = myCostSummary(period, myCosts)
+    y = drawSectionTitle(doc, y, 'My Costs')
     y = drawReportTable(
       doc,
       y,
@@ -1373,27 +1373,38 @@ export function generateStockCheckReportDoc(period: StockCheckPeriod, manualRate
         { header: 'COST (Rs.)', x: 184, align: 'right' },
       ],
       [
-        ...manual.lines.map((l) => [
+        ...mine.lines.map((l) => [
           l.material.material_name,
           num(l.material.consumed_kg),
           money(l.appRate),
           l.manualRate === null ? '-' : money(l.manualRate),
           money(l.cost),
         ]),
-        ['TOTAL', num(manual.usedKg), '', '', money(manual.materialCost)],
+        ['TOTAL', num(mine.usedKg), '', '', money(mine.materialCost)],
       ],
       'No material used.',
     )
+    const perKgRow = (label: string, rate: number, amount: number) =>
+      rate > 0 ? [{ label: `${label} @ Rs. ${money(rate)}/kg`, value: `Rs. ${money(amount)}` }] : []
     drawSummaryBlock(
       doc,
       y,
       [
-        { label: 'Material Cost (your prices)', value: `Rs. ${money(manual.materialCost)}` },
-        { label: 'Running Costs', value: `Rs. ${money(period.overhead_cost)}` },
-        { label: 'Pipe Produced', value: `${num(period.produced_kg)} kg` },
+        { label: 'Material (your prices)', value: `Rs. ${money(mine.materialCost)}` },
+        ...perKgRow('Operator - pipe', myCosts.operatorPipeRate, mine.operatorPipe),
+        ...perKgRow('Operator - recycled', myCosts.operatorRecycledRate, mine.operatorRecycled),
+        ...perKgRow('Electricity - pipe', myCosts.electricityPipeRate, mine.electricityPipe),
+        ...perKgRow('Electricity - recycled', myCosts.electricityRecycledRate, mine.electricityRecycled),
+        ...myCosts.extras.map((e) => ({ label: e.name.slice(0, 26), value: `Rs. ${money(e.amount)}` })),
+        ...(myCosts.includeAppExpenses
+          ? [{ label: 'Expenses in app', value: `Rs. ${money(mine.appExpenses)}` }]
+          : []),
+        { label: 'Total cost', value: `Rs. ${money(mine.totalCost)}` },
+        { label: 'Pipe produced', value: `${num(period.produced_kg)} kg` },
+        { label: 'Recycled produced', value: `${num(period.recycled_kg)} kg` },
         { label: 'Cost / kg (app)', value: costPerKg === null ? '-' : `Rs. ${money(costPerKg)}` },
       ],
-      { label: 'COST / KG (YOURS)', value: manual.costPerKg === null ? '-' : `Rs. ${money(manual.costPerKg)}` },
+      { label: 'COST / KG (YOURS)', value: mine.costPerKg === null ? '-' : `Rs. ${money(mine.costPerKg)}` },
     )
   }
 
@@ -1404,8 +1415,8 @@ export function stockCheckPeriodLabel(period: StockCheckPeriod): string {
   return `${formatStatementDate(period.prev_count_date)} to ${formatStatementDate(period.count_date)}`
 }
 
-export function generateStockCheckReportBlob(period: StockCheckPeriod, manualRates?: ManualRates) {
-  return reportBlob(generateStockCheckReportDoc(period, manualRates), `Stock_Check_${period.count_date}.pdf`)
+export function generateStockCheckReportBlob(period: StockCheckPeriod, myCosts?: MyCosts) {
+  return reportBlob(generateStockCheckReportDoc(period, myCosts), `Stock_Check_${period.count_date}.pdf`)
 }
 
 /**
@@ -1423,7 +1434,7 @@ export function generateProductionCostReportDoc(report: ProductionCostReport, pe
       `Material counted for ${reportDate(report.coveredFrom)} to ${reportDate(report.coveredTo)}; material per kg uses the ${num(report.coveredProducedKg)} kg of pipe made on those days.`,
     )
   }
-  if (report.isEstimated) notes.push('Part of the material is a by-days share of a stock-check week crossing the month - estimated.')
+  if (report.isEstimated) notes.push('Part of the material is a share (by pipe made each day) of a stock-check week crossing the month - estimated.')
   if (report.unpricedKg > 0.01) notes.push(`${num(report.unpricedKg)} kg used has no purchase price and is not in the cost.`)
   if (notes.length) {
     doc.setFont('helvetica', 'italic')

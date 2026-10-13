@@ -81,6 +81,8 @@ export type StockCheckPeriod = {
   /** consumed − produced. */
   waste_kg: number
   unpriced_kg: number
+  /** Granules made by recycling in the period. */
+  recycled_kg: number
 }
 
 const COUNTS_KEY = ['stock_counts']
@@ -90,6 +92,7 @@ const REPORT_KEY = ['stock_check_report']
 export function invalidateStockCheck(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: COUNTS_KEY })
   queryClient.invalidateQueries({ queryKey: REPORT_KEY })
+  queryClient.invalidateQueries({ queryKey: MY_COSTS_KEY })
   queryClient.invalidateQueries({ queryKey: ['raw_material_stock'] })
   queryClient.invalidateQueries({ queryKey: ['dashboard'] })
 }
@@ -202,6 +205,7 @@ function buildPeriods(
         factory_waste_kg: Number(row.factory_waste_kg) || 0,
         waste_kg: 0,
         unpriced_kg: 0,
+        recycled_kg: 0,
       }
       period.produced_pcs = period.production.reduce((sum, p) => sum + (Number(p.pcs) || 0), 0)
       period.overhead_cost = period.overheads.reduce((sum, o) => sum + (Number(o.amount) || 0), 0)
@@ -213,6 +217,7 @@ function buildPeriods(
     period.consumed_kg += Number(row.consumed_kg) || 0
     period.consumed_cost += Number(row.consumed_cost) || 0
     period.unpriced_kg += Number(row.unpriced_kg) || 0
+    period.recycled_kg += Number(row.recycled_kg) || 0
   }
 
   const periods = [...byCount.values()]
@@ -247,33 +252,104 @@ export function yieldPercent(period: StockCheckPeriod): number | null {
 /** Prices the user typed in for one week, keyed by material id. */
 export type ManualRates = Map<string, number>
 
-const MANUAL_RATES_KEY = ['stock_check_manual_rates']
+export type MyCostExtra = { name: string; amount: number }
 
-export function useManualRates(countId: string) {
+/** The owner's own costing of one week — see 20261013010000_stock_check_my_costs.sql. */
+export type MyCosts = {
+  rates: ManualRates
+  operatorPipeRate: number
+  operatorRecycledRate: number
+  electricityPipeRate: number
+  electricityRecycledRate: number
+  extras: MyCostExtra[]
+  includeAppExpenses: boolean
+}
+
+/** Operator pay per kg a week starts with when none has been saved yet. */
+export const DEFAULT_OPERATOR_PIPE_RATE = 2.5
+export const DEFAULT_OPERATOR_RECYCLED_RATE = 2.6
+
+type SavedMyCosts = MyCosts & { updatedAt: string }
+
+const MY_COSTS_KEY = ['stock_check_my_costs']
+
+/** Every week's saved costs, keyed by count id. */
+export function useAllMyCosts() {
   return useQuery({
-    queryKey: [...MANUAL_RATES_KEY, countId],
-    queryFn: async (): Promise<ManualRates> => {
-      const { data, error } = await supabase
-        .from('stock_check_manual_rates')
-        .select('raw_material_type_id, rate_per_kg')
-        .eq('count_id', countId)
-      if (error) throw error
-      return new Map((data ?? []).map((row) => [row.raw_material_type_id, Number(row.rate_per_kg)]))
+    queryKey: MY_COSTS_KEY,
+    queryFn: async (): Promise<Map<string, SavedMyCosts>> => {
+      const [costsRes, ratesRes] = await Promise.all([
+        supabase.from('stock_check_my_costs').select('*'),
+        supabase.from('stock_check_manual_rates').select('count_id, raw_material_type_id, rate_per_kg'),
+      ])
+      if (costsRes.error) throw costsRes.error
+      if (ratesRes.error) throw ratesRes.error
+
+      const byCount = new Map<string, SavedMyCosts>()
+      for (const row of costsRes.data ?? []) {
+        byCount.set(row.count_id, {
+          rates: new Map(),
+          operatorPipeRate: Number(row.operator_pipe_rate) || 0,
+          operatorRecycledRate: Number(row.operator_recycled_rate) || 0,
+          electricityPipeRate: Number(row.electricity_pipe_rate) || 0,
+          electricityRecycledRate: Number(row.electricity_recycled_rate) || 0,
+          extras: Array.isArray(row.extra_costs)
+            ? (row.extra_costs as { name?: unknown; amount?: unknown }[]).map((e) => ({
+                name: String(e?.name ?? ''),
+                amount: Number(e?.amount) || 0,
+              }))
+            : [],
+          includeAppExpenses: row.include_app_expenses,
+          updatedAt: row.updated_at,
+        })
+      }
+      for (const row of ratesRes.data ?? []) {
+        byCount.get(row.count_id)?.rates.set(row.raw_material_type_id, Number(row.rate_per_kg))
+      }
+      return byCount
     },
   })
 }
 
-export function useSaveManualRates() {
+/**
+ * What an unsaved week's form starts with: no material prices, and each
+ * per-kg rate as last saved (any week), else the default.
+ */
+export function newWeekMyCosts(saved: Map<string, SavedMyCosts>): MyCosts {
+  const newestFirst = [...saved.values()].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  const lastRate = (pick: (c: MyCosts) => number, fallback: number) =>
+    newestFirst.map(pick).find((rate) => rate > 0) ?? fallback
+  return {
+    rates: new Map(),
+    operatorPipeRate: lastRate((c) => c.operatorPipeRate, DEFAULT_OPERATOR_PIPE_RATE),
+    operatorRecycledRate: lastRate((c) => c.operatorRecycledRate, DEFAULT_OPERATOR_RECYCLED_RATE),
+    electricityPipeRate: lastRate((c) => c.electricityPipeRate, 0),
+    electricityRecycledRate: lastRate((c) => c.electricityRecycledRate, 0),
+    extras: [],
+    includeAppExpenses: false,
+  }
+}
+
+export function useSaveMyCosts() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (input: { countId: string; rates: ManualRates }) => {
-      const { error } = await supabase.rpc('save_stock_check_manual_rates', {
+    mutationFn: async (input: { countId: string; costs: MyCosts }) => {
+      const { costs } = input
+      const { error } = await supabase.rpc('save_stock_check_my_costs', {
         p_count_id: input.countId,
-        p_rates: [...input.rates].map(([raw_material_type_id, rate_per_kg]) => ({ raw_material_type_id, rate_per_kg })),
+        p_rates: [...costs.rates].map(([raw_material_type_id, rate_per_kg]) => ({ raw_material_type_id, rate_per_kg })),
+        p_costs: {
+          operator_pipe_rate: costs.operatorPipeRate,
+          operator_recycled_rate: costs.operatorRecycledRate,
+          electricity_pipe_rate: costs.electricityPipeRate,
+          electricity_recycled_rate: costs.electricityRecycledRate,
+          extra_costs: costs.extras,
+          include_app_expenses: costs.includeAppExpenses,
+        },
       })
       if (error) throw error
     },
-    onSuccess: (_data, input) => queryClient.invalidateQueries({ queryKey: [...MANUAL_RATES_KEY, input.countId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: MY_COSTS_KEY }),
   })
 }
 
@@ -287,20 +363,41 @@ export type ManualCostLine = {
 }
 
 /**
- * The week's cost redone with the user's prices. Only materials actually used
- * (more than 0 kg) are priced; a material without a typed price keeps the
- * app's rate. Running costs are the same as the app's.
+ * The week's cost per kg of pipe the owner's way. Only materials actually
+ * used (more than 0 kg) are priced; one without a typed price keeps the
+ * app's rate. Operator pay and electricity are per kg — pipe on the pipe
+ * made, recycling on the granules made.
  */
-export function manualCostSummary(period: StockCheckPeriod, rates: ManualRates) {
+export function myCostSummary(period: StockCheckPeriod, costs: MyCosts) {
   const lines: ManualCostLine[] = period.materials
     .filter((m) => m.consumed_kg > 0)
     .map((m) => {
       const appRate = m.consumed_cost / m.consumed_kg
-      const manualRate = rates.get(m.raw_material_type_id) ?? null
+      const manualRate = costs.rates.get(m.raw_material_type_id) ?? null
       return { material: m, appRate, manualRate, cost: m.consumed_kg * (manualRate ?? appRate) }
     })
   const materialCost = lines.reduce((sum, l) => sum + l.cost, 0)
   const usedKg = lines.reduce((sum, l) => sum + Number(l.material.consumed_kg), 0)
-  const costPerKg = period.produced_kg > 0 ? (materialCost + period.overhead_cost) / period.produced_kg : null
-  return { lines, usedKg, materialCost, costPerKg }
+  const operatorPipe = period.produced_kg * costs.operatorPipeRate
+  const operatorRecycled = period.recycled_kg * costs.operatorRecycledRate
+  const electricityPipe = period.produced_kg * costs.electricityPipeRate
+  const electricityRecycled = period.recycled_kg * costs.electricityRecycledRate
+  const extrasCost = costs.extras.reduce((sum, e) => sum + e.amount, 0)
+  const appExpenses = costs.includeAppExpenses ? period.overhead_cost : 0
+  const totalCost =
+    materialCost + operatorPipe + operatorRecycled + electricityPipe + electricityRecycled + extrasCost + appExpenses
+  const costPerKg = period.produced_kg > 0 ? totalCost / period.produced_kg : null
+  return {
+    lines,
+    usedKg,
+    materialCost,
+    operatorPipe,
+    operatorRecycled,
+    electricityPipe,
+    electricityRecycled,
+    extrasCost,
+    appExpenses,
+    totalCost,
+    costPerKg,
+  }
 }

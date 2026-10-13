@@ -94,8 +94,8 @@ export function CostPerKgTab() {
               )}
               {report.isEstimated && (
                 <p>
-                  A stock-check week crosses into the next or previous month, so its material is shared by days — an
-                  estimate. Counting on the last day of the month makes this exact.
+                  A stock-check week crosses into the next or previous month, so its material is shared by the pipe
+                  made each day — an estimate. Counting on the last day of the month makes this exact.
                 </p>
               )}
               {report.unpricedKg > 0.01 && (

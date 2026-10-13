@@ -2,80 +2,22 @@ import { useState } from 'react'
 import { AlertTriangle, ChevronDown, ChevronUp, Share2 } from 'lucide-react'
 import { DateRangeField } from '../../components/DateRangeField'
 import { CostPerKgBreakdown } from '../../components/CostPerKgBreakdown'
-import { ManualPricesSection } from './ManualPricesSection'
 import { LoadingState, EmptyNote } from '../../components/States'
 import {
   useStockCheckReport,
-  useManualRates,
   costPerKgProduced,
   yieldPercent,
   type StockCheckPeriod,
 } from '../../hooks/useStockChecks'
-import { generateStockCheckReportBlob, stockCheckPeriodLabel } from '../../lib/pdfGenerator'
-import { useToast } from '../../lib/toast'
-import { formatShortDate, isoDateFromDate, todayISODate } from '../../lib/date'
+import { stockCheckPeriodLabel } from '../../lib/pdfGenerator'
+import { formatShortDate, todayISODate } from '../../lib/date'
 import { formatPipeProductLabel, formatQty } from '../../lib/format'
-
-function threeMonthsAgo(): string {
-  const d = new Date()
-  d.setMonth(d.getMonth() - 3)
-  return isoDateFromDate(d)
-}
-
-const pct = (n: number | null) => (n === null ? '—' : `${formatQty(n)}%`)
-const wastePercent = (p: StockCheckPeriod) => (p.consumed_kg > 0 ? (p.waste_kg / p.consumed_kg) * 100 : null)
-
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
-  return (
-    <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/60">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
-      <p className="text-sm font-bold text-slate-900 dark:text-slate-100">{value}</p>
-      {sub && <p className="text-[11px] text-slate-500 dark:text-slate-400">{sub}</p>}
-    </div>
-  )
-}
-
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-      {children}
-    </h4>
-  )
-}
+import { SectionTitle, Stat } from './weekParts'
+import { pct, threeMonthsAgo, useSharePeriodPdf, wastePercent } from './weekUtils'
 
 function PeriodDetail({ period }: { period: StockCheckPeriod }) {
-  const { showToast } = useToast()
-  const [sharing, setSharing] = useState(false)
-  const { data: manualRates } = useManualRates(period.count_id)
+  const { share: sharePdf, sharing } = useSharePeriodPdf(period)
   const costPerKg = costPerKgProduced(period)
-
-  async function handleShare() {
-    setSharing(true)
-    try {
-      const { file, url, filename } = generateStockCheckReportBlob(period, manualRates)
-      if (typeof navigator !== 'undefined' && 'share' in navigator && 'canShare' in navigator) {
-        try {
-          if (navigator.canShare({ files: [file] })) {
-            await navigator.share({ title: `Stock Check — ${stockCheckPeriodLabel(period)}`, files: [file] })
-            return
-          }
-        } catch (err: any) {
-          if (err?.name === 'AbortError') return
-        }
-      }
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      showToast(`Downloaded ${filename}`)
-    } catch {
-      showToast('Could not generate the report', 'error')
-    } finally {
-      setSharing(false)
-    }
-  }
 
   return (
     <div className="space-y-4 border-t border-slate-200 pt-3 dark:border-slate-800">
@@ -194,11 +136,9 @@ function PeriodDetail({ period }: { period: StockCheckPeriod }) {
         </div>
       </div>
 
-      <ManualPricesSection period={period} />
-
       <button
         type="button"
-        onClick={handleShare}
+        onClick={sharePdf}
         disabled={sharing}
         className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
       >

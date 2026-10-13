@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { EnterCountTab } from './stock-check/EnterCountTab'
 import { SavedCountsTab } from './stock-check/SavedCountsTab'
 import { WeeklyReportTab } from './stock-check/WeeklyReportTab'
+import { MyCostsTab } from './stock-check/MyCostsTab'
 import { useStockCounts, type StockCount } from '../hooks/useStockChecks'
 
 const TABS = [
   { key: 'count', label: 'Enter Count' },
   { key: 'saved', label: 'Saved Counts' },
   { key: 'report', label: 'Weekly Report' },
+  { key: 'mine', label: 'My Costs' },
 ] as const
 
 type TabKey = (typeof TABS)[number]['key']
@@ -70,6 +72,7 @@ export function StockCheckPage() {
       )}
       {activeTab === 'saved' && <SavedCountsTab highlightDate={savedDate} onEdit={startEdit} />}
       {activeTab === 'report' && <WeeklyReportTab />}
+      {activeTab === 'mine' && <MyCostsTab />}
     </div>
   )
 }
