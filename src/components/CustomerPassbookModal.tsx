@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Modal } from './Modal'
 import { ConfirmDialog } from './ConfirmDialog'
 import { RecordPaymentModal } from './RecordPaymentModal'
 import { AddManualDueModal } from './AddManualDueModal'
 import { BillPdfModal } from './BillPdfModal'
+import { DateRangeField } from './DateRangeField'
 import { Trash2, Receipt, Share2 } from 'lucide-react'
 import {
   useCustomerPassbook,
@@ -14,7 +15,7 @@ import {
 import { useBill } from '../hooks/useBills'
 import { LoadingState, EmptyNote } from './States'
 import { useToast } from '../lib/toast'
-import { formatDateLabel } from '../lib/date'
+import { formatDateLabel, formatShortDate, startOfMonth, todayISODate } from '../lib/date'
 import { formatQty } from '../lib/format'
 import { generateLedgerStatementBlob } from '../lib/pdfGenerator'
 
@@ -22,6 +23,7 @@ type CustomerPassbookModalProps = {
   open: boolean
   customer: CustomerLedgerBalance | null
   onClose: () => void
+  initialRange?: { fromDate: string; toDate: string } | null
 }
 
 const PAYMENT_APP_LABEL: Record<string, string> = { phonepe: 'PhonePe', gpay: 'GPay', other: 'Other' }
@@ -98,7 +100,7 @@ function TransactionRow({
   )
 }
 
-export function CustomerPassbookModal({ open, customer, onClose }: CustomerPassbookModalProps) {
+export function CustomerPassbookModal({ open, customer, onClose, initialRange }: CustomerPassbookModalProps) {
   const { data: entries, isLoading } = useCustomerPassbook(customer?.customer_id ?? null)
   const deleteTxn = useDeleteLedgerTransaction()
   const { showToast } = useToast()
@@ -109,6 +111,44 @@ export function CustomerPassbookModal({ open, customer, onClose }: CustomerPassb
   const [sharing, setSharing] = useState(false)
   const [viewBillId, setViewBillId] = useState<string | null>(null)
   const { data: viewBill } = useBill(viewBillId)
+
+  const [isAll, setIsAll] = useState(() => !initialRange)
+  const [fromDate, setFromDate] = useState(() => initialRange?.fromDate ?? startOfMonth())
+  const [toDate, setToDate] = useState(() => initialRange?.toDate ?? todayISODate())
+
+  useEffect(() => {
+    if (open) {
+      if (initialRange) {
+        setIsAll(false)
+        setFromDate(initialRange.fromDate)
+        setToDate(initialRange.toDate)
+      } else {
+        setIsAll(true)
+      }
+    }
+  }, [open, customer?.customer_id, initialRange])
+
+  const filteredEntries = useMemo(() => {
+    const all = entries ?? []
+    if (isAll) return all
+    return all.filter((e) => e.entry_date >= fromDate && e.entry_date <= toDate)
+  }, [entries, isAll, fromDate, toDate])
+
+  const { openingBalance, periodBilled, periodReceived } = useMemo(() => {
+    const all = entries ?? []
+    if (isAll) return { openingBalance: 0, periodBilled: 0, periodReceived: 0 }
+    const prior = all.filter((e) => e.entry_date < fromDate)
+    const openingBalance = prior.length > 0 ? prior[0].running_balance : 0
+    let periodBilled = 0
+    let periodReceived = 0
+    for (const e of all) {
+      if (e.entry_date >= fromDate && e.entry_date <= toDate) {
+        if (e.type === 'due') periodBilled += e.amount
+        else periodReceived += e.amount
+      }
+    }
+    return { openingBalance, periodBilled, periodReceived }
+  }, [entries, isAll, fromDate, toDate])
 
   if (!customer) return null
 
@@ -139,7 +179,12 @@ export function CustomerPassbookModal({ open, customer, onClose }: CustomerPassb
     if (!customer || !entries) return
     setSharing(true)
     try {
-      const { file, url, filename } = generateLedgerStatementBlob(customer, entries)
+      const { file, url, filename } = generateLedgerStatementBlob(
+        customer,
+        filteredEntries,
+        isAll ? null : { fromDate, toDate },
+        isAll ? undefined : openingBalance,
+      )
 
       if (typeof navigator !== 'undefined' && 'share' in navigator && 'canShare' in navigator) {
         try {
@@ -193,6 +238,47 @@ export function CustomerPassbookModal({ open, customer, onClose }: CustomerPassb
             </button>
           </div>
 
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-850">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Filter By Date Range
+            </p>
+            <DateRangeField
+              fromDate={fromDate}
+              toDate={toDate}
+              showAllOption
+              isAll={isAll}
+              allLabel="Pull All"
+              onSelectAll={() => setIsAll(true)}
+              onChange={(r) => {
+                setIsAll(false)
+                setFromDate(r.fromDate)
+                setToDate(r.toDate)
+              }}
+              hideLimitNote
+            />
+
+            {!isAll && (
+              <div className="mt-3 rounded-lg border border-slate-200 bg-white p-2.5 text-xs shadow-xs dark:border-slate-750 dark:bg-slate-900">
+                <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
+                  <span>
+                    Opening Balance: <strong className="font-mono text-slate-900 dark:text-slate-100">₹{formatQty(openingBalance)}</strong>
+                  </span>
+                  <span className="font-medium text-slate-500">
+                    {filteredEntries.length} transaction{filteredEntries.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between border-t border-slate-100 pt-1.5 dark:border-slate-800">
+                  <span>
+                    Billed: <strong className="font-mono text-red-600 dark:text-red-400">₹{formatQty(periodBilled)}</strong>
+                  </span>
+                  <span>
+                    Received: <strong className="font-mono text-green-600 dark:text-green-400">₹{formatQty(periodReceived)}</strong>
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={handleShare}
@@ -200,13 +286,28 @@ export function CustomerPassbookModal({ open, customer, onClose }: CustomerPassb
             className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
           >
             <Share2 className="h-3.5 w-3.5" />
-            {sharing ? 'Preparing…' : 'Share Statement'}
+            {sharing
+              ? 'Preparing…'
+              : isAll
+                ? 'Share Statement (All Data)'
+                : `Share Statement (${formatShortDate(fromDate)} – ${formatShortDate(toDate)})`}
           </button>
 
           <div className="space-y-2">
-            <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              <Receipt className="h-3.5 w-3.5" />
-              Transaction History
+            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              <span className="flex items-center gap-1.5">
+                <Receipt className="h-3.5 w-3.5" />
+                Transaction History
+              </span>
+              {!isAll && (
+                <button
+                  type="button"
+                  onClick={() => setIsAll(true)}
+                  className="font-bold text-teal-600 hover:underline dark:text-teal-400 normal-case"
+                >
+                  Pull all data
+                </button>
+              )}
             </div>
 
             {isLoading && <LoadingState />}
@@ -214,8 +315,23 @@ export function CustomerPassbookModal({ open, customer, onClose }: CustomerPassb
               <EmptyNote>No transactions yet for this customer.</EmptyNote>
             )}
 
+            {!isLoading && (entries ?? []).length > 0 && filteredEntries.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center dark:border-slate-800">
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                  No transactions between {formatShortDate(fromDate)} and {formatShortDate(toDate)}.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsAll(true)}
+                  className="mt-2 text-xs font-bold text-teal-600 hover:underline dark:text-teal-400"
+                >
+                  Pull all data for this customer
+                </button>
+              </div>
+            )}
+
             <div className="space-y-1.5">
-              {(entries ?? []).map((entry) => (
+              {filteredEntries.map((entry) => (
                 <TransactionRow key={entry.id} entry={entry} onDelete={setDeleting} onViewBill={setViewBillId} />
               ))}
             </div>

@@ -86,6 +86,151 @@ const BALANCES_KEY = ['supplier_ledger_balances']
 export function invalidateSupplierLedger(queryClient: QueryClient) {
   queryClient.invalidateQueries({ queryKey: BALANCES_KEY })
   queryClient.invalidateQueries({ queryKey: ['supplier_passbook'] })
+  queryClient.invalidateQueries({ queryKey: ['supplier_ledger_period'] })
+}
+
+export type SupplierPeriodActivity = {
+  purchased: number
+  paid: number
+  count: number
+}
+
+export type SupplierLedgerPeriodData = {
+  partyActivity: Map<string, SupplierPeriodActivity>
+  totalPurchased: number
+  totalPaid: number
+  net: number
+}
+
+export function useSupplierLedgerPeriod(fromDate: string | null, toDate: string | null) {
+  return useQuery({
+    queryKey: ['supplier_ledger_period', fromDate, toDate],
+    enabled: Boolean(fromDate && toDate),
+    queryFn: async (): Promise<SupplierLedgerPeriodData> => {
+      if (!fromDate || !toDate) {
+        return { partyActivity: new Map(), totalPurchased: 0, totalPaid: 0, net: 0 }
+      }
+
+      const [rawPurchases, scrapPurchases, ledgerTxns, returns] = await Promise.all([
+        supabase
+          .from('raw_material_purchases')
+          .select('id, supplier_id, cost, entry_date')
+          .gte('entry_date', fromDate)
+          .lte('entry_date', toDate)
+          .not('supplier_id', 'is', null)
+          .not('cost', 'is', null)
+          .limit(10000),
+        supabase
+          .from('scrap_purchases')
+          .select('id, scrap_dealer_id, cost, entry_date')
+          .gte('entry_date', fromDate)
+          .lte('entry_date', toDate)
+          .not('scrap_dealer_id', 'is', null)
+          .not('cost', 'is', null)
+          .limit(10000),
+        supabase
+          .from('supplier_ledger_transactions')
+          .select('id, party_type, supplier_id, scrap_dealer_id, type, amount, date')
+          .gte('date', fromDate)
+          .lte('date', toDate)
+          .limit(10000),
+        supabase
+          .from('raw_material_purchase_returns')
+          .select('id, quantity_kg, return_date, raw_material_purchases(supplier_id, price_per_kg, cost, total_qty_kg)')
+          .gte('return_date', fromDate)
+          .lte('return_date', toDate)
+          .limit(10000),
+      ])
+
+      if (rawPurchases.error) throw rawPurchases.error
+      if (scrapPurchases.error) throw scrapPurchases.error
+      if (ledgerTxns.error) throw ledgerTxns.error
+      if (returns.error) throw returns.error
+
+      const partyActivity = new Map<string, SupplierPeriodActivity>()
+      let totalPurchased = 0
+      let totalPaid = 0
+
+      const getActivity = (key: string) => {
+        let act = partyActivity.get(key)
+        if (!act) {
+          act = { purchased: 0, paid: 0, count: 0 }
+          partyActivity.set(key, act)
+        }
+        return act
+      }
+
+      for (const row of rawPurchases.data ?? []) {
+        if (!row.supplier_id) continue
+        const key = `supplier:${row.supplier_id}`
+        const act = getActivity(key)
+        const cost = Number(row.cost) || 0
+        act.purchased += cost
+        act.count += 1
+        totalPurchased += cost
+      }
+
+      for (const row of scrapPurchases.data ?? []) {
+        if (!row.scrap_dealer_id) continue
+        const key = `scrap_dealer:${row.scrap_dealer_id}`
+        const act = getActivity(key)
+        const cost = Number(row.cost) || 0
+        act.purchased += cost
+        act.count += 1
+        totalPurchased += cost
+      }
+
+      for (const row of returns.data ?? []) {
+        const purchase = row.raw_material_purchases as {
+          supplier_id?: string
+          price_per_kg?: number | null
+          cost?: number | null
+          total_qty_kg?: number | null
+        } | null
+        const supplierId = purchase?.supplier_id
+        if (!supplierId) continue
+        const key = `supplier:${supplierId}`
+        const act = getActivity(key)
+        const qty = Number(row.quantity_kg) || 0
+        let retAmt = 0
+        if (purchase.price_per_kg != null) {
+          retAmt = qty * Number(purchase.price_per_kg)
+        } else if (purchase.total_qty_kg && purchase.total_qty_kg > 0 && purchase.cost != null) {
+          retAmt = Math.round(((qty * purchase.cost) / purchase.total_qty_kg) * 100) / 100
+        }
+        act.purchased -= retAmt
+        act.count += 1
+        totalPurchased -= retAmt
+      }
+
+      for (const row of ledgerTxns.data ?? []) {
+        const partyId = row.supplier_id || row.scrap_dealer_id
+        if (!partyId) continue
+        const key = `${row.party_type}:${partyId}`
+        const act = getActivity(key)
+        const amt = Number(row.amount) || 0
+        act.count += 1
+
+        if (row.type === 'payment') {
+          act.paid += amt
+          totalPaid += amt
+        } else if (row.type === 'refund') {
+          act.paid -= amt
+          totalPaid -= amt
+        } else if (row.type === 'due') {
+          act.purchased += amt
+          totalPurchased += amt
+        }
+      }
+
+      return {
+        partyActivity,
+        totalPurchased,
+        totalPaid,
+        net: totalPurchased - totalPaid,
+      }
+    },
+  })
 }
 
 /** Every supplier's and scrap dealer's live balance. */

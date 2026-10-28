@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Modal } from './Modal'
 import { ConfirmDialog } from './ConfirmDialog'
 import { SupplierPaymentModal } from './SupplierPaymentModal'
+import { DateRangeField } from './DateRangeField'
 import { Trash2, Receipt, Share2 } from 'lucide-react'
 import {
   useSupplierPassbook,
@@ -14,7 +15,7 @@ import {
 } from '../hooks/useSupplierLedger'
 import { LoadingState, EmptyNote } from './States'
 import { useToast } from '../lib/toast'
-import { formatDateLabel } from '../lib/date'
+import { formatDateLabel, formatShortDate, startOfMonth, todayISODate } from '../lib/date'
 import { formatQty } from '../lib/format'
 import { generateSupplierStatementBlob } from '../lib/pdfGenerator'
 
@@ -22,6 +23,7 @@ type SupplierPassbookModalProps = {
   open: boolean
   party: SupplierLedgerBalance | null
   onClose: () => void
+  initialRange?: { fromDate: string; toDate: string } | null
 }
 
 function balanceColor(balance: number): string {
@@ -137,7 +139,7 @@ function TransactionRow({
   )
 }
 
-export function SupplierPassbookModal({ open, party, onClose }: SupplierPassbookModalProps) {
+export function SupplierPassbookModal({ open, party, onClose, initialRange }: SupplierPassbookModalProps) {
   const { data: entries, isLoading } = useSupplierPassbook(party?.party_type ?? null, party?.party_id ?? null)
   const deleteEntry = useDeleteSupplierLedgerEntry()
   const { showToast } = useToast()
@@ -148,6 +150,46 @@ export function SupplierPassbookModal({ open, party, onClose }: SupplierPassbook
   } | null>(null)
   const [deleting, setDeleting] = useState<SupplierPassbookEntry | null>(null)
   const [sharing, setSharing] = useState(false)
+
+  const [isAll, setIsAll] = useState(() => !initialRange)
+  const [fromDate, setFromDate] = useState(() => initialRange?.fromDate ?? startOfMonth())
+  const [toDate, setToDate] = useState(() => initialRange?.toDate ?? todayISODate())
+
+  useEffect(() => {
+    if (open) {
+      if (initialRange) {
+        setIsAll(false)
+        setFromDate(initialRange.fromDate)
+        setToDate(initialRange.toDate)
+      } else {
+        setIsAll(true)
+      }
+    }
+  }, [open, party?.party_type, party?.party_id, initialRange])
+
+  const filteredEntries = useMemo(() => {
+    const all = entries ?? []
+    if (isAll) return all
+    return all.filter((e) => e.entry_date >= fromDate && e.entry_date <= toDate)
+  }, [entries, isAll, fromDate, toDate])
+
+  const { openingBalance, periodPurchased, periodPaid } = useMemo(() => {
+    const all = entries ?? []
+    if (isAll) return { openingBalance: 0, periodPurchased: 0, periodPaid: 0 }
+    const prior = all.filter((e) => e.entry_date < fromDate)
+    const openingBalance = prior.length > 0 ? prior[0].running_balance : 0
+    let periodPurchased = 0
+    let periodPaid = 0
+    for (const e of all) {
+      if (e.entry_date >= fromDate && e.entry_date <= toDate) {
+        if (e.kind === 'purchase' || e.kind === 'due') periodPurchased += e.amount
+        else if (e.kind === 'return') periodPurchased -= e.amount
+        else if (e.kind === 'payment') periodPaid += e.amount
+        else if (e.kind === 'refund') periodPaid -= e.amount
+      }
+    }
+    return { openingBalance, periodPurchased, periodPaid }
+  }, [entries, isAll, fromDate, toDate])
 
   // Most recent first — the friend paid last week is the likeliest next payee.
   const knownPayees = useMemo(() => distinctNames((entries ?? []).map((e) => e.paid_to)), [entries])
@@ -172,7 +214,12 @@ export function SupplierPassbookModal({ open, party, onClose }: SupplierPassbook
     if (!party || !entries) return
     setSharing(true)
     try {
-      const { file, url, filename } = generateSupplierStatementBlob(party, entries)
+      const { file, url, filename } = generateSupplierStatementBlob(
+        party,
+        filteredEntries,
+        isAll ? null : { fromDate, toDate },
+        isAll ? undefined : openingBalance,
+      )
 
       if (typeof navigator !== 'undefined' && 'share' in navigator && 'canShare' in navigator) {
         try {
@@ -233,6 +280,47 @@ export function SupplierPassbookModal({ open, party, onClose }: SupplierPassbook
             </button>
           </div>
 
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-850">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Filter By Date Range
+            </p>
+            <DateRangeField
+              fromDate={fromDate}
+              toDate={toDate}
+              showAllOption
+              isAll={isAll}
+              allLabel="Pull All"
+              onSelectAll={() => setIsAll(true)}
+              onChange={(r) => {
+                setIsAll(false)
+                setFromDate(r.fromDate)
+                setToDate(r.toDate)
+              }}
+              hideLimitNote
+            />
+
+            {!isAll && (
+              <div className="mt-3 rounded-lg border border-slate-200 bg-white p-2.5 text-xs shadow-xs dark:border-slate-750 dark:bg-slate-900">
+                <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
+                  <span>
+                    Opening Balance: <strong className="font-mono text-slate-900 dark:text-slate-100">{supplierBalanceText(openingBalance, formatQty)}</strong>
+                  </span>
+                  <span className="font-medium text-slate-500">
+                    {filteredEntries.length} transaction{filteredEntries.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+                <div className="mt-1.5 flex items-center justify-between border-t border-slate-100 pt-1.5 dark:border-slate-800">
+                  <span>
+                    Purchased: <strong className="font-mono text-red-600 dark:text-red-400">₹{formatQty(periodPurchased)}</strong>
+                  </span>
+                  <span>
+                    Paid: <strong className="font-mono text-green-600 dark:text-green-400">₹{formatQty(periodPaid)}</strong>
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={handleShare}
@@ -240,13 +328,28 @@ export function SupplierPassbookModal({ open, party, onClose }: SupplierPassbook
             className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
           >
             <Share2 className="h-3.5 w-3.5" />
-            {sharing ? 'Preparing…' : 'Share Statement'}
+            {sharing
+              ? 'Preparing…'
+              : isAll
+                ? 'Share Statement (All Data)'
+                : `Share Statement (${formatShortDate(fromDate)} – ${formatShortDate(toDate)})`}
           </button>
 
           <div className="space-y-2">
-            <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              <Receipt className="h-3.5 w-3.5" />
-              Transaction History
+            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              <span className="flex items-center gap-1.5">
+                <Receipt className="h-3.5 w-3.5" />
+                Transaction History
+              </span>
+              {!isAll && (
+                <button
+                  type="button"
+                  onClick={() => setIsAll(true)}
+                  className="font-bold text-teal-600 hover:underline dark:text-teal-400 normal-case"
+                >
+                  Pull all data
+                </button>
+              )}
             </div>
 
             {isLoading && <LoadingState />}
@@ -257,8 +360,23 @@ export function SupplierPassbookModal({ open, party, onClose }: SupplierPassbook
               </EmptyNote>
             )}
 
+            {!isLoading && (entries ?? []).length > 0 && filteredEntries.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-200 p-6 text-center dark:border-slate-800">
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                  No purchases or payments between {formatShortDate(fromDate)} and {formatShortDate(toDate)}.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setIsAll(true)}
+                  className="mt-2 text-xs font-bold text-teal-600 hover:underline dark:text-teal-400"
+                >
+                  Pull all data for this supplier
+                </button>
+              </div>
+            )}
+
             <div className="space-y-1.5">
-              {(entries ?? []).map((entry) => (
+              {filteredEntries.map((entry) => (
                 <TransactionRow
                   key={`${entry.kind}-${entry.id}`}
                   entry={entry}

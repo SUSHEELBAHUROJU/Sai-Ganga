@@ -1,10 +1,11 @@
 import jsPDF from 'jspdf'
 import type { BillLineItem, BillRow } from '../hooks/useBills'
-import type { CustomerLedgerBalance, PassbookEntry } from '../hooks/useLedger'
+import type { CustomerLedgerBalance, PassbookEntry, CustomerLedgerPeriodData } from '../hooks/useLedger'
 import {
   supplierPaymentModeText,
   type SupplierLedgerBalance,
   type SupplierPassbookEntry,
+  type SupplierLedgerPeriodData,
 } from '../hooks/useSupplierLedger'
 import type { RecordKind } from '../hooks/useRecords'
 import type { ProductionCostReport } from '../hooks/useProductionCost'
@@ -467,6 +468,8 @@ export function generateBillPdfBlob(bill: BillRow): {
 export function generateLedgerStatementDoc(
   customer: CustomerLedgerBalance,
   entries: PassbookEntry[],
+  dateRange?: { fromDate: string; toDate: string } | null,
+  openingBalance?: number,
 ): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
 
@@ -489,9 +492,12 @@ export function generateLedgerStatementDoc(
   doc.text('Sai Ganga Pipes', margin, y)
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(9)
+  doc.setFontSize(8.5)
   doc.setTextColor(...MUTED_TEXT)
-  doc.text('Account Statement', pageWidth - margin, y, { align: 'right' })
+  const periodText = dateRange
+    ? `${formatStatementDate(dateRange.fromDate)} to ${formatStatementDate(dateRange.toDate)}`
+    : 'All Time'
+  doc.text(`Account Statement · ${periodText}`, pageWidth - margin, y, { align: 'right' })
 
   y += 6
   doc.setDrawColor(...BORDER_GRAY)
@@ -525,11 +531,6 @@ export function generateLedgerStatementDoc(
 
   y += 10
 
-  // Separate "Order Amount" (a bill, increases what they owe) / "Payment
-  // Received" (decreases it) columns rather than one signed amount — this
-  // goes to the customer, and a lone colored +/- doesn't survive
-  // black-and-white printing, WhatsApp image compression, or colorblindness.
-  // Color is kept as a secondary cue, not the only signal.
   const colX = {
     date: margin + 2,
     desc: margin + 24,
@@ -538,32 +539,59 @@ export function generateLedgerStatementDoc(
     balance: pageWidth - margin - 2,
   }
 
-  doc.setFillColor(...NAVY)
-  doc.rect(margin, y, contentWidth, 8, 'F')
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8)
-  doc.setTextColor(255, 255, 255)
-  doc.text('DATE', colX.date, y + 5.4)
-  doc.text('PARTICULARS', colX.desc, y + 5.4)
-  doc.setFontSize(6.8)
-  doc.text('ORDER AMOUNT', colX.gave, y + 5.4, { align: 'right' })
-  doc.text('PAYMENT RECEIVED', colX.got, y + 5.4, { align: 'right' })
-  doc.setFontSize(8)
-  doc.text('BALANCE', colX.balance, y + 5.4, { align: 'right' })
-  y += 8
+  const drawTableHeader = () => {
+    doc.setFillColor(...NAVY)
+    doc.rect(margin, y, contentWidth, 8, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(8)
+    doc.setTextColor(255, 255, 255)
+    doc.text('DATE', colX.date, y + 5.4)
+    doc.text('PARTICULARS', colX.desc, y + 5.4)
+    doc.setFontSize(6.8)
+    doc.text('ORDER AMOUNT', colX.gave, y + 5.4, { align: 'right' })
+    doc.text('PAYMENT RECEIVED', colX.got, y + 5.4, { align: 'right' })
+    doc.setFontSize(8)
+    doc.text('BALANCE', colX.balance, y + 5.4, { align: 'right' })
+    y += 8
+  }
+
+  drawTableHeader()
+
+  let rowIndex = 0
+
+  if (openingBalance !== undefined && dateRange) {
+    const rowHeight = 7.5
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(8)
+    doc.setTextColor(...MUTED_TEXT)
+    doc.text(formatStatementDate(dateRange.fromDate), colX.date, y + 5)
+    doc.text('Opening Balance', colX.desc, y + 5)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...DARK_TEXT)
+    doc.text(formatQty(openingBalance), colX.balance, y + 5, { align: 'right' })
+    doc.setDrawColor(...BORDER_GRAY)
+    doc.setLineWidth(0.2)
+    doc.line(margin, y + rowHeight, pageWidth - margin, y + rowHeight)
+    y += rowHeight
+    rowIndex++
+  }
 
   const sortedAsc = [...entries].sort((a, b) => a.entry_date.localeCompare(b.entry_date))
 
-  sortedAsc.forEach((entry, index) => {
+  sortedAsc.forEach((entry) => {
     const rowHeight = 7.5
-    if (index % 2 === 1) {
+    if (y + rowHeight > 280) {
+      doc.addPage()
+      y = 14
+      drawTableHeader()
+    }
+
+    if (rowIndex % 2 === 1) {
       doc.setFillColor(...ROW_ALT_BG)
       doc.rect(margin, y, contentWidth, rowHeight, 'F')
     }
 
     const isDue = entry.type === 'due'
-    // Bills show only their total weight here — the customer gets the full
-    // itemised bill separately; the statement just needs to tie out.
     const particulars = entry.bill_number
       ? `Bill ${entry.bill_number}${entry.bill_total_kg ? ` (${formatQty(entry.bill_total_kg)} kg)` : ''}`
       : isDue
@@ -594,7 +622,17 @@ export function generateLedgerStatementDoc(
     doc.line(margin, y + rowHeight, pageWidth - margin, y + rowHeight)
 
     y += rowHeight
+    rowIndex++
   })
+
+  if (sortedAsc.length === 0 && openingBalance === undefined) {
+    const rowHeight = 8
+    doc.setFont('helvetica', 'italic')
+    doc.setFontSize(8.5)
+    doc.setTextColor(...MUTED_TEXT)
+    doc.text('No transactions in this period', margin + 4, y + 5.5)
+    y += rowHeight
+  }
 
   y += 4
   doc.setFont('helvetica', 'italic')
@@ -612,9 +650,12 @@ export function generateLedgerStatementDoc(
 export function generateLedgerStatementBlob(
   customer: CustomerLedgerBalance,
   entries: PassbookEntry[],
+  dateRange?: { fromDate: string; toDate: string } | null,
+  openingBalance?: number,
 ): { blob: Blob; file: File; filename: string; url: string } {
-  const doc = generateLedgerStatementDoc(customer, entries)
-  const filename = `Statement_${customer.name.replace(/[^a-zA-Z0-9_-]/g, '_')}.pdf`
+  const doc = generateLedgerStatementDoc(customer, entries, dateRange, openingBalance)
+  const rangePart = dateRange ? `_${dateRange.fromDate}_to_${dateRange.toDate}` : '_All_Time'
+  const filename = `Statement_${customer.name.replace(/[^a-zA-Z0-9_-]/g, '_')}${rangePart}.pdf`
   const blob = doc.output('blob')
   const file = new File([blob], filename, { type: 'application/pdf' })
   const url = URL.createObjectURL(blob)
@@ -1597,13 +1638,17 @@ function supplierParticulars(entry: SupplierPassbookEntry): string {
 export function generateSupplierStatementDoc(
   party: SupplierLedgerBalance,
   entries: SupplierPassbookEntry[],
+  dateRange?: { fromDate: string; toDate: string } | null,
+  openingBalance?: number,
 ): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   // Passbook RPC returns newest first; a statement reads top-down in time.
   const sortedAsc = [...entries].reverse()
-  const periodLabel = sortedAsc.length
-    ? `${reportDate(sortedAsc[0].entry_date)} to ${reportDate(sortedAsc[sortedAsc.length - 1].entry_date)}`
-    : 'No transactions'
+  const periodLabel = dateRange
+    ? `${reportDate(dateRange.fromDate)} to ${reportDate(dateRange.toDate)}`
+    : sortedAsc.length
+      ? `${reportDate(sortedAsc[0].entry_date)} to ${reportDate(sortedAsc[sortedAsc.length - 1].entry_date)}`
+      : 'All Time'
 
   let y = drawReportHeader(doc, 'Supplier Statement', periodLabel)
 
@@ -1619,6 +1664,35 @@ export function generateSupplierStatementDoc(
   }
   y += 8
 
+  const tableRows: string[][] = []
+  if (openingBalance !== undefined && dateRange) {
+    tableRows.push([
+      reportDate(dateRange.fromDate),
+      'Opening Balance',
+      '',
+      '',
+      supplierBalanceLabel(openingBalance),
+    ])
+  }
+
+  for (const entry of sortedAsc) {
+    const purchaseCol =
+      entry.kind === 'purchase' || entry.kind === 'due'
+        ? money(entry.amount)
+        : entry.kind === 'return'
+          ? `-${money(entry.amount)}`
+          : ''
+    const paidCol =
+      entry.kind === 'payment' ? money(entry.amount) : entry.kind === 'refund' ? `-${money(entry.amount)}` : ''
+    tableRows.push([
+      reportDate(entry.entry_date),
+      supplierParticulars(entry),
+      purchaseCol,
+      paidCol,
+      supplierBalanceLabel(entry.running_balance),
+    ])
+  }
+
   // Separate Purchase / Paid columns rather than one signed amount — the
   // sign doesn't survive black-and-white printing or a WhatsApp forward.
   y = drawReportTable(
@@ -1631,44 +1705,185 @@ export function generateSupplierStatementDoc(
       { header: 'PAID', x: 152, align: 'right' },
       { header: 'BALANCE', x: 184, align: 'right' },
     ],
-    sortedAsc.map((entry) => {
-      // A refund reverses a payment, so it sits in the Paid column as a
-      // negative; a return reverses a purchase, so it sits in Purchase.
-      const purchaseCol =
-        entry.kind === 'purchase' || entry.kind === 'due'
-          ? money(entry.amount)
-          : entry.kind === 'return'
-            ? `-${money(entry.amount)}`
-            : ''
-      const paidCol =
-        entry.kind === 'payment' ? money(entry.amount) : entry.kind === 'refund' ? `-${money(entry.amount)}` : ''
-      return [
-        reportDate(entry.entry_date),
-        supplierParticulars(entry),
-        purchaseCol,
-        paidCol,
-        supplierBalanceLabel(entry.running_balance),
-      ]
-    }),
+    tableRows,
     'No purchases or payments yet.',
   )
+
+  const periodPurchased = sortedAsc.reduce((sum, e) => {
+    if (e.kind === 'purchase' || e.kind === 'due') return sum + e.amount
+    if (e.kind === 'return') return sum - e.amount
+    return sum
+  }, 0)
+  const periodPaid = sortedAsc.reduce((sum, e) => {
+    if (e.kind === 'payment') return sum + e.amount
+    if (e.kind === 'refund') return sum - e.amount
+    return sum
+  }, 0)
+  const finalBalance =
+    sortedAsc.length > 0 ? sortedAsc[sortedAsc.length - 1].running_balance : (openingBalance ?? party.balance)
 
   drawSummaryBlock(
     doc,
     y,
-    [
-      { label: 'Total Purchased', value: `Rs. ${money(party.total_purchased)}` },
-      { label: 'Total Paid', value: `Rs. ${money(party.total_paid)}` },
-    ],
+    dateRange
+      ? [
+          { label: 'Period Purchases', value: `Rs. ${money(periodPurchased)}` },
+          { label: 'Period Paid', value: `Rs. ${money(periodPaid)}` },
+        ]
+      : [
+          { label: 'Total Purchased', value: `Rs. ${money(party.total_purchased)}` },
+          { label: 'Total Paid', value: `Rs. ${money(party.total_paid)}` },
+        ],
     {
-      label: party.balance < 0 ? 'ADVANCE' : 'PAYABLE',
-      value: `Rs. ${money(Math.abs(party.balance))}`,
+      label: finalBalance < 0 ? 'ADVANCE' : 'PAYABLE',
+      value: `Rs. ${money(Math.abs(finalBalance))}`,
     },
   )
 
   return doc
 }
 
-export function generateSupplierStatementBlob(party: SupplierLedgerBalance, entries: SupplierPassbookEntry[]) {
-  return reportBlob(generateSupplierStatementDoc(party, entries), `Supplier_Statement_${slug(party.name)}.pdf`)
+export function generateSupplierStatementBlob(
+  party: SupplierLedgerBalance,
+  entries: SupplierPassbookEntry[],
+  dateRange?: { fromDate: string; toDate: string } | null,
+  openingBalance?: number,
+) {
+  const rangePart = dateRange ? `_${dateRange.fromDate}_to_${dateRange.toDate}` : '_All_Time'
+  return reportBlob(
+    generateSupplierStatementDoc(party, entries, dateRange, openingBalance),
+    `Supplier_Statement_${slug(party.name)}${rangePart}.pdf`,
+  )
+}
+
+export function generateCustomerLedgerReportDoc(
+  balances: CustomerLedgerBalance[],
+  periodData: CustomerLedgerPeriodData | null,
+  periodLabel: string,
+): jsPDF {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  let y = drawReportHeader(doc, 'Customer Ledger Report', periodLabel)
+
+  const rows = balances.map((c) => {
+    const act = periodData?.customerActivity.get(c.customer_id)
+    const dueCol = periodData ? (act?.due ? money(act.due) : '—') : money(c.total_due)
+    const recvCol = periodData ? (act?.received ? money(act.received) : '—') : money(c.total_received)
+    const balCol =
+      c.balance > 0 ? `${money(c.balance)} Due` : c.balance < 0 ? `${money(-c.balance)} Adv` : 'Settled'
+    return [c.name, c.phone ?? '—', dueCol, recvCol, balCol]
+  })
+
+  y = drawReportTable(
+    doc,
+    y,
+    [
+      { header: 'CUSTOMER', x: 2, width: 60 },
+      { header: 'PHONE', x: 65, width: 35 },
+      { header: periodData ? 'BILLED (PERIOD)' : 'TOTAL BILLED', x: 125, align: 'right' },
+      { header: periodData ? 'RECEIVED (PERIOD)' : 'TOTAL RECEIVED', x: 155, align: 'right' },
+      { header: 'BALANCE', x: 184, align: 'right' },
+    ],
+    rows,
+    'No customers found.',
+  )
+
+  const totalOwed = balances.reduce((sum, c) => sum + Math.max(0, c.balance), 0)
+  drawSummaryBlock(
+    doc,
+    y,
+    periodData
+      ? [
+          { label: 'Period Billed', value: `Rs. ${money(periodData.totalDue)}` },
+          { label: 'Period Received', value: `Rs. ${money(periodData.totalReceived)}` },
+        ]
+      : [{ label: 'Customers', value: String(balances.length) }],
+    {
+      label: 'TOTAL OWED',
+      value: `Rs. ${money(totalOwed)}`,
+    },
+  )
+
+  return doc
+}
+
+export function generateCustomerLedgerReportBlob(
+  balances: CustomerLedgerBalance[],
+  periodData: CustomerLedgerPeriodData | null,
+  periodLabel: string,
+) {
+  return reportBlob(
+    generateCustomerLedgerReportDoc(balances, periodData, periodLabel),
+    `Customer_Ledger_${slug(periodLabel)}.pdf`,
+  )
+}
+
+export function generateSupplierLedgerReportDoc(
+  balances: SupplierLedgerBalance[],
+  periodData: SupplierLedgerPeriodData | null,
+  periodLabel: string,
+): jsPDF {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+  let y = drawReportHeader(doc, 'Supplier Ledger Report', periodLabel)
+
+  const rows = balances.map((p) => {
+    const act = periodData?.partyActivity.get(`${p.party_type}:${p.party_id}`)
+    const purchaseCol = periodData ? (act?.purchased ? money(act.purchased) : '—') : money(p.total_purchased)
+    const paidCol = periodData ? (act?.paid ? money(act.paid) : '—') : money(p.total_paid)
+    return [
+      p.name,
+      p.party_type === 'supplier' ? 'Raw Material' : 'Scrap Dealer',
+      purchaseCol,
+      paidCol,
+      supplierBalanceLabel(p.balance),
+    ]
+  })
+
+  y = drawReportTable(
+    doc,
+    y,
+    [
+      { header: 'PARTY', x: 2, width: 60 },
+      { header: 'TYPE', x: 65, width: 35 },
+      { header: periodData ? 'PURCHASED (PERIOD)' : 'TOTAL PURCHASED', x: 125, align: 'right' },
+      { header: periodData ? 'PAID (PERIOD)' : 'TOTAL PAID', x: 155, align: 'right' },
+      { header: 'BALANCE', x: 184, align: 'right' },
+    ],
+    rows,
+    'No suppliers found.',
+  )
+
+  let payable = 0
+  let advance = 0
+  for (const p of balances) {
+    if (p.balance > 0) payable += p.balance
+    else advance -= p.balance
+  }
+
+  drawSummaryBlock(
+    doc,
+    y,
+    periodData
+      ? [
+          { label: 'Period Purchases', value: `Rs. ${money(periodData.totalPurchased)}` },
+          { label: 'Period Paid', value: `Rs. ${money(periodData.totalPaid)}` },
+        ]
+      : [{ label: 'Advance With Them', value: `Rs. ${money(advance)}` }],
+    {
+      label: 'YOU OWE',
+      value: `Rs. ${money(payable)}`,
+    },
+  )
+
+  return doc
+}
+
+export function generateSupplierLedgerReportBlob(
+  balances: SupplierLedgerBalance[],
+  periodData: SupplierLedgerPeriodData | null,
+  periodLabel: string,
+) {
+  return reportBlob(
+    generateSupplierLedgerReportDoc(balances, periodData, periodLabel),
+    `Supplier_Ledger_${slug(periodLabel)}.pdf`,
+  )
 }

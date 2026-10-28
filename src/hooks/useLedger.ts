@@ -44,6 +44,70 @@ function invalidateLedger(queryClient: ReturnType<typeof useQueryClient>, custom
   queryClient.invalidateQueries({ queryKey: ['ledger_passbook', customerId] })
   queryClient.invalidateQueries({ queryKey: ['bill_payment_status'] })
   queryClient.invalidateQueries({ queryKey: ['ledger_collections'] })
+  queryClient.invalidateQueries({ queryKey: ['ledger_period'] })
+}
+
+export type CustomerPeriodActivity = {
+  due: number
+  received: number
+  count: number
+}
+
+export type CustomerLedgerPeriodData = {
+  customerActivity: Map<string, CustomerPeriodActivity>
+  totalDue: number
+  totalReceived: number
+  net: number
+}
+
+export function useCustomerLedgerPeriod(fromDate: string | null, toDate: string | null) {
+  return useQuery({
+    queryKey: ['ledger_period', fromDate, toDate],
+    enabled: Boolean(fromDate && toDate),
+    queryFn: async (): Promise<CustomerLedgerPeriodData> => {
+      if (!fromDate || !toDate) {
+        return { customerActivity: new Map(), totalDue: 0, totalReceived: 0, net: 0 }
+      }
+      const { data, error } = await supabase
+        .from('ledger_transactions')
+        .select('id, customer_id, type, amount, date, bill_id, bills(status)')
+        .gte('date', fromDate)
+        .lte('date', toDate)
+        .limit(10000)
+
+      if (error) throw error
+
+      const customerActivity = new Map<string, CustomerPeriodActivity>()
+      let totalDue = 0
+      let totalReceived = 0
+
+      for (const row of data ?? []) {
+        const billStatus = (row.bills as { status?: string } | null)?.status
+        if (row.bill_id && billStatus === 'voided') continue
+
+        const cid = row.customer_id
+        const current = customerActivity.get(cid) ?? { due: 0, received: 0, count: 0 }
+        const amt = Number(row.amount) || 0
+
+        if (row.type === 'due') {
+          current.due += amt
+          totalDue += amt
+        } else {
+          current.received += amt
+          totalReceived += amt
+        }
+        current.count += 1
+        customerActivity.set(cid, current)
+      }
+
+      return {
+        customerActivity,
+        totalDue,
+        totalReceived,
+        net: totalDue - totalReceived,
+      }
+    },
+  })
 }
 
 /** Every customer's live balance — the Ledger list and the Reports dues tab both read from this. */
