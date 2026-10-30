@@ -24,10 +24,27 @@ export type NewRawMaterialPurchase = {
   notes: string | null
 }
 
+/**
+ * Splits one delivery's transport across its items by weight, so every kg
+ * carries the same freight in landed-cost figures. The paise left over from
+ * rounding go on the last item, so the parts add back to the exact total.
+ */
+export function splitTransportByWeight(transport: number, weightsKg: number[]): number[] {
+  const totalKg = weightsKg.reduce((sum, kg) => sum + kg, 0)
+  if (transport <= 0 || totalKg <= 0) return weightsKg.map(() => 0)
+  const shares = weightsKg.map((kg) => Math.round(((transport * kg) / totalKg) * 100) / 100)
+  const assigned = shares.slice(0, -1).reduce((sum, v) => sum + v, 0)
+  shares[shares.length - 1] = Math.round((transport - assigned) * 100) / 100
+  return shares
+}
+
 export function useAddRawMaterialPurchase() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async (input: NewRawMaterialPurchase) => {
+    // One delivery can carry several materials: each becomes its own row (so
+    // stock, returns, FIFO costing and the supplier ledger work per material),
+    // written in a single insert so the delivery saves whole or not at all.
+    mutationFn: async (input: NewRawMaterialPurchase | NewRawMaterialPurchase[]) => {
       const { error } = await supabase.from('raw_material_purchases').insert(input)
       if (error) throw error
     },
