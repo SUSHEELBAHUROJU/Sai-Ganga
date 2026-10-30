@@ -1,6 +1,14 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
-import { invalidateSupplierLedger, type PartyType } from './useSupplierLedger'
+import { useToast } from '../lib/toast'
+import { formatQty } from '../lib/format'
+import {
+  invalidateSupplierLedger,
+  balanceEffect,
+  type PartyType,
+  type SupplierLedgerBalance,
+  type SupplierPassbookEntry,
+} from './useSupplierLedger'
 
 export type PaymentMode = 'cash' | 'online'
 export type PaymentApp = 'phonepe' | 'gpay' | 'other'
@@ -184,9 +192,173 @@ export type RecordPaymentInput = {
   paid_to?: { party_type: PartyType; party_id: string } | null
 }
 
+/** Running balances recomputed oldest-first, returned newest-first like the RPCs. */
+function withRunningBalances<T extends { entry_date: string; created_at: string; running_balance: number }>(
+  rows: T[],
+  effect: (row: T) => number,
+): T[] {
+  const ordered = [...rows].sort(
+    (a, b) => a.entry_date.localeCompare(b.entry_date) || a.created_at.localeCompare(b.created_at),
+  )
+  let running = 0
+  const withBalance = ordered.map((row) => {
+    running = Math.round((running + effect(row)) * 100) / 100
+    return { ...row, running_balance: running }
+  })
+  return withBalance.reverse()
+}
+
+type PaymentSnapshot = [readonly unknown[], unknown][]
+
+/**
+ * Shows a payment everywhere the moment Save is tapped — customer balance,
+ * passbook, and (for a payment made straight to a supplier) that supplier's
+ * balance and passbook, which also moves the Ledger's net position — instead
+ * of waiting for the save and the re-fetch. Returns the caches it touched so a
+ * failed save can put them back.
+ */
+async function applyPaymentOptimistically(
+  queryClient: QueryClient,
+  input: RecordPaymentInput,
+): Promise<PaymentSnapshot> {
+  const keys: (readonly unknown[])[] = [LEDGER_KEY, ['ledger_passbook', input.customer_id]]
+  const party = input.paid_to
+  if (party) keys.push(['supplier_ledger_balances'], ['supplier_passbook', party.party_type, party.party_id])
+
+  await Promise.all(keys.map((queryKey) => queryClient.cancelQueries({ queryKey })))
+  const snapshot: PaymentSnapshot = keys.map((k) => [k, queryClient.getQueryData(k)])
+
+  const now = new Date().toISOString()
+  const tempId = `pending-${now}`
+  const amount = input.amount
+  const supplierName = party
+    ? queryClient
+        .getQueryData<SupplierLedgerBalance[]>(['supplier_ledger_balances'])
+        ?.find((p) => p.party_type === party.party_type && p.party_id === party.party_id)?.name ?? null
+    : null
+
+  queryClient.setQueryData<CustomerLedgerBalance[]>(LEDGER_KEY, (rows) =>
+    rows?.map((c) =>
+      c.customer_id === input.customer_id
+        ? { ...c, total_received: c.total_received + amount, balance: c.balance - amount }
+        : c,
+    ),
+  )
+
+  queryClient.setQueryData<PassbookEntry[]>(['ledger_passbook', input.customer_id], (rows) =>
+    rows
+      ? withRunningBalances(
+          [
+            ...rows,
+            {
+              id: tempId,
+              entry_date: input.date,
+              type: 'received',
+              amount,
+              running_balance: 0,
+              payment_mode: input.payment_mode,
+              payment_app: input.payment_app ?? null,
+              bill_id: null,
+              bill_number: null,
+              bill_total_kg: null,
+              note: input.note?.trim() || null,
+              created_at: now,
+              paid_to_party_type: party?.party_type ?? null,
+              paid_to_party_id: party?.party_id ?? null,
+              paid_to_party_name: supplierName,
+            },
+          ],
+          (row) => (row.type === 'due' ? row.amount : -row.amount),
+        )
+      : rows,
+  )
+
+  if (party) {
+    queryClient.setQueryData<SupplierLedgerBalance[]>(['supplier_ledger_balances'], (rows) =>
+      rows?.map((p) =>
+        p.party_type === party.party_type && p.party_id === party.party_id
+          ? { ...p, total_paid: p.total_paid + amount, balance: p.balance - amount }
+          : p,
+      ),
+    )
+    const customerName =
+      queryClient
+        .getQueryData<CustomerLedgerBalance[]>(LEDGER_KEY)
+        ?.find((c) => c.customer_id === input.customer_id)?.name ?? null
+    queryClient.setQueryData<SupplierPassbookEntry[]>(
+      ['supplier_passbook', party.party_type, party.party_id],
+      (rows) =>
+        rows
+          ? withRunningBalances(
+              [
+                ...rows,
+                {
+                  id: tempId,
+                  kind: 'payment',
+                  entry_date: input.date,
+                  amount,
+                  running_balance: 0,
+                  item_name: null,
+                  quantity_kg: null,
+                  price_per_kg: null,
+                  payment_mode: input.payment_mode,
+                  payment_app: input.payment_app ?? null,
+                  paid_to: null,
+                  reference_no: null,
+                  bank_account: null,
+                  paid_by: null,
+                  note: input.note?.trim() || null,
+                  created_at: now,
+                  paid_by_customer_id: input.customer_id,
+                  paid_by_customer_name: customerName ?? 'Customer',
+                },
+              ],
+              (row) => balanceEffect(row.kind, row.amount),
+            )
+          : rows,
+    )
+  }
+
+  return snapshot
+}
+
 export function useRecordPayment() {
   const queryClient = useQueryClient()
+  const { showToast } = useToast()
+  // The payment modal closes as soon as Save is tapped, so the outcome is
+  // reported from here — these callbacks run even after it has unmounted.
   return useMutation({
+    onMutate: (input: RecordPaymentInput) => applyPaymentOptimistically(queryClient, input),
+    onError: (_err, input, snapshot) => {
+      for (const [queryKey, data] of snapshot ?? []) queryClient.setQueryData(queryKey, data)
+      showToast(
+        `Payment of ₹${formatQty(input.amount)} was NOT saved — check your connection and record it again.`,
+        'error',
+      )
+    },
+    onSuccess: (_data, input) => {
+      const customer = queryClient
+        .getQueryData<CustomerLedgerBalance[]>(LEDGER_KEY)
+        ?.find((c) => c.customer_id === input.customer_id)
+      const supplier = input.paid_to
+        ? queryClient
+            .getQueryData<SupplierLedgerBalance[]>(['supplier_ledger_balances'])
+            ?.find((p) => p.party_type === input.paid_to!.party_type && p.party_id === input.paid_to!.party_id)
+        : null
+      const who = customer?.name ?? 'customer'
+      const what = supplier
+        ? `₹${formatQty(input.amount)} paid by ${who} to ${supplier.name}`
+        : `₹${formatQty(input.amount)} received from ${who}`
+      // The cached balance already includes this payment (optimistic update).
+      const remaining = customer ? customer.balance : null
+      showToast(
+        remaining === null
+          ? `${what} — saved`
+          : remaining > 0
+            ? `${what} — ₹${formatQty(remaining)} still due`
+            : `${what} — fully paid!`,
+      )
+    },
     mutationFn: async (input: RecordPaymentInput) => {
       if (input.paid_to) {
         // Both ledgers in one transaction: the customer's 'received' and the
@@ -217,7 +389,9 @@ export function useRecordPayment() {
       })
       if (error) throw error
     },
-    onSuccess: (_data, input) => {
+    // Success or failure, re-read the real figures (bill PAID/PARTIAL status,
+    // collections and period totals are left to this refresh).
+    onSettled: (_data, _err, input) => {
       invalidateLedger(queryClient, input.customer_id)
       if (input.paid_to) invalidateSupplierLedger(queryClient)
     },
