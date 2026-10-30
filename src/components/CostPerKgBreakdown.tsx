@@ -40,7 +40,7 @@ export function CostPerKgBreakdown({
         overheads.map((o) => <Row key={o.name} label={o.name} amount={o.amount} perKgText={perKg(o.amount, producedKg)} />)
       )}
       {overheads.length > 0 && (
-        <Row label="Running costs" amount={runningCost} perKgText={perKg(runningCost, producedKg)} strong />
+        <Row label="Salary, Rent & Bills" amount={runningCost} perKgText={perKg(runningCost, producedKg)} strong />
       )}
       <div className="flex items-center justify-between bg-purple-50 px-3 py-2.5 font-bold text-purple-800 dark:bg-purple-950/40 dark:text-purple-200">
         <span>Cost to make 1 kg</span>

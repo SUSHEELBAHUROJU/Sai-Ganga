@@ -70,7 +70,7 @@ function SettingsFields({
           onChange={(e) => onChange({ ...value, in_production_cost: e.target.checked })}
           className="h-5 w-5 rounded border-slate-300"
         />
-        Count in production cost (₹ per kg of pipe)
+        Add to cost of 1 kg pipe
       </label>
       <label className="flex min-h-[44px] items-center gap-3 text-sm text-slate-700 dark:text-slate-300">
         <input
@@ -79,7 +79,7 @@ function SettingsFields({
           onChange={(e) => onChange({ ...value, tracks_units: e.target.checked })}
           className="h-5 w-5 rounded border-slate-300"
         />
-        Record units consumed (electricity meter)
+        Ask meter units (current bill)
       </label>
     </div>
   )

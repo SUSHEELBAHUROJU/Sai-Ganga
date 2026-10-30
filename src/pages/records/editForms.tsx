@@ -315,7 +315,7 @@ export function EditRecyclingForm({ row, onChange }: EditFormProps<RecyclingReco
       </div>
       <div className="border-t border-slate-100 pt-4 dark:border-slate-800">
         <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Granule Output
+          Granules Made
         </span>
         <div className="mt-2">
           <GranuleOutputField
@@ -459,7 +459,7 @@ export function EditRawPurchaseForm({ row, onChange }: EditFormProps<RawPurchase
       </div>
       <div>
         <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-          Entry Mode
+          Packed As
         </span>
         <div className="flex flex-wrap gap-2">
           <Chip

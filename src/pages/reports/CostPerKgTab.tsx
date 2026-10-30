@@ -99,13 +99,13 @@ export function CostPerKgTab() {
                 </p>
               )}
               {report.unpricedKg > 0.01 && (
-                <p>{formatQty(report.unpricedKg)} kg used has no purchase price, so material cost is understated.</p>
+                <p>{formatQty(report.unpricedKg)} kg used has no purchase price, so material cost shows less than the real cost.</p>
               )}
             </div>
           )}
 
           <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-            <SectionTitle>Cost to Produce</SectionTitle>
+            <SectionTitle>Cost to Make</SectionTitle>
             <CostPerKgBreakdown
               materialCost={report.materialCost}
               materialProducedKg={report.coveredProducedKg}
@@ -125,9 +125,9 @@ export function CostPerKgTab() {
           </button>
 
           <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-            <SectionTitle>Materials Consumed</SectionTitle>
+            <SectionTitle>Material Used</SectionTitle>
             {report.materials.length === 0 ? (
-              <EmptyNote>No stock-check counts cover this period.</EmptyNote>
+              <EmptyNote>No stock count for these dates.</EmptyNote>
             ) : (
               <div className="space-y-1">
                 {report.materials.map((m) => (
@@ -152,7 +152,7 @@ export function CostPerKgTab() {
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-            <SectionTitle>Pipes Produced</SectionTitle>
+            <SectionTitle>Pipes Made</SectionTitle>
             {report.production.length === 0 ? (
               <EmptyNote>No production recorded in this period.</EmptyNote>
             ) : (

@@ -63,7 +63,7 @@ export function SalesReportTab() {
           {/* Sale amounts come from bills — sales entries record stock movement
               only and have never carried a price. */}
           <p className="text-xs text-slate-400 dark:text-slate-500">
-            Based on billed sales. Voided bills are excluded.
+            Only bills are counted. Cancelled bills are left out.
           </p>
 
           <button

@@ -68,7 +68,7 @@ export function BillingSettingsTab() {
         bill_start_date: billStartDate || new Date().toISOString().split('T')[0],
       },
       {
-        onSuccess: () => showToast('Bill numbering configuration saved'),
+        onSuccess: () => showToast('Bill number saved'),
         onError: () => showToast('Could not save bill numbering', 'error'),
       },
     )
@@ -82,10 +82,10 @@ export function BillingSettingsTab() {
         className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900"
       >
         <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-          Company Details on Bill Header
+          Shop Details
         </h3>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          These details will be printed on top of every PDF bill.
+          Your business name is printed at the bottom of bills and reports.
         </p>
 
         <Field
@@ -141,15 +141,15 @@ export function BillingSettingsTab() {
         className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900"
       >
         <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-          Bill Numbering & Sequence
+          Bill Number
         </h3>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          Configure prefix and next bill counter. New bills auto-increment sequentially (e.g. SG-0001, SG-0002).
+          Bills are numbered one after another, e.g. SG-0001, SG-0002.
         </p>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Field
-            label="Bill Prefix"
+            label="Bill Number Starts With"
             value={billPrefix}
             onChange={(e) => setBillPrefix(e.target.value)}
             placeholder="e.g. SG-"

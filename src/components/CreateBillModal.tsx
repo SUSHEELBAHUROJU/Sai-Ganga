@@ -270,7 +270,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
   }
 
   return (
-    <Modal title="Create Tax Invoice / Bill" open={open} onClose={onClose} maxWidthClass="md:max-w-3xl">
+    <Modal title="Create Bill" open={open} onClose={onClose} maxWidthClass="md:max-w-3xl">
       <div className="space-y-5">
         {/* Header Summary Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-teal-50 px-4 py-3 dark:bg-teal-950/40">
@@ -353,7 +353,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
               Selling Rate / kg:
             </span>
             <span className="text-xs text-amber-700 dark:text-amber-300">
-              (Entering rate here updates all product items automatically)
+              (This rate is used for all items)
             </span>
           </div>
 

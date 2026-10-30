@@ -71,11 +71,11 @@ export function supplierPaymentModeText(
   return mode === 'online' && app ? `${label} · ${SUPPLIER_PAYMENT_APP_LABEL[app]}` : label
 }
 
-/** "₹12,000 Payable" / "₹5,000 Advance" / "Settled" — the one wording used on every supplier-ledger screen. */
+/** "₹12,000 To Pay" / "₹5,000 Advance" / "Fully Paid" — the one wording used on every supplier-ledger screen. */
 export function supplierBalanceText(balance: number, format: (n: number) => string): string {
-  if (balance > 0) return `₹${format(balance)} Payable`
+  if (balance > 0) return `₹${format(balance)} To Pay`
   if (balance < 0) return `₹${format(-balance)} Advance`
-  return 'Settled'
+  return 'Fully Paid'
 }
 
 /** How an entry moves the balance: purchases, dues and refunds raise what we owe; payments and returns lower it. */

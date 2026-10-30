@@ -38,7 +38,7 @@ export function DateRangeField({
   showAllOption = false,
   isAll = false,
   onSelectAll,
-  allLabel = 'Pull All',
+  allLabel = 'Show All',
   hideLimitNote = false,
 }: DateRangeFieldProps) {
   const today = todayISODate()
@@ -79,7 +79,7 @@ export function DateRangeField({
         />
         {isAll && (
           <span className="rounded bg-teal-50 px-2 py-0.5 text-[11px] font-semibold text-teal-700 dark:bg-teal-950/60 dark:text-teal-300">
-            All Records
+            All Dates
           </span>
         )}
       </div>

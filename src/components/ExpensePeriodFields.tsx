@@ -101,7 +101,7 @@ export function ExpensePeriodFields({ category, paidDate, value, onChange, editi
 
       {category.tracks_units && (
         <Field
-          label="Units consumed (optional)"
+          label="Meter units used (optional)"
           type="number"
           min="0"
           inputMode="decimal"

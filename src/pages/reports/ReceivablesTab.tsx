@@ -76,11 +76,11 @@ export function ReceivablesTab({ fromDate, toDate }: { fromDate: string; toDate:
 
           <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
             <h3 className="mb-3 text-sm font-semibold text-slate-500 dark:text-slate-400">
-              Customers With Dues
+              Customers Who Have to Pay
             </h3>
             {customersWithDues.length === 0 ? (
               <p className="text-sm text-slate-400 dark:text-slate-500">
-                No outstanding dues — everyone's settled up.
+                No dues — everyone has paid.
               </p>
             ) : (
               <div className="space-y-1">

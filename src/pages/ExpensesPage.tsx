@@ -70,7 +70,7 @@ export function ExpensesPage() {
       categoryId ? null : 'Choose an expense type',
       validateCost(amount, 'an amount'),
       period && 'error' in period ? period.error : null,
-      units !== null && (Number.isNaN(units) || units < 0) ? 'Enter valid units consumed' : null,
+      units !== null && (Number.isNaN(units) || units < 0) ? 'Enter correct meter units' : null,
     )
     if (problem || !period || 'error' in period) {
       showToast(problem ?? 'Choose an expense type', 'error')

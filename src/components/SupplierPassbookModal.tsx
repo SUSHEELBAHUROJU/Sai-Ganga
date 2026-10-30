@@ -50,9 +50,9 @@ function entryTitle(entry: SupplierPassbookEntry): string {
       return entry.paid_to ? `Paid · ${mode} → ${entry.paid_to}` : `Paid · ${mode}`
     }
     case 'refund':
-      return 'Refund Received'
+      return 'Money Back from Supplier'
     case 'due':
-      return 'Opening / Manual Due'
+      return 'Old Due'
   }
 }
 
@@ -87,7 +87,7 @@ function TransactionRow({
   // What the factory owes goes up (purchase, due, refund) in red; payments and returns in green.
   const raisesBalance = entry.kind !== 'payment' && entry.kind !== 'return'
   const detail = entryDetail(entry)
-  const amountLabel = { purchase: 'Purchase', return: 'Returned', payment: 'Paid', refund: 'Refund', due: 'Due' }[
+  const amountLabel = { purchase: 'Purchase', return: 'Returned', payment: 'Paid', refund: 'Money Back', due: 'Due' }[
     entry.kind
   ]
 
@@ -255,11 +255,11 @@ export function SupplierPassbookModal({ open, party, onClose, initialRange }: Su
           <div className="rounded-xl bg-slate-50 p-4 text-center dark:bg-slate-800">
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Current Balance</p>
             <p className={`text-3xl font-bold ${balanceColor(balance)}`}>
-              {balance === 0 ? 'Settled' : `₹${formatQty(Math.abs(balance))}`}
+              {balance === 0 ? 'Fully Paid' : `₹${formatQty(Math.abs(balance))}`}
             </p>
             {balance !== 0 && (
               <p className={`text-sm font-semibold ${balanceColor(balance)}`}>
-                {balance > 0 ? 'You owe (Payable)' : 'Advance with supplier'}
+                {balance > 0 ? 'You have to pay' : 'Advance with supplier'}
               </p>
             )}
             <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
@@ -280,20 +280,20 @@ export function SupplierPassbookModal({ open, party, onClose, initialRange }: Su
               onClick={() => setEntryModal({ editing: null, initialType: 'refund' })}
               className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
             >
-              Refund / Opening Due
+              Old Due / Money Back
             </button>
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-850">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Filter By Date Range
+              Choose Dates
             </p>
             <DateRangeField
               fromDate={fromDate}
               toDate={toDate}
               showAllOption
               isAll={isAll}
-              allLabel="Pull All"
+              allLabel="Show All"
               onSelectAll={() => setIsAll(true)}
               onChange={(r) => {
                 setIsAll(false)
@@ -343,7 +343,7 @@ export function SupplierPassbookModal({ open, party, onClose, initialRange }: Su
             <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <span className="flex items-center gap-1.5">
                 <Receipt className="h-3.5 w-3.5" />
-                Transaction History
+                All Entries
               </span>
               {!isAll && (
                 <button
@@ -351,7 +351,7 @@ export function SupplierPassbookModal({ open, party, onClose, initialRange }: Su
                   onClick={() => setIsAll(true)}
                   className="font-bold text-teal-600 hover:underline dark:text-teal-400 normal-case"
                 >
-                  Pull all data
+                  Show all
                 </button>
               )}
             </div>
@@ -374,7 +374,7 @@ export function SupplierPassbookModal({ open, party, onClose, initialRange }: Su
                   onClick={() => setIsAll(true)}
                   className="mt-2 text-xs font-bold text-teal-600 hover:underline dark:text-teal-400"
                 >
-                  Pull all data for this supplier
+                  Show all entries for this supplier
                 </button>
               </div>
             )}
