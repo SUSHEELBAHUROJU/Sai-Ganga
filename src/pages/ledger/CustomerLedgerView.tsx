@@ -177,7 +177,7 @@ export function CustomerLedgerView() {
           </span>
           <div>
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-              Total to Collect
+              Total Outstanding
             </p>
             <p className="text-2xl font-bold text-red-600 dark:text-red-400">
               ₹{formatQty(totalReceivables)}
@@ -207,7 +207,7 @@ export function CustomerLedgerView() {
           </div>
 
           <div className="col-span-2 rounded-xl border border-slate-200 bg-white p-3 sm:col-span-1 dark:border-slate-800 dark:bg-slate-900">
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total to Collect</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Outstanding</p>
             <p className="mt-1 truncate text-lg font-bold text-slate-900 dark:text-slate-100">
               ₹{formatQty(totalReceivables)}
             </p>

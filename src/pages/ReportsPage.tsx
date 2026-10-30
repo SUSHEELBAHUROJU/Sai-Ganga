@@ -78,7 +78,7 @@ const REPORTS = {
     render: () => <ExpenseReportTab />,
   },
   stock: {
-    title: 'Stock in Hand',
+    title: 'Current Stock',
     description: 'Pipes, material and scrap you have now',
     icon: Warehouse,
     iconClass: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',

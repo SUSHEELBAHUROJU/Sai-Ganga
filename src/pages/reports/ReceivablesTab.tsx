@@ -41,7 +41,7 @@ export function ReceivablesTab({ fromDate, toDate }: { fromDate: string; toDate:
         <>
           <div className="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/30">
             <p className="text-xs font-semibold uppercase tracking-wider text-red-700 dark:text-red-300">
-              Total to Collect
+              Total Outstanding
             </p>
             <p className="mt-1 text-3xl font-bold text-red-600 dark:text-red-400">
               ₹{formatQty(totalOutstanding)}

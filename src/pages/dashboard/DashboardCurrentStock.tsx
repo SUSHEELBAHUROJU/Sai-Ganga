@@ -75,7 +75,7 @@ export function DashboardCurrentStock() {
   if (isLoading) {
     return (
       <div>
-        <h3 className="mb-3 text-sm font-semibold text-slate-500 dark:text-slate-400">Stock in Hand</h3>
+        <h3 className="mb-3 text-sm font-semibold text-slate-500 dark:text-slate-400">Current Stock</h3>
         <LoadingState label="Calculating stock…" />
       </div>
     )
@@ -102,10 +102,10 @@ export function DashboardCurrentStock() {
 
   return (
     <div>
-      <h3 className="mb-3 text-sm font-semibold text-slate-500 dark:text-slate-400">Stock in Hand</h3>
+      <h3 className="mb-3 text-sm font-semibold text-slate-500 dark:text-slate-400">Current Stock</h3>
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <GroupCard icon={Factory} title="Pipes">
+        <GroupCard icon={Factory} title="Finished Pipes">
           {activePipes.length === 0 ? (
             <p className="text-sm text-slate-400 dark:text-slate-500">No pipe sizes yet.</p>
           ) : (
