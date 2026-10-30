@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { formatExpensePeriod } from '../lib/expensePeriod'
 import type { Database } from '../types/database'
-import { formatQty, formatPipeProductLabel, piecesToKg } from '../lib/format'
+import { formatQty, formatPipeProductLabel, piecesToKg, scrapUsedForGranules } from '../lib/format'
 
 type Tables = Database['public']['Tables']
 
@@ -18,7 +18,7 @@ export type SaleRecordRow = Tables['sales_entries']['Row'] & {
   bills: BillRef
 }
 export type RecyclingRecordRow = Tables['recycling_entries']['Row'] & {
-  scrap_types: NameRef
+  scrap_types: { name: string; loss_pct: number } | null
   pipe_products: PipeRef
 }
 export type RawPurchaseRecordRow = Tables['raw_material_purchases']['Row'] & {
@@ -119,9 +119,17 @@ export function describeRecord(record: EntryRecord): {
           ? `${formatQty(record.row.num_bags)} × ${formatQty(record.row.output_pack_kg ?? 0)}kg bags`
           : null
 
+      // The scrap this batch took off scrap stock (granules ÷ (1 − loss)).
+      const lossPct = record.row.scrap_types?.loss_pct
+      const scrapUsed =
+        lossPct != null && record.row.total_output_kg
+          ? `used ${formatQty(scrapUsedForGranules(record.row.total_output_kg, Number(lossPct)))} kg ${sourceName || 'scrap'}`
+          : null
+
       return {
         title: granuleProduct,
-        subtitle: bagInfo ? `${bagInfo} • Source: ${sourceName || 'Scrap'}` : sourceName ? `Source: ${sourceName}` : null,
+        subtitle:
+          [bagInfo, scrapUsed ?? (sourceName ? `Source: ${sourceName}` : null)].filter(Boolean).join(' • ') || null,
         amount: `${formatQty(record.row.total_output_kg ?? 0)} kg`,
         amountKgPcs: null,
       }
@@ -227,7 +235,7 @@ export function useRecords({ fromDate, toDate, kinds }: RecordsFilter) {
             ? inRange(
                 supabase
                   .from('recycling_entries')
-                  .select('*, scrap_types:source_scrap_type_id(name), pipe_products(diameter_inches, weight_kg)'),
+                  .select('*, scrap_types:source_scrap_type_id(name, loss_pct), pipe_products(diameter_inches, weight_kg)'),
               )
             : null,
           wants('raw_material_purchase')

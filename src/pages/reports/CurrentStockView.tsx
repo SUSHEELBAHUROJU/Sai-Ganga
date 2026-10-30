@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useFinishedGoodsStock, useRawMaterialStock, useScrapStock } from '../../hooks/useStock'
 import { LoadingState } from '../../components/States'
 import { StockFlag, StockValue, StockValueKgPcs, stockHealthBorderClass } from '../../components/StockBadges'
-import { formatPipeProductLabel, piecesToKg } from '../../lib/format'
+import { formatPipeProductLabel, formatQty, piecesToKg } from '../../lib/format'
 import { formatShortDate } from '../../lib/date'
 
 export function CurrentStockView() {
@@ -77,7 +77,18 @@ export function CurrentStockView() {
                   key={s.scrap_type_id}
                   className={`flex items-center justify-between gap-2 rounded-lg border border-l-4 border-slate-200 px-4 py-2.5 dark:border-slate-800 ${stockHealthBorderClass((s.current_stock ?? 0) < 0, s.is_low_stock ?? false)}`}
                 >
-                  <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{s.name}</span>
+                  <span className="min-w-0 text-sm font-medium text-slate-800 dark:text-slate-200">
+                    {s.name}
+                    {(s.consumed_kg ?? 0) > 0 && (
+                      // How the figure is made up: what came in, minus what
+                      // recycling used (granules ÷ (1 − loss %)).
+                      <span className="block text-xs font-normal text-slate-400">
+                        In {formatQty(Number(s.opening_kg ?? 0) + Number(s.purchased_kg ?? 0) + Number(s.factory_waste_kg ?? 0))} kg
+                        {' · '}Recycled −{formatQty(Number(s.consumed_kg))} kg
+                        {' '}({formatQty(Number(s.recycled_output_kg ?? 0))} kg granules, {formatQty(Number(s.loss_pct ?? 0))}% loss)
+                      </span>
+                    )}
+                  </span>
                   <div className="flex shrink-0 items-center gap-2">
                     <StockFlag
                       isNegative={(s.current_stock ?? 0) < 0}

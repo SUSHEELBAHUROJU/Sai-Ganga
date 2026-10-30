@@ -11,6 +11,7 @@ import { Modal } from '../../components/Modal'
 import { ConfirmDialog } from '../../components/ConfirmDialog'
 import { Field } from '../../components/Field'
 import { useToast } from '../../lib/toast'
+import { formatQty } from '../../lib/format'
 import { LoadingState } from '../../components/States'
 
 export function ScrapTypesTab() {
@@ -138,7 +139,7 @@ export function ScrapTypesTab() {
             <div className="min-w-0">
               <p className="font-medium text-slate-900 dark:text-slate-100">{t.name}</p>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                {Number(t.loss_pct)}% lost in recycling
+                {Number(t.loss_pct)}% lost in recycling · 100 kg scrap → {formatQty(100 - Number(t.loss_pct))} kg granules
               </p>
             </div>
             {t.is_active ? (
@@ -216,7 +217,7 @@ export function ScrapTypesTab() {
             {(() => {
               const loss = Number(lossInput)
               return lossInput.trim() !== '' && loss >= 0 && loss < 100
-                ? `100 kg of scrap gives ${Math.round((100 - loss) * 100) / 100} kg of granules. Granules are priced at the scrap rate ÷ ${Math.round((100 - loss) * 100) / 100}%, so the stock check cost includes the loss.`
+                ? `100 kg of scrap gives ${Math.round((100 - loss) * 100) / 100} kg of granules. Each recycling entry takes its granules ÷ ${Math.round((100 - loss) * 100) / 100}% off scrap stock, and granules are priced the same way in the stock check. Changing this recalculates scrap stock for all past recycling too.`
                 : 'Share of the scrap weight lost when it is recycled into granules.'
             })()}
           </p>

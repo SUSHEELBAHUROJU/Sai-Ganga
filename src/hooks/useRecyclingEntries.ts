@@ -26,6 +26,8 @@ export function useAddGranulesRecyclingEntry() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recycling_entries'] })
       queryClient.invalidateQueries({ queryKey: ['raw_material_stock'] })
+      // The scrap the batch used comes off scrap stock.
+      queryClient.invalidateQueries({ queryKey: ['scrap_stock'] })
       queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     },
   })

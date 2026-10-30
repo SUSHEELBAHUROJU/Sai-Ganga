@@ -56,7 +56,8 @@ export function useSetScrapTypeActive() {
   })
 }
 
-/** Percent of scrap weight lost in recycling — prices granules in the stock check report. */
+/** Percent of scrap weight lost in recycling — sets how much scrap stock each
+ *  recycling entry uses up, and prices granules in the stock check report. */
 export function useSetScrapTypeLoss() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -68,6 +69,8 @@ export function useSetScrapTypeLoss() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY })
       queryClient.invalidateQueries({ queryKey: ['stock_check_report'] })
       queryClient.invalidateQueries({ queryKey: ['reports', 'production_cost'] })
+      queryClient.invalidateQueries({ queryKey: ['scrap_stock'] })
+      queryClient.invalidateQueries({ queryKey: ['records'] })
     },
   })
 }

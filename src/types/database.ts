@@ -1365,6 +1365,8 @@ export type Database = {
           opening_kg: number | null
           purchased_kg: number | null
           scrap_type_id: string | null
+          recycled_output_kg: number | null
+          loss_pct: number | null
         }
         Relationships: []
       }
