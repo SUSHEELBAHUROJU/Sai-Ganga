@@ -18,8 +18,10 @@ import {
   type MyCosts,
   type StockCheckPeriod,
 } from '../hooks/useStockChecks'
-import { formatInvoiceDate, formatStatementDate } from './date'
-import { formatPipeProductLabel, formatQty } from './format'
+import { formatInvoiceDate, formatStatementDate, todayISODate } from './date'
+import { formatPipeProductLabel } from './format'
+import { LOGO_ASPECT, LOGO_DATA_URL } from './pdfLogo'
+import { pdfCompany as company, companyContactLine } from './pdfCompany'
 
 /* ==========================================================================
  * Bill PDF — compact two-copy A4 layout
@@ -45,7 +47,13 @@ const BAND_BG: Rgb = [235, 242, 250]
 const ROW_ALT_BG: Rgb = [243, 246, 250]
 const BORDER_GRAY: Rgb = [214, 222, 233]
 
-const BUSINESS_NAME = 'Sai Ganga Pipes'
+const GREEN: Rgb = [21, 128, 61]
+
+function drawLogo(doc: jsPDF, x: number, y: number, width: number): number {
+  const height = width * LOGO_ASPECT
+  doc.addImage(LOGO_DATA_URL, 'JPEG', x, y, width, height, 'sai-ganga-logo', 'FAST')
+  return height
+}
 
 const PAGE_W = 210
 const PAGE_H = 297
@@ -56,7 +64,7 @@ const CUT_GUTTER = 7
 const COPY_H = (PAGE_H - MARGIN_Y * 2 - CUT_GUTTER) / 2
 
 /** Vertical cost of everything in a copy that isn't an item row. */
-const HEAD_H = 9.5
+const HEAD_H = 15
 /**
  * Meta block depth. Grows only when the address actually wraps to a second
  * line — a fixed two-line allowance would push every bill's table down and
@@ -178,41 +186,54 @@ function drawInvoiceCopy(doc: jsPDF, bill: BillRow, top: number, opts: CopyOptio
   let y = top
 
   // ---------------------------------------------------------------- header
-  doc.setFillColor(...NAVY)
-  doc.rect(MARGIN_X, y, contentWidth, 1.4, 'F')
-  doc.setFillColor(...RED)
-  doc.rect(MARGIN_X, y + 1.4, contentWidth, 0.7, 'F')
-
-  y += 6.6
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(12.5)
-  doc.setTextColor(...NAVY)
-  doc.text(BUSINESS_NAME, MARGIN_X, y)
+  // Logo on the left, the shop's address / phone / GSTIN beside it, and the
+  // INVOICE badge on the right.
+  const logoH = drawLogo(doc, MARGIN_X, y, 46)
 
   // A voided bill must be unmistakable on paper, so it takes over the badge.
   const badgeLabel = isVoided ? 'VOIDED' : 'INVOICE'
   const badgeW = isVoided ? 24 : 22
-  const badgeH = 6
+  const badgeH = 6.4
   const badgeX = PAGE_W - MARGIN_X - badgeW
   doc.setFillColor(...(isVoided ? RED : NAVY))
-  doc.rect(badgeX, y - 4.4, badgeW, badgeH, 'F')
-  doc.setFontSize(8)
+  doc.rect(badgeX, y + 0.4, badgeW, badgeH, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(8.5)
   doc.setTextColor(255, 255, 255)
-  doc.text(badgeLabel, badgeX + badgeW / 2, y - 0.2, { align: 'center' })
+  doc.text(badgeLabel, badgeX + badgeW / 2, y + 4.8, { align: 'center' })
 
-  // Sits on the title line, left of the badge — the meta block below has no
-  // spare row, and putting it there overlapped the items table header.
   if (opts.sheetLabel) {
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(7)
     doc.setTextColor(...MUTED_TEXT)
-    doc.text(opts.sheetLabel, badgeX - 3, y - 0.2, { align: 'right' })
+    doc.text(opts.sheetLabel, PAGE_W - MARGIN_X, y + 10.6, { align: 'right' })
   }
 
-  y += 2.9
-  doc.setDrawColor(...BORDER_GRAY)
-  doc.setLineWidth(0.3)
-  doc.line(MARGIN_X, y, PAGE_W - MARGIN_X, y)
+  const infoX = MARGIN_X + 50
+  const infoW = badgeX - infoX - 4
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7)
+  doc.setTextColor(...DARK_TEXT)
+  let infoY = y + 3.6
+  if (company.address) {
+    ;(doc.splitTextToSize(company.address, infoW) as string[]).slice(0, 2).forEach((line) => {
+      doc.text(line, infoX, infoY)
+      infoY += 3.2
+    })
+  }
+  const contact = companyContactLine()
+  if (contact) {
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...NAVY)
+    doc.text(contact, infoX, infoY)
+  }
+
+  y += Math.max(logoH, 11.5) + 1.6
+  doc.setFillColor(...NAVY)
+  doc.rect(MARGIN_X, y, contentWidth, 0.8, 'F')
+  doc.setFillColor(...RED)
+  doc.rect(MARGIN_X, y + 0.8, contentWidth, 0.4, 'F')
+  y += 1.2
 
   // ------------------------------------------------------------------ meta
   // Two plain columns instead of the old bordered cards — same information,
@@ -238,6 +259,10 @@ function drawInvoiceCopy(doc: jsPDF, bill: BillRow, top: number, opts: CopyOptio
   opts.addrLines.forEach((line, i) => {
     doc.text(line, MARGIN_X, metaTop + 8.9 + i * 3.3)
   })
+  if (bill.customer_phone) {
+    doc.setFont('helvetica', 'bold')
+    doc.text(`Ph: ${bill.customer_phone}`, MARGIN_X, metaTop + 8.9 + opts.addrLines.length * 3.3)
+  }
 
   const metaRow = (label: string, value: string, offsetY: number) => {
     doc.setFont('helvetica', 'normal')
@@ -371,11 +396,11 @@ function drawInvoiceCopy(doc: jsPDF, bill: BillRow, top: number, opts: CopyOptio
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(6.5)
   doc.setTextColor(...MUTED_TEXT)
-  doc.text('Computer-generated invoice.', MARGIN_X, footBase)
+  doc.text('Computer-generated invoice. Thank you for your business!', MARGIN_X, footBase)
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7.5)
   doc.setTextColor(...NAVY)
-  doc.text(`For ${BUSINESS_NAME}`, COL.amount, footBase, { align: 'right' })
+  doc.text(`For ${company.businessName}`, COL.amount, footBase, { align: 'right' })
 }
 
 export function generateBillPdfDoc(bill: BillRow): jsPDF {
@@ -388,8 +413,9 @@ export function generateBillPdfDoc(bill: BillRow): jsPDF {
   const totalKg = allItems.reduce((sum, i) => sum + (i.weight_kg ?? 0), 0)
 
   const addrLines = wrapAddress(doc, bill.customer_address)
-  const metaH =
-    META_H_BASE + Math.max(0, addrLines.length - 1) * META_H_PER_EXTRA_LINE
+  // Address lines plus the customer's phone line, if any.
+  const metaLines = addrLines.length + (bill.customer_phone ? 1 : 0)
+  const metaH = META_H_BASE + Math.max(0, metaLines - 1) * META_H_PER_EXTRA_LINE
 
   // Space left for item rows once the fixed sections are accounted for. The
   // totals overhead is charged to every sheet (not just the last) so each
@@ -464,7 +490,31 @@ export function generateBillPdfBlob(bill: BillRow): {
   return { blob, file, filename, url }
 }
 
-/** Plain account-statement PDF for a customer's ledger — kept simple, no address/GST, same as the bill PDF. */
+const CUSTOMER_PAYMENT_APP: Record<string, string> = { phonepe: 'PhonePe', gpay: 'GPay', other: 'Other' }
+
+function customerParticulars(entry: PassbookEntry): string {
+  if (entry.bill_number) {
+    return `Bill ${entry.bill_number}${entry.bill_total_kg ? ` - ${num(entry.bill_total_kg)} kg pipes` : ''}`
+  }
+  if (entry.type === 'due') return entry.note ? `Due - ${entry.note}` : 'Due added'
+  const mode =
+    entry.payment_mode === 'online'
+      ? `Online${entry.payment_app ? ` (${CUSTOMER_PAYMENT_APP[entry.payment_app] ?? entry.payment_app})` : ''}`
+      : entry.payment_mode === 'cash'
+        ? 'Cash'
+        : ''
+  const base = entry.paid_to_party_name
+    ? `Paid to ${entry.paid_to_party_name} (our supplier)`
+    : 'Payment received'
+  const withMode = mode ? `${base} - ${mode}` : base
+  return entry.note ? `${withMode} - ${entry.note}` : withMode
+}
+
+/**
+ * Customer account statement: every bill and payment, oldest first, with the
+ * running balance in words (Due / Advance) — the page a customer is sent to
+ * see what they owe and how it was arrived at.
+ */
 export function generateLedgerStatementDoc(
   customer: CustomerLedgerBalance,
   entries: PassbookEntry[],
@@ -472,181 +522,88 @@ export function generateLedgerStatementDoc(
   openingBalance?: number,
 ): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-
-  const pageWidth = 210
-  const margin = 14
-  const contentWidth = pageWidth - margin * 2
-  const NAVY = [15, 31, 69] as const
-  const RED = [210, 31, 31] as const
-  const TEAL = [13, 148, 136] as const
-  const DARK_TEXT = [30, 41, 59] as const
-  const MUTED_TEXT = [100, 116, 139] as const
-  const ROW_ALT_BG = [241, 245, 249] as const
-  const BORDER_GRAY = [226, 232, 240] as const
-
-  let y = 14
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(15)
-  doc.setTextColor(...NAVY)
-  doc.text('Sai Ganga Pipes', margin, y)
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...MUTED_TEXT)
-  const periodText = dateRange
-    ? `${formatStatementDate(dateRange.fromDate)} to ${formatStatementDate(dateRange.toDate)}`
+  const sortedAsc = [...entries].sort(
+    (a, b) => a.entry_date.localeCompare(b.entry_date) || a.created_at.localeCompare(b.created_at),
+  )
+  const periodLabel = dateRange
+    ? `${reportDate(dateRange.fromDate)} to ${reportDate(dateRange.toDate)}`
     : 'All Time'
-  doc.text(`Account Statement · ${periodText}`, pageWidth - margin, y, { align: 'right' })
 
-  y += 6
-  doc.setDrawColor(...BORDER_GRAY)
-  doc.setLineWidth(0.4)
-  doc.line(margin, y, pageWidth - margin, y)
+  let y = drawReportHeader(doc, 'Account Statement', periodLabel)
+  y = drawPartyBlock(doc, y, 'Statement for', customer.name, customer.phone)
 
-  y += 8
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(12)
-  doc.setTextColor(...DARK_TEXT)
-  doc.text(customer.name, margin, y)
-  if (customer.phone) {
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    doc.setTextColor(...MUTED_TEXT)
-    doc.text(customer.phone, margin, y + 5)
+  const billed = sortedAsc.filter((e) => e.type === 'due').reduce((sum, e) => sum + e.amount, 0)
+  const received = sortedAsc.filter((e) => e.type === 'received').reduce((sum, e) => sum + e.amount, 0)
+  const hasOpening = openingBalance !== undefined && Boolean(dateRange)
+  const closing = sortedAsc.length
+    ? sortedAsc[sortedAsc.length - 1].running_balance
+    : hasOpening
+      ? (openingBalance ?? 0)
+      : customer.balance
+  const closingText = customerBalanceText(closing)
+
+  y = drawKeyFigures(doc, y, [
+    ...(hasOpening ? [{ label: 'Opening balance', value: customerBalanceText(openingBalance ?? 0), tone: 'gray' as const }] : []),
+    { label: 'Bills', value: rs(billed), tone: 'red', note: `${sortedAsc.filter((e) => e.type === 'due').length} entries` },
+    { label: 'Payments received', value: rs(received), tone: 'green', note: `${sortedAsc.filter((e) => e.type === 'received').length} entries` },
+    {
+      label: closing > 0.004 ? 'Balance due' : closing < -0.004 ? 'Advance with us' : 'Balance',
+      value: closing > 0.004 || closing < -0.004 ? rs(Math.abs(closing)) : 'Settled',
+      tone: closing > 0.004 ? 'red' : closing < -0.004 ? 'green' : 'navy',
+    },
+  ])
+
+  const rows: string[][] = []
+  if (hasOpening && dateRange) {
+    rows.push([reportDate(dateRange.fromDate), 'Opening balance', '', '', customerBalanceText(openingBalance ?? 0)])
+  }
+  for (const entry of sortedAsc) {
+    rows.push([
+      reportDate(entry.entry_date),
+      customerParticulars(entry),
+      entry.type === 'due' ? money(entry.amount) : '',
+      entry.type === 'received' ? money(entry.amount) : '',
+      customerBalanceText(entry.running_balance),
+    ])
   }
 
-  const balance = customer.balance
-  const balanceLabel = balance > 0 ? 'DUE' : balance < 0 ? 'ADVANCE' : 'SETTLED'
-  const balanceColor: readonly [number, number, number] = balance > 0 ? RED : balance < 0 ? TEAL : DARK_TEXT
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(14)
-  doc.setTextColor(...balanceColor)
-  doc.text(
-    balance === 0 ? 'SETTLED' : `Rs. ${Math.abs(balance).toLocaleString('en-IN', { minimumFractionDigits: 2 })} ${balanceLabel}`,
-    pageWidth - margin,
+  y = drawSectionTitle(doc, y, 'Transactions')
+  y = drawReportTable(
+    doc,
     y,
-    { align: 'right' },
+    [
+      { header: 'DATE', x: 2 },
+      { header: 'PARTICULARS', x: 22, width: 86 },
+      { header: 'BILL AMOUNT', x: 132, align: 'right', color: () => RED },
+      { header: 'RECEIVED', x: 156, align: 'right', color: () => GREEN },
+      { header: 'BALANCE', x: 184, align: 'right', bold: true, color: balanceTone },
+    ],
+    rows,
+    'No transactions in this period.',
+    sortedAsc.length ? ['', 'TOTAL', money(billed), money(received), closingText] : undefined,
   )
 
-  y += 10
-
-  const colX = {
-    date: margin + 2,
-    desc: margin + 24,
-    gave: pageWidth - margin - 68,
-    got: pageWidth - margin - 34,
-    balance: pageWidth - margin - 2,
-  }
-
-  const drawTableHeader = () => {
-    doc.setFillColor(...NAVY)
-    doc.rect(margin, y, contentWidth, 8, 'F')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(8)
-    doc.setTextColor(255, 255, 255)
-    doc.text('DATE', colX.date, y + 5.4)
-    doc.text('PARTICULARS', colX.desc, y + 5.4)
-    doc.setFontSize(6.8)
-    doc.text('ORDER AMOUNT', colX.gave, y + 5.4, { align: 'right' })
-    doc.text('PAYMENT RECEIVED', colX.got, y + 5.4, { align: 'right' })
-    doc.setFontSize(8)
-    doc.text('BALANCE', colX.balance, y + 5.4, { align: 'right' })
-    y += 8
-  }
-
-  drawTableHeader()
-
-  let rowIndex = 0
-
-  if (openingBalance !== undefined && dateRange) {
-    const rowHeight = 7.5
-    doc.setFont('helvetica', 'italic')
-    doc.setFontSize(8)
-    doc.setTextColor(...MUTED_TEXT)
-    doc.text(formatStatementDate(dateRange.fromDate), colX.date, y + 5)
-    doc.text('Opening Balance', colX.desc, y + 5)
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(...DARK_TEXT)
-    doc.text(formatQty(openingBalance), colX.balance, y + 5, { align: 'right' })
-    doc.setDrawColor(...BORDER_GRAY)
-    doc.setLineWidth(0.2)
-    doc.line(margin, y + rowHeight, pageWidth - margin, y + rowHeight)
-    y += rowHeight
-    rowIndex++
-  }
-
-  const sortedAsc = [...entries].sort((a, b) => a.entry_date.localeCompare(b.entry_date))
-
-  sortedAsc.forEach((entry) => {
-    const rowHeight = 7.5
-    if (y + rowHeight > 280) {
-      doc.addPage()
-      y = 14
-      drawTableHeader()
-    }
-
-    if (rowIndex % 2 === 1) {
-      doc.setFillColor(...ROW_ALT_BG)
-      doc.rect(margin, y, contentWidth, rowHeight, 'F')
-    }
-
-    const isDue = entry.type === 'due'
-    const particulars = entry.bill_number
-      ? `Bill ${entry.bill_number}${entry.bill_total_kg ? ` (${formatQty(entry.bill_total_kg)} kg)` : ''}`
-      : isDue
-        ? 'Due'
-        : entry.paid_to_party_name
-          ? `Paid to ${entry.paid_to_party_name} (supplier)`
-          : 'Payment'
-
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8)
-    doc.setTextColor(...DARK_TEXT)
-    doc.text(formatStatementDate(entry.entry_date), colX.date, y + 5)
-    doc.text(particulars, colX.desc, y + 5)
-
-    doc.setFont('helvetica', 'bold')
-    if (isDue) {
-      doc.setTextColor(...RED)
-      doc.text(formatQty(entry.amount), colX.gave, y + 5, { align: 'right' })
-    } else {
-      doc.setTextColor(...TEAL)
-      doc.text(formatQty(entry.amount), colX.got, y + 5, { align: 'right' })
-    }
-
-    doc.setFont('helvetica', 'normal')
-    doc.setTextColor(...DARK_TEXT)
-    doc.text(formatQty(entry.running_balance), colX.balance, y + 5, { align: 'right' })
-
-    doc.setDrawColor(...BORDER_GRAY)
-    doc.setLineWidth(0.2)
-    doc.line(margin, y + rowHeight, pageWidth - margin, y + rowHeight)
-
-    y += rowHeight
-    rowIndex++
-  })
-
-  if (sortedAsc.length === 0 && openingBalance === undefined) {
-    const rowHeight = 8
-    doc.setFont('helvetica', 'italic')
-    doc.setFontSize(8.5)
-    doc.setTextColor(...MUTED_TEXT)
-    doc.text('No transactions in this period', margin + 4, y + 5.5)
-    y += rowHeight
-  }
-
-  y += 4
-  doc.setFont('helvetica', 'italic')
-  doc.setFontSize(7.5)
-  doc.setTextColor(...MUTED_TEXT)
-  doc.text(
-    'Order Amount = billed to you (increases due) · Payment Received = reduces due',
-    margin,
-    y,
+  y = drawNote(
+    doc,
+    y + 1,
+    'Bill Amount adds to what is owed; Received reduces it. "Due" is the amount payable to us; "Advance" is extra paid, adjusted against the next bill.',
   )
 
-  return doc
+  drawSummaryBlock(
+    doc,
+    y,
+    [
+      ...(hasOpening ? [{ label: 'Opening balance', value: customerBalanceText(openingBalance ?? 0) }] : []),
+      { label: '+ Bills', value: rs(billed) },
+      { label: '- Payments received', value: rs(received) },
+    ],
+    {
+      label: closing > 0.004 ? 'BALANCE DUE' : closing < -0.004 ? 'ADVANCE' : 'BALANCE',
+      value: closing > 0.004 || closing < -0.004 ? rs(Math.abs(closing)) : 'Settled',
+    },
+  )
+
+  return finishReport(doc)
 }
 
 export function generateLedgerStatementBlob(
@@ -674,7 +631,9 @@ export function generateLedgerStatementBlob(
  * ========================================================================== */
 
 const REPORT_MARGIN = 12
-const REPORT_BOTTOM = 282
+/** Lowest y any report content may reach — the page footer sits below it. */
+const REPORT_BOTTOM = 279
+const REPORT_W = PAGE_W - REPORT_MARGIN * 2
 
 /** dd-mm-yyyy. The invoice's spelled-out date is too wide for a report table
  *  that carries a row per transaction — it ran into the next column. */
@@ -683,12 +642,182 @@ function reportDate(iso: string): string {
   return `${d}-${m}-${y}`
 }
 
+/** What every page of a report repeats: its title and the period it covers. */
+type ReportContext = { title: string; periodLabel: string }
+const reportContexts = new WeakMap<jsPDF, ReportContext>()
+
+/**
+ * First-page header: the logo with the shop's address / phone / GSTIN under
+ * it on the left; the report's title, period and generation date on the
+ * right; a navy-and-red rule beneath — the logo's own colours.
+ */
+function drawReportHeader(doc: jsPDF, title: string, periodLabel: string): number {
+  reportContexts.set(doc, { title, periodLabel })
+  const top = 10
+  const logoH = drawLogo(doc, REPORT_MARGIN, top, 62)
+
+  let infoY = top + logoH + 3.6
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...DARK_TEXT)
+  if (company.address) {
+    ;(doc.splitTextToSize(company.address, 100) as string[]).slice(0, 2).forEach((line) => {
+      doc.text(line, REPORT_MARGIN, infoY)
+      infoY += 3.4
+    })
+  }
+  const contact = companyContactLine()
+  if (contact) {
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...NAVY)
+    doc.text(contact, REPORT_MARGIN, infoY)
+    infoY += 3.4
+  }
+
+  const right = PAGE_W - REPORT_MARGIN
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(15)
+  doc.setTextColor(...NAVY)
+  doc.text(title.toUpperCase(), right, top + 6, { align: 'right' })
+  doc.setFillColor(...RED)
+  doc.rect(right - 28, top + 8.2, 28, 0.9, 'F')
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(...DARK_TEXT)
+  doc.text(periodLabel, right, top + 13.6, { align: 'right' })
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor(...MUTED_TEXT)
+  doc.text(`Generated on ${reportDate(todayISODate())}`, right, top + 17.6, { align: 'right' })
+
+  const ruleY = Math.max(infoY, top + 20.5) + 1
+  doc.setFillColor(...NAVY)
+  doc.rect(REPORT_MARGIN, ruleY, REPORT_W, 1, 'F')
+  doc.setFillColor(...RED)
+  doc.rect(REPORT_MARGIN, ruleY + 1, REPORT_W, 0.5, 'F')
+  return ruleY + 5
+}
+
+/** Slim header for page 2 onwards: small logo, title and period on one line. */
+function drawContinuationHeader(doc: jsPDF): number {
+  const ctx = reportContexts.get(doc)
+  const top = 9
+  const logoH = drawLogo(doc, REPORT_MARGIN, top, 36)
+  if (ctx) {
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(10)
+    doc.setTextColor(...NAVY)
+    doc.text(ctx.title, PAGE_W - REPORT_MARGIN, top + 4.2, { align: 'right' })
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(7.5)
+    doc.setTextColor(...MUTED_TEXT)
+    doc.text(`${ctx.periodLabel}  (continued)`, PAGE_W - REPORT_MARGIN, top + 8, { align: 'right' })
+  }
+  const ruleY = top + logoH + 2
+  doc.setFillColor(...NAVY)
+  doc.rect(REPORT_MARGIN, ruleY, REPORT_W, 0.6, 'F')
+  return ruleY + 5
+}
+
+/** Starts a new page, with the continuation header, and returns the y to draw at. */
+function newReportPage(doc: jsPDF): number {
+  doc.addPage()
+  return drawContinuationHeader(doc)
+}
+
+/** Moves to a new page when `needed` mm won't fit below `y`. */
+function ensureSpace(doc: jsPDF, y: number, needed: number): number {
+  return y + needed > REPORT_BOTTOM ? newReportPage(doc) : y
+}
+
+/**
+ * Footer on every page, drawn once the page count is known: the shop's name
+ * on the left, "Page x of y" on the right. Also used for the statements and
+ * the bill-free documents, so every PDF ends the same way.
+ */
+function finishReport(doc: jsPDF): jsPDF {
+  const pages = doc.getNumberOfPages()
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i)
+    const y = PAGE_H - 9
+    doc.setDrawColor(...BORDER_GRAY)
+    doc.setLineWidth(0.3)
+    doc.line(REPORT_MARGIN, y - 4, PAGE_W - REPORT_MARGIN, y - 4)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.5)
+    doc.setTextColor(...NAVY)
+    doc.text(company.businessName, REPORT_MARGIN, y)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(...MUTED_TEXT)
+    doc.text('Computer-generated report', PAGE_W / 2, y, { align: 'center' })
+    doc.text(`Page ${i} of ${pages}`, PAGE_W - REPORT_MARGIN, y, { align: 'right' })
+  }
+  return doc
+}
+
+type Tone = 'navy' | 'red' | 'green' | 'gray'
+const TONE: Record<Tone, Rgb> = { navy: NAVY, red: RED, green: GREEN, gray: MUTED_TEXT }
+
+/** One headline number for the top of a report. */
+type KeyFigure = { label: string; value: string; tone?: Tone; note?: string }
+
+/**
+ * The figures someone opens the report for, as a row of boxes right under
+ * the header — so the answer is on top instead of at the end of the tables.
+ */
+function drawKeyFigures(doc: jsPDF, y: number, figures: KeyFigure[]): number {
+  if (figures.length === 0) return y
+  const gap = 3
+  const boxW = (REPORT_W - gap * (figures.length - 1)) / figures.length
+  const boxH = figures.some((f) => f.note) ? 17 : 14.5
+  figures.forEach((f, i) => {
+    const x = REPORT_MARGIN + i * (boxW + gap)
+    const color = TONE[f.tone ?? 'navy']
+    doc.setFillColor(...BAND_BG)
+    doc.rect(x, y, boxW, boxH, 'F')
+    doc.setFillColor(...color)
+    doc.rect(x, y, 1.4, boxH, 'F')
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(6.8)
+    doc.setTextColor(...MUTED_TEXT)
+    doc.text(f.label.toUpperCase(), x + 4, y + 4.8)
+
+    doc.setFontSize(fitFontSize(doc, f.value, boxW - 6, [13, 12, 11, 10, 9]))
+    // Grey marks a secondary figure: grey bar, but the number stays readable.
+    doc.setTextColor(...(f.tone === 'gray' ? DARK_TEXT : color))
+    doc.text(f.value, x + 4, y + 11)
+
+    if (f.note) {
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(6.8)
+      doc.setTextColor(...MUTED_TEXT)
+      doc.text(fitToWidth(doc, f.note, boxW - 6), x + 4, y + 15)
+    }
+  })
+  return y + boxH + 3
+}
+
+/** A short line of explanation under the header (what the figures mean). */
+function drawNote(doc: jsPDF, y: number, text: string): number {
+  doc.setFont('helvetica', 'italic')
+  doc.setFontSize(7.6)
+  doc.setTextColor(...MUTED_TEXT)
+  const lines = doc.splitTextToSize(text, REPORT_W) as string[]
+  lines.forEach((line, i) => doc.text(line, REPORT_MARGIN, y + 3 + i * 3.6))
+  return y + 3 + lines.length * 3.6
+}
+
 type ReportColumn = {
   header: string
   /** x offset from the left margin. */
   x: number
   align?: 'left' | 'right'
   width?: number
+  /** Colour for a cell's text — e.g. red for what was billed, green for what was paid. */
+  color?: (cell: string, row: string[]) => Rgb | undefined
+  bold?: boolean
 }
 
 /**
@@ -708,152 +837,181 @@ function fitToWidth(doc: jsPDF, text: string, width: number): string {
   return `${candidate.trimEnd()}...`
 }
 
-/** Shared table renderer for both reports, so they stay visually identical
- *  and neither has to reimplement paging, banding, or header repetition. */
+const TABLE_HEAD_H = 7
+const TABLE_ROW_H = 6.6
+
+/** Shared table renderer for every report, so they stay visually identical
+ *  and none has to reimplement paging, banding, or header repetition. A
+ *  `totalRow` is drawn bold on a tinted band, closing the table. */
 function drawReportTable(
   doc: jsPDF,
   startY: number,
   columns: ReportColumn[],
   rows: string[][],
   emptyMessage: string,
+  totalRow?: string[],
 ): number {
-  const contentWidth = PAGE_W - REPORT_MARGIN * 2
   let y = startY
 
   const drawHeader = () => {
     doc.setFillColor(...NAVY)
-    doc.rect(REPORT_MARGIN, y, contentWidth, 6.5, 'F')
+    doc.rect(REPORT_MARGIN, y, REPORT_W, TABLE_HEAD_H, 'F')
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7.5)
+    doc.setFontSize(7.6)
     doc.setTextColor(255, 255, 255)
     columns.forEach((col) => {
-      doc.text(col.header, REPORT_MARGIN + col.x, y + 4.4, {
+      doc.text(col.header, REPORT_MARGIN + col.x, y + 4.7, {
         align: col.align === 'right' ? 'right' : 'left',
       })
     })
-    y += 6.5
+    y += TABLE_HEAD_H
   }
 
+  y = ensureSpace(doc, y, TABLE_HEAD_H + TABLE_ROW_H * 2)
   drawHeader()
 
   if (rows.length === 0) {
     doc.setFont('helvetica', 'italic')
-    doc.setFontSize(8)
+    doc.setFontSize(8.4)
     doc.setTextColor(...MUTED_TEXT)
-    doc.text(emptyMessage, REPORT_MARGIN + 3, y + 5)
-    return y + 9
+    doc.text(emptyMessage, REPORT_MARGIN + 3, y + 5.4)
+    doc.setDrawColor(...BORDER_GRAY)
+    doc.setLineWidth(0.2)
+    doc.line(REPORT_MARGIN, y + 8, PAGE_W - REPORT_MARGIN, y + 8)
+    return y + 8
   }
 
-  const rowH = 6
-  rows.forEach((row, i) => {
-    if (y + rowH > REPORT_BOTTOM) {
-      doc.addPage()
-      y = 16
+  const drawRow = (row: string[], i: number, isTotal: boolean) => {
+    if (y + TABLE_ROW_H > REPORT_BOTTOM) {
+      y = newReportPage(doc)
       drawHeader()
     }
 
-    if (i % 2 === 1) {
+    if (isTotal) {
+      doc.setFillColor(...BAND_BG)
+      doc.rect(REPORT_MARGIN, y, REPORT_W, TABLE_ROW_H + 0.4, 'F')
+      doc.setDrawColor(...NAVY)
+      doc.setLineWidth(0.4)
+      doc.line(REPORT_MARGIN, y, PAGE_W - REPORT_MARGIN, y)
+    } else if (i % 2 === 1) {
       doc.setFillColor(...ROW_ALT_BG)
-      doc.rect(REPORT_MARGIN, y, contentWidth, rowH, 'F')
+      doc.rect(REPORT_MARGIN, y, REPORT_W, TABLE_ROW_H, 'F')
     }
 
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(7.8)
-    doc.setTextColor(...DARK_TEXT)
-
+    doc.setFontSize(8.2)
     columns.forEach((col, ci) => {
       const raw = row[ci] ?? ''
+      if (!raw) return
       const align = col.align === 'right' ? 'right' : 'left'
+      doc.setFont('helvetica', isTotal || col.bold ? 'bold' : 'normal')
+      doc.setTextColor(...(isTotal ? NAVY : (col.color?.(raw, row) ?? DARK_TEXT)))
       const text = col.width ? fitToWidth(doc, raw, col.width) : raw
-      doc.text(text, REPORT_MARGIN + col.x, y + 4.2, { align })
+      doc.text(text, REPORT_MARGIN + col.x, y + 4.5, { align })
     })
 
-    doc.setDrawColor(...BORDER_GRAY)
-    doc.setLineWidth(0.15)
-    doc.line(REPORT_MARGIN, y + rowH, PAGE_W - REPORT_MARGIN, y + rowH)
-    y += rowH
-  })
+    if (!isTotal) {
+      doc.setDrawColor(...BORDER_GRAY)
+      doc.setLineWidth(0.15)
+      doc.line(REPORT_MARGIN, y + TABLE_ROW_H, PAGE_W - REPORT_MARGIN, y + TABLE_ROW_H)
+    }
+    y += TABLE_ROW_H + (isTotal ? 0.4 : 0)
+  }
+
+  rows.forEach((row, i) => drawRow(row, i, false))
+  if (totalRow) drawRow(totalRow, 0, true)
 
   return y
 }
 
-/** Report title block — business name, report name, and the period covered. */
-function drawReportHeader(doc: jsPDF, title: string, periodLabel: string): number {
-  const contentWidth = PAGE_W - REPORT_MARGIN * 2
-  let y = 14
-
-  doc.setFillColor(...NAVY)
-  doc.rect(REPORT_MARGIN, y, contentWidth, 1.4, 'F')
-  doc.setFillColor(...RED)
-  doc.rect(REPORT_MARGIN, y + 1.4, contentWidth, 0.7, 'F')
-
-  y += 8
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(14)
-  doc.setTextColor(...NAVY)
-  doc.text(BUSINESS_NAME, REPORT_MARGIN, y)
-
-  doc.setFontSize(10)
-  doc.text(title, PAGE_W - REPORT_MARGIN, y, { align: 'right' })
-
-  y += 5.5
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...MUTED_TEXT)
-  doc.text(`Period: ${periodLabel}`, REPORT_MARGIN, y)
-
-  return y + 6
-}
-
-/** Section heading inside a report. */
+/** Section heading inside a report: a short red bar and the title. */
 function drawSectionTitle(doc: jsPDF, y: number, label: string): number {
-  const top = y + 6.5
+  y = ensureSpace(doc, y + 5, 22) // keep a heading with at least a couple of rows
+  doc.setFillColor(...RED)
+  doc.rect(REPORT_MARGIN, y - 3.2, 1.2, 4.2, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9)
-  doc.setTextColor(...RED)
-  doc.text(label.toUpperCase(), REPORT_MARGIN, top)
-  return top + 2.5
+  doc.setFontSize(10)
+  doc.setTextColor(...NAVY)
+  doc.text(label, REPORT_MARGIN + 3.2, y)
+  return y + 3
 }
 
+/** Closing figures, boxed on the right with the main result highlighted. */
 function drawSummaryBlock(
   doc: jsPDF,
   y: number,
   rows: { label: string; value: string }[],
   grand: { label: string; value: string },
 ): number {
-  const width = 84
+  const width = 92
   const x = PAGE_W - REPORT_MARGIN - width
-  let cursor = y + 4
-
+  const rowH = 6
   // Keep the whole block on one page — a summary split across a page break
   // is exactly the part someone flips to first.
-  const needed = rows.length * 5.2 + 10
-  if (cursor + needed > REPORT_BOTTOM) {
-    doc.addPage()
-    cursor = 16
-  }
+  let cursor = ensureSpace(doc, y + 4, rows.length * rowH + 14)
 
-  rows.forEach((row) => {
+  doc.setDrawColor(...BORDER_GRAY)
+  doc.setLineWidth(0.3)
+  doc.rect(x, cursor, width, rows.length * rowH + 2, 'S')
+  cursor += 1
+  rows.forEach((row, i) => {
+    if (i > 0) {
+      doc.setDrawColor(...ROW_ALT_BG)
+      doc.line(x + 2, cursor, x + width - 2, cursor)
+    }
     doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.2)
+    doc.setFontSize(8.6)
+    doc.setTextColor(...MUTED_TEXT)
+    doc.text(row.label, x + 3, cursor + 4.2)
+    doc.setFont('helvetica', 'bold')
     doc.setTextColor(...DARK_TEXT)
-    doc.text(row.label, x, cursor + 3.6)
-    doc.text(row.value, PAGE_W - REPORT_MARGIN, cursor + 3.6, { align: 'right' })
-    cursor += 5.2
+    doc.text(row.value, PAGE_W - REPORT_MARGIN - 3, cursor + 4.2, { align: 'right' })
+    cursor += rowH
   })
+  cursor += 1
 
   doc.setFillColor(...NAVY)
-  doc.rect(x, cursor, width, 9, 'F')
+  doc.rect(x, cursor, width, 10, 'F')
   doc.setFillColor(...RED)
-  doc.rect(x, cursor, 1.8, 9, 'F')
+  doc.rect(x, cursor, 1.8, 10, 'F')
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
+  doc.setFontSize(10.5)
   doc.setTextColor(255, 255, 255)
-  doc.text(grand.label, x + 4.5, cursor + 6)
-  doc.text(grand.value, PAGE_W - REPORT_MARGIN, cursor + 6, { align: 'right' })
+  doc.text(grand.label, x + 4.5, cursor + 6.6)
+  doc.text(grand.value, PAGE_W - REPORT_MARGIN - 3, cursor + 6.6, { align: 'right' })
 
-  return cursor + 9
+  return cursor + 10
 }
+
+const rs = (n: number | null | undefined) => `Rs. ${money(n)}`
+
+/** Who a statement is for — name large, phone beside it. */
+function drawPartyBlock(doc: jsPDF, y: number, label: string, name: string, detail: string | null): number {
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(7)
+  doc.setTextColor(...RED)
+  doc.text(label.toUpperCase(), REPORT_MARGIN, y + 1)
+  doc.setFontSize(fitFontSize(doc, name, REPORT_W - 60, [14, 13, 12, 11]))
+  doc.setTextColor(...NAVY)
+  doc.text(name, REPORT_MARGIN, y + 7.2)
+  if (detail) {
+    const nameW = doc.getTextWidth(name)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(9)
+    doc.setTextColor(...MUTED_TEXT)
+    doc.text(detail, REPORT_MARGIN + nameW + 4, y + 7.2)
+  }
+  return y + 12
+}
+
+/** "12,000.00 Due" / "500.00 Advance" / "Settled" — a customer's balance in words. */
+function customerBalanceText(balance: number): string {
+  if (balance > 0.004) return `${money(balance)} Due`
+  if (balance < -0.004) return `${money(-balance)} Advance`
+  return 'Settled'
+}
+
+const balanceTone = (text: string): Rgb =>
+  text.endsWith('Due') || text.endsWith('Payable') ? RED : text.endsWith('Advance') ? GREEN : DARK_TEXT
 
 export type ExpenseReportData = {
   purchases: {
@@ -884,19 +1042,26 @@ export function generateExpenseReportDoc(
 ): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   let y = drawReportHeader(doc, 'Expense Report', periodLabel)
+  const t = report.totals
+  y = drawKeyFigures(doc, y, [
+    { label: 'Total expenses', value: rs(t.grandTotal), tone: 'red' },
+    { label: 'Purchases + transport', value: rs(t.purchaseTotal) },
+    { label: 'Salaries', value: rs(t.salaries) },
+    { label: 'Other expenses', value: rs(t.otherExpenses) },
+  ])
 
-  y = drawSectionTitle(doc, y, 'Purchases')
+  y = drawSectionTitle(doc, y, `Purchases (${report.purchases.length})`)
   y = drawReportTable(
     doc,
     y,
     [
       { header: 'DATE', x: 2 },
-      { header: 'SUPPLIER', x: 17, width: 38 },
-      { header: 'ITEM', x: 57, width: 30 },
-      { header: 'QTY (KG)', x: 112, align: 'right' },
-      { header: 'RATE/KG', x: 136, align: 'right' },
-      { header: 'TRANSPORT', x: 162, align: 'right' },
-      { header: 'TOTAL (Rs.)', x: 186, align: 'right' },
+      { header: 'SUPPLIER', x: 21, width: 44 },
+      { header: 'ITEM', x: 67, width: 34 },
+      { header: 'QTY (KG)', x: 120, align: 'right' },
+      { header: 'RATE/KG', x: 140, align: 'right' },
+      { header: 'TRANSPORT', x: 161, align: 'right' },
+      { header: 'TOTAL (Rs.)', x: 184, align: 'right', bold: true },
     ],
     report.purchases.map((p) => [
       reportDate(p.entry_date),
@@ -908,44 +1073,39 @@ export function generateExpenseReportDoc(
       p.total === null ? '-' : money(p.total),
     ]),
     'No purchases in this period.',
+    report.purchases.length
+      ? ['TOTAL', '', '', num(report.purchases.reduce((s, p) => s + p.quantityKg, 0)), '', money(t.transport), money(t.purchaseTotal)]
+      : undefined,
   )
 
-  y = drawSectionTitle(doc, y, 'Salaries')
+  y = drawSectionTitle(doc, y, `Salaries (${report.salaries.length})`)
   y = drawReportTable(
     doc,
     y,
     [
       { header: 'DATE', x: 2 },
-      { header: 'TYPE', x: 24, width: 40 },
-      { header: 'AMOUNT (Rs.)', x: 100, align: 'right' },
-      { header: 'DESCRIPTION', x: 108, width: 78 },
+      { header: 'TYPE', x: 24, width: 50 },
+      { header: 'DESCRIPTION', x: 78, width: 74 },
+      { header: 'AMOUNT (Rs.)', x: 184, align: 'right', bold: true },
     ],
-    report.salaries.map((s) => [
-      reportDate(s.entry_date),
-      s.category,
-      money(s.amount),
-      s.notes ?? '',
-    ]),
+    report.salaries.map((s) => [reportDate(s.entry_date), s.category, s.notes ?? '', money(s.amount)]),
     'No salary payments in this period.',
+    report.salaries.length ? ['TOTAL', '', '', money(t.salaries)] : undefined,
   )
 
-  y = drawSectionTitle(doc, y, 'Other Expenses')
+  y = drawSectionTitle(doc, y, `Other Expenses (${report.otherExpenses.length})`)
   y = drawReportTable(
     doc,
     y,
     [
       { header: 'DATE', x: 2 },
-      { header: 'TYPE', x: 24, width: 40 },
-      { header: 'AMOUNT (Rs.)', x: 100, align: 'right' },
-      { header: 'DESCRIPTION', x: 108, width: 78 },
+      { header: 'TYPE', x: 24, width: 50 },
+      { header: 'DESCRIPTION', x: 78, width: 74 },
+      { header: 'AMOUNT (Rs.)', x: 184, align: 'right', bold: true },
     ],
-    report.otherExpenses.map((e) => [
-      reportDate(e.entry_date),
-      e.category,
-      money(e.amount),
-      e.notes ?? '',
-    ]),
+    report.otherExpenses.map((e) => [reportDate(e.entry_date), e.category, e.notes ?? '', money(e.amount)]),
     'No other expenses in this period.',
+    report.otherExpenses.length ? ['TOTAL', '', '', money(t.otherExpenses)] : undefined,
   )
 
   y = drawSectionTitle(doc, y, 'Summary')
@@ -961,7 +1121,7 @@ export function generateExpenseReportDoc(
     { label: 'TOTAL EXPENSES', value: `Rs. ${money(report.totals.grandTotal)}` },
   )
 
-  return doc
+  return finishReport(doc)
 }
 
 export type SalesReportData = {
@@ -979,18 +1139,29 @@ export type SalesReportData = {
 export function generateSalesReportDoc(report: SalesReportData, periodLabel: string): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   let y = drawReportHeader(doc, 'Sales Report', periodLabel)
+  const t = report.totals
+  y = drawKeyFigures(doc, y, [
+    { label: 'Total sales', value: rs(t.salesAmount), tone: 'green' },
+    { label: 'Bills raised', value: String(t.billCount) },
+    { label: 'Weight sold', value: `${num(t.weightKg)} kg` },
+    {
+      label: 'Average rate',
+      value: t.weightKg > 0 ? `${rs(t.salesAmount / t.weightKg)}/kg` : '-',
+      tone: 'gray',
+    },
+  ])
 
-  y = drawSectionTitle(doc, y, 'Sales')
+  y = drawSectionTitle(doc, y, `Bills (${report.lines.length})`)
   y = drawReportTable(
     doc,
     y,
     [
       { header: 'S.NO', x: 2 },
       { header: 'DATE', x: 13 },
-      { header: 'BILL', x: 31 },
-      { header: 'CUSTOMER', x: 48, width: 84 },
-      { header: 'WEIGHT (KG)', x: 152, align: 'right' },
-      { header: 'AMOUNT (Rs.)', x: 186, align: 'right' },
+      { header: 'BILL NO', x: 33 },
+      { header: 'CUSTOMER', x: 52, width: 82 },
+      { header: 'WEIGHT (KG)', x: 154, align: 'right' },
+      { header: 'AMOUNT (Rs.)', x: 184, align: 'right', bold: true },
     ],
     report.lines.map((l, i) => [
       String(i + 1),
@@ -1001,6 +1172,7 @@ export function generateSalesReportDoc(report: SalesReportData, periodLabel: str
       money(l.amount),
     ]),
     'No sales in this period.',
+    report.lines.length ? ['', '', '', 'TOTAL', num(t.weightKg), money(t.salesAmount)] : undefined,
   )
 
   y = drawSectionTitle(doc, y, 'Summary')
@@ -1015,7 +1187,7 @@ export function generateSalesReportDoc(report: SalesReportData, periodLabel: str
     { label: 'TOTAL SALES', value: `Rs. ${money(report.totals.salesAmount)}` },
   )
 
-  return doc
+  return finishReport(doc)
 }
 
 export type RecordsReportData = {
@@ -1164,8 +1336,7 @@ function drawRecordsDays(doc: jsPDF, startY: number, days: RecordsReportData['da
 
     // Never leave a day heading stranded at the foot of a page.
     if (y + REC_DAY_H + REC_ROW_H > REPORT_BOTTOM) {
-      doc.addPage()
-      y = 16
+      y = newReportPage(doc)
       drawColumnHeader()
     }
     drawDayHeading(day, false)
@@ -1174,8 +1345,7 @@ function drawRecordsDays(doc: jsPDF, startY: number, days: RecordsReportData['da
     day.lines.forEach((line) => {
       const rowH = line.type === 'subtotal' ? REC_SUBTOTAL_H : REC_ROW_H
       if (y + rowH > REPORT_BOTTOM) {
-        doc.addPage()
-        y = 16
+        y = newReportPage(doc)
         drawColumnHeader()
         drawDayHeading(day, true)
       }
@@ -1228,16 +1398,16 @@ function drawRecordsDays(doc: jsPDF, startY: number, days: RecordsReportData['da
 export function generateRecordsReportDoc(report: RecordsReportData, periodLabel: string): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   let y = drawReportHeader(doc, 'Records Report', periodLabel)
-
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8.5)
-  doc.setTextColor(...MUTED_TEXT)
-  doc.text(
-    `Types: ${report.kindsLabel}   ·   ${report.totalEntries} ${report.totalEntries === 1 ? 'entry' : 'entries'} over ${report.days.length} ${report.days.length === 1 ? 'day' : 'days'}`,
-    REPORT_MARGIN,
-    y,
-  )
-  y += 4
+  y = drawKeyFigures(doc, y, [
+    { label: 'Entries', value: String(report.totalEntries) },
+    { label: 'Days', value: String(report.days.length) },
+    ...report.summary.slice(0, 2).map((s) => ({
+      label: s.label,
+      value: s.amount !== null ? rs(s.amount) : (s.qty ?? '-'),
+      tone: 'gray' as const,
+    })),
+  ])
+  y = drawNote(doc, y - 2, `Showing: ${report.kindsLabel}`)
 
   y = drawSectionTitle(doc, y, 'Day-by-day Entries')
   y = drawRecordsDays(doc, y, report.days)
@@ -1253,7 +1423,7 @@ export function generateRecordsReportDoc(report: RecordsReportData, periodLabel:
     { label: 'TOTAL ENTRIES', value: String(report.totalEntries) },
   )
 
-  return doc
+  return finishReport(doc)
 }
 
 function reportBlob(doc: jsPDF, filename: string) {
@@ -1294,6 +1464,16 @@ export function generateStockCheckReportDoc(period: StockCheckPeriod): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const periodLabel = stockCheckPeriodLabel(period)
   let y = drawReportHeader(doc, 'Stock Check Report', periodLabel)
+  {
+    const cpk = costPerKgProduced(period)
+    const yp = yieldPercent(period)
+    y = drawKeyFigures(doc, y, [
+      { label: 'Cost / kg of pipe', value: cpk === null ? '-' : rs(cpk), tone: 'red' },
+      { label: 'Pipe produced', value: `${num(period.produced_kg)} kg`, tone: 'green', note: `${num(period.produced_pcs)} pieces` },
+      { label: 'Material used', value: `${num(period.consumed_kg)} kg`, note: rs(period.consumed_cost) },
+      { label: 'Yield', value: yp === null ? '-' : `${num(yp)}%`, tone: 'gray', note: `Waste ${num(period.waste_kg)} kg` },
+    ])
+  }
 
   y = drawSectionTitle(doc, y, 'Materials Consumed')
   y = drawReportTable(
@@ -1322,9 +1502,11 @@ export function generateStockCheckReportDoc(period: StockCheckPeriod): jsPDF {
         m.consumed_kg ? money(m.consumed_cost / m.consumed_kg) : '-',
         money(m.consumed_cost),
       ]),
-      ['TOTAL', '', '', '', '', '', num(period.consumed_kg), '', money(period.consumed_cost)],
     ],
     'No materials counted.',
+    period.materials.length
+      ? ['TOTAL', '', '', '', '', '', num(period.consumed_kg), '', money(period.consumed_cost)]
+      : undefined,
   )
 
   y = drawSectionTitle(doc, y, 'Pipes Produced')
@@ -1345,9 +1527,9 @@ export function generateStockCheckReportDoc(period: StockCheckPeriod): jsPDF {
         num(p.pcs),
         num(p.kg),
       ]),
-      ...(period.production.length ? [['', 'TOTAL', num(period.produced_pcs), num(period.produced_kg)]] : []),
     ],
     'No production recorded in this period.',
+    period.production.length ? ['', 'TOTAL', num(period.produced_pcs), num(period.produced_kg)] : undefined,
   )
 
   const perKg = (amount: number) => (period.produced_kg > 0 ? money(amount / period.produced_kg) : '-')
@@ -1366,9 +1548,9 @@ export function generateStockCheckReportDoc(period: StockCheckPeriod): jsPDF {
         money(Number(o.amount)),
         perKg(Number(o.amount)),
       ]),
-      ...(period.overheads.length ? [['TOTAL', money(period.overhead_cost), perKg(period.overhead_cost)]] : []),
     ],
     'No salaries, rent or bills recorded for these days.',
+    period.overheads.length ? ['TOTAL', money(period.overhead_cost), perKg(period.overhead_cost)] : undefined,
   )
 
   const yieldPct = yieldPercent(period)
@@ -1401,7 +1583,7 @@ export function generateStockCheckReportDoc(period: StockCheckPeriod): jsPDF {
     { label: 'COST / KG PIPE', value: costPerKg === null ? '-' : `Rs. ${money(costPerKg)}` },
   )
 
-  return doc
+  return finishReport(doc)
 }
 
 export function stockCheckPeriodLabel(period: StockCheckPeriod): string {
@@ -1421,6 +1603,12 @@ export function generateMyCostsReportDoc(period: StockCheckPeriod, myCosts: MyCo
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const mine = myCostSummary(period, myCosts)
   let y = drawReportHeader(doc, 'My Cost Report', stockCheckPeriodLabel(period))
+  y = drawKeyFigures(doc, y, [
+    { label: 'Cost / kg of pipe', value: mine.costPerKg === null ? '-' : rs(mine.costPerKg), tone: 'red' },
+    { label: 'Total cost', value: rs(mine.totalCost) },
+    { label: 'Material cost', value: rs(mine.materialCost), note: `${num(mine.usedKg)} kg used` },
+    { label: 'Pipe produced', value: `${num(period.produced_kg)} kg`, tone: 'green' },
+  ])
 
   y = drawSectionTitle(doc, y, 'Materials Used')
   y = drawReportTable(
@@ -1439,9 +1627,9 @@ export function generateMyCostsReportDoc(period: StockCheckPeriod, myCosts: MyCo
         money(l.manualRate ?? l.appRate),
         money(l.cost),
       ]),
-      ['TOTAL', num(mine.usedKg), '', money(mine.materialCost)],
     ],
     'No material used.',
+    ['TOTAL', num(mine.usedKg), '', money(mine.materialCost)],
   )
 
   const perKgRow = (label: string, kg: number, rate: number, amount: number) =>
@@ -1469,7 +1657,7 @@ export function generateMyCostsReportDoc(period: StockCheckPeriod, myCosts: MyCo
     { label: 'COST / KG PIPE', value: mine.costPerKg === null ? '-' : `Rs. ${money(mine.costPerKg)}` },
   )
 
-  return doc
+  return finishReport(doc)
 }
 
 export function generateMyCostsReportBlob(period: StockCheckPeriod, myCosts: MyCosts) {
@@ -1483,6 +1671,20 @@ export function generateMyCostsReportBlob(period: StockCheckPeriod, myCosts: MyC
 export function generateProductionCostReportDoc(report: ProductionCostReport, periodLabel: string): jsPDF {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   let y = drawReportHeader(doc, 'Production Cost Report', periodLabel)
+  {
+    const matPerKg = report.coveredProducedKg > 0 && report.coveredFrom ? report.materialCost / report.coveredProducedKg : null
+    const runPerKg = report.producedKg > 0 ? report.overheadCost / report.producedKg : null
+    y = drawKeyFigures(doc, y, [
+      {
+        label: 'Cost / kg of pipe',
+        value: matPerKg !== null && runPerKg !== null ? rs(matPerKg + runPerKg) : '-',
+        tone: 'red',
+      },
+      { label: 'Material / kg', value: matPerKg === null ? '-' : rs(matPerKg) },
+      { label: 'Running costs / kg', value: runPerKg === null ? '-' : rs(runPerKg) },
+      { label: 'Pipe produced', value: `${num(report.producedKg)} kg`, tone: 'green', note: `${num(report.producedPcs)} pieces` },
+    ])
+  }
 
   const notes: string[] = []
   if (!report.coveredFrom) notes.push('No stock counts cover this period - material cost is not known.')
@@ -1493,19 +1695,7 @@ export function generateProductionCostReportDoc(report: ProductionCostReport, pe
   }
   if (report.isEstimated) notes.push('Part of the material is a share (by pipe made each day) of a stock-check week crossing the month - estimated.')
   if (report.unpricedKg > 0.01) notes.push(`${num(report.unpricedKg)} kg used has no purchase price and is not in the cost.`)
-  if (notes.length) {
-    doc.setFont('helvetica', 'italic')
-    doc.setFontSize(7.5)
-    doc.setTextColor(...MUTED_TEXT)
-    notes.forEach((n) => {
-      const lines = doc.splitTextToSize(n, PAGE_W - REPORT_MARGIN * 2) as string[]
-      lines.forEach((line) => {
-        y += 3.6
-        doc.text(line, REPORT_MARGIN, y)
-      })
-    })
-    y += 1
-  }
+  if (notes.length) y = drawNote(doc, y - 2, notes.join(' '))
 
   y = drawSectionTitle(doc, y, 'Materials Consumed')
   y = drawReportTable(
@@ -1524,9 +1714,9 @@ export function generateProductionCostReportDoc(report: ProductionCostReport, pe
         m.consumed_kg ? money(m.consumed_cost / m.consumed_kg) : '-',
         money(m.consumed_cost),
       ]),
-      ...(report.materials.length ? [['TOTAL', num(report.materialKg), '', money(report.materialCost)]] : []),
     ],
     'No stock counts cover this period.',
+    report.materials.length ? ['TOTAL', num(report.materialKg), '', money(report.materialCost)] : undefined,
   )
 
   const perKg = (amount: number) => (report.producedKg > 0 ? money(amount / report.producedKg) : '-')
@@ -1545,9 +1735,9 @@ export function generateProductionCostReportDoc(report: ProductionCostReport, pe
         money(o.amount),
         perKg(o.amount),
       ]),
-      ...(report.overheads.length ? [['TOTAL', money(report.overheadCost), perKg(report.overheadCost)]] : []),
     ],
     'No salaries, rent or bills recorded for this period.',
+    report.overheads.length ? ['TOTAL', money(report.overheadCost), perKg(report.overheadCost)] : undefined,
   )
 
   y = drawSectionTitle(doc, y, 'Pipes Produced')
@@ -1567,9 +1757,9 @@ export function generateProductionCostReportDoc(report: ProductionCostReport, pe
         num(p.pcs),
         num(p.kg),
       ]),
-      ...(report.production.length ? [['', 'TOTAL', num(report.producedPcs), num(report.producedKg)]] : []),
     ],
     'No production recorded in this period.',
+    report.production.length ? ['', 'TOTAL', num(report.producedPcs), num(report.producedKg)] : undefined,
   )
 
   const materialPerKg = report.coveredProducedKg > 0 && report.coveredFrom ? report.materialCost / report.coveredProducedKg : null
@@ -1591,7 +1781,7 @@ export function generateProductionCostReportDoc(report: ProductionCostReport, pe
     { label: 'COST / KG PIPE', value: total === null ? '-' : `Rs. ${money(total)}` },
   )
 
-  return doc
+  return finishReport(doc)
 }
 
 export function generateProductionCostReportBlob(report: ProductionCostReport, periodLabel: string) {
@@ -1656,18 +1846,13 @@ export function generateSupplierStatementDoc(
       : 'All Time'
 
   let y = drawReportHeader(doc, 'Supplier Statement', periodLabel)
-
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(11)
-  doc.setTextColor(...NAVY)
-  doc.text(party.name, REPORT_MARGIN, y + 2)
-  if (party.phone) {
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.5)
-    doc.setTextColor(...MUTED_TEXT)
-    doc.text(party.phone, REPORT_MARGIN, y + 6.5)
-  }
-  y += 8
+  y = drawPartyBlock(
+    doc,
+    y,
+    party.party_type === 'supplier' ? 'Raw material supplier' : 'Scrap dealer',
+    party.name,
+    party.phone,
+  )
 
   const tableRows: string[][] = []
   if (openingBalance !== undefined && dateRange) {
@@ -1698,22 +1883,6 @@ export function generateSupplierStatementDoc(
     ])
   }
 
-  // Separate Purchase / Paid columns rather than one signed amount — the
-  // sign doesn't survive black-and-white printing or a WhatsApp forward.
-  y = drawReportTable(
-    doc,
-    y,
-    [
-      { header: 'DATE', x: 2 },
-      { header: 'PARTICULARS', x: 20, width: 92 },
-      { header: 'PURCHASE', x: 130, align: 'right' },
-      { header: 'PAID', x: 152, align: 'right' },
-      { header: 'BALANCE', x: 184, align: 'right' },
-    ],
-    tableRows,
-    'No purchases or payments yet.',
-  )
-
   const periodPurchased = sortedAsc.reduce((sum, e) => {
     if (e.kind === 'purchase' || e.kind === 'due') return sum + e.amount
     if (e.kind === 'return') return sum - e.amount
@@ -1727,25 +1896,56 @@ export function generateSupplierStatementDoc(
   const finalBalance =
     sortedAsc.length > 0 ? sortedAsc[sortedAsc.length - 1].running_balance : (openingBalance ?? party.balance)
 
+  y = drawKeyFigures(doc, y, [
+    ...(openingBalance !== undefined && dateRange
+      ? [{ label: 'Opening balance', value: supplierBalanceLabel(openingBalance), tone: 'gray' as const }]
+      : []),
+    { label: 'Purchases', value: rs(periodPurchased), tone: 'red', note: 'material cost, after returns' },
+    { label: 'Paid to them', value: rs(periodPaid), tone: 'green', note: 'after refunds' },
+    {
+      label: finalBalance > 0.004 ? 'We owe them' : finalBalance < -0.004 ? 'Advance with them' : 'Balance',
+      value: Math.abs(finalBalance) > 0.004 ? rs(Math.abs(finalBalance)) : 'Settled',
+      tone: finalBalance > 0.004 ? 'red' : finalBalance < -0.004 ? 'green' : 'navy',
+    },
+  ])
+
+  // Separate Purchase / Paid columns rather than one signed amount — the
+  // sign doesn't survive black-and-white printing or a WhatsApp forward.
+  y = drawSectionTitle(doc, y, 'Transactions')
+  y = drawReportTable(
+    doc,
+    y,
+    [
+      { header: 'DATE', x: 2 },
+      { header: 'PARTICULARS', x: 22, width: 84 },
+      { header: 'PURCHASE', x: 128, align: 'right', color: () => RED },
+      { header: 'PAID', x: 151, align: 'right', color: () => GREEN },
+      { header: 'BALANCE', x: 184, align: 'right', bold: true, color: balanceTone },
+    ],
+    tableRows,
+    'No purchases or payments yet.',
+    sortedAsc.length ? ['', 'TOTAL', money(periodPurchased), money(periodPaid), supplierBalanceLabel(finalBalance)] : undefined,
+  )
+  y = drawNote(doc, y + 1, '"Payable" is what we still owe the supplier; "Advance" is paid ahead of deliveries. Transport is not included.')
+
   drawSummaryBlock(
     doc,
     y,
-    dateRange
-      ? [
-          { label: 'Period Purchases', value: `Rs. ${money(periodPurchased)}` },
-          { label: 'Period Paid', value: `Rs. ${money(periodPaid)}` },
-        ]
-      : [
-          { label: 'Total Purchased', value: `Rs. ${money(party.total_purchased)}` },
-          { label: 'Total Paid', value: `Rs. ${money(party.total_paid)}` },
-        ],
+    // The same figures as the boxes at the top, worked out from the rows above.
+    [
+      ...(openingBalance !== undefined && dateRange
+        ? [{ label: 'Opening balance', value: supplierBalanceLabel(openingBalance) }]
+        : []),
+      { label: '+ Purchases', value: rs(periodPurchased) },
+      { label: '- Paid', value: rs(periodPaid) },
+    ],
     {
       label: finalBalance < 0 ? 'ADVANCE' : 'PAYABLE',
       value: `Rs. ${money(Math.abs(finalBalance))}`,
     },
   )
 
-  return doc
+  return finishReport(doc)
 }
 
 export function generateSupplierStatementBlob(
@@ -1769,30 +1969,41 @@ export function generateCustomerLedgerReportDoc(
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   let y = drawReportHeader(doc, 'Customer Ledger Report', periodLabel)
 
+  const totalOwed = balances.reduce((sum, c) => sum + Math.max(0, c.balance), 0)
+  const totalAdvance = balances.reduce((sum, c) => sum + Math.max(0, -c.balance), 0)
+  const owingCount = balances.filter((c) => c.balance > 0.004).length
+  y = drawKeyFigures(doc, y, [
+    { label: 'Customers owe us', value: rs(totalOwed), tone: 'red', note: `${owingCount} of ${balances.length} customers` },
+    ...(periodData
+      ? [
+          { label: 'Billed in period', value: rs(periodData.totalDue) },
+          { label: 'Received in period', value: rs(periodData.totalReceived), tone: 'green' as const },
+        ]
+      : [{ label: 'Advance with us', value: rs(totalAdvance), tone: 'green' as const }]),
+  ])
+
   const rows = balances.map((c) => {
     const act = periodData?.customerActivity.get(c.customer_id)
-    const dueCol = periodData ? (act?.due ? money(act.due) : '—') : money(c.total_due)
-    const recvCol = periodData ? (act?.received ? money(act.received) : '—') : money(c.total_received)
-    const balCol =
-      c.balance > 0 ? `${money(c.balance)} Due` : c.balance < 0 ? `${money(-c.balance)} Adv` : 'Settled'
-    return [c.name, c.phone ?? '—', dueCol, recvCol, balCol]
+    const dueCol = periodData ? (act?.due ? money(act.due) : '-') : money(c.total_due)
+    const recvCol = periodData ? (act?.received ? money(act.received) : '-') : money(c.total_received)
+    return [c.name, c.phone ?? '-', dueCol, recvCol, customerBalanceText(c.balance)]
   })
 
+  y = drawSectionTitle(doc, y, `Customers (${balances.length})`)
   y = drawReportTable(
     doc,
     y,
     [
-      { header: 'CUSTOMER', x: 2, width: 60 },
-      { header: 'PHONE', x: 65, width: 35 },
-      { header: periodData ? 'BILLED (PERIOD)' : 'TOTAL BILLED', x: 125, align: 'right' },
+      { header: 'CUSTOMER', x: 2, width: 62 },
+      { header: 'PHONE', x: 66, width: 30 },
+      { header: periodData ? 'BILLED (PERIOD)' : 'TOTAL BILLED', x: 126, align: 'right' },
       { header: periodData ? 'RECEIVED (PERIOD)' : 'TOTAL RECEIVED', x: 155, align: 'right' },
-      { header: 'BALANCE', x: 184, align: 'right' },
+      { header: 'BALANCE', x: 184, align: 'right', bold: true, color: balanceTone },
     ],
     rows,
     'No customers found.',
   )
 
-  const totalOwed = balances.reduce((sum, c) => sum + Math.max(0, c.balance), 0)
   drawSummaryBlock(
     doc,
     y,
@@ -1808,7 +2019,7 @@ export function generateCustomerLedgerReportDoc(
     },
   )
 
-  return doc
+  return finishReport(doc)
 }
 
 export function generateCustomerLedgerReportBlob(
@@ -1830,10 +2041,32 @@ export function generateSupplierLedgerReportDoc(
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   let y = drawReportHeader(doc, 'Supplier Ledger Report', periodLabel)
 
+  let payableTop = 0
+  let advanceTop = 0
+  for (const p of balances) {
+    if (p.balance > 0) payableTop += p.balance
+    else advanceTop -= p.balance
+  }
+  y = drawKeyFigures(doc, y, [
+    {
+      label: 'We owe suppliers',
+      value: rs(payableTop),
+      tone: 'red',
+      note: `${balances.filter((p) => p.balance > 0.004).length} of ${balances.length} suppliers`,
+    },
+    ...(periodData
+      ? [
+          { label: 'Purchased in period', value: rs(periodData.totalPurchased) },
+          { label: 'Paid in period', value: rs(periodData.totalPaid), tone: 'green' as const },
+        ]
+      : [{ label: 'Advance with them', value: rs(advanceTop), tone: 'green' as const }]),
+  ])
+  y = drawSectionTitle(doc, y, `Suppliers (${balances.length})`)
+
   const rows = balances.map((p) => {
     const act = periodData?.partyActivity.get(`${p.party_type}:${p.party_id}`)
-    const purchaseCol = periodData ? (act?.purchased ? money(act.purchased) : '—') : money(p.total_purchased)
-    const paidCol = periodData ? (act?.paid ? money(act.paid) : '—') : money(p.total_paid)
+    const purchaseCol = periodData ? (act?.purchased ? money(act.purchased) : '-') : money(p.total_purchased)
+    const paidCol = periodData ? (act?.paid ? money(act.paid) : '-') : money(p.total_paid)
     return [
       p.name,
       p.party_type === 'supplier' ? 'Raw Material' : 'Scrap Dealer',
@@ -1851,7 +2084,7 @@ export function generateSupplierLedgerReportDoc(
       { header: 'TYPE', x: 65, width: 35 },
       { header: periodData ? 'PURCHASED (PERIOD)' : 'TOTAL PURCHASED', x: 125, align: 'right' },
       { header: periodData ? 'PAID (PERIOD)' : 'TOTAL PAID', x: 155, align: 'right' },
-      { header: 'BALANCE', x: 184, align: 'right' },
+      { header: 'BALANCE', x: 184, align: 'right', bold: true, color: balanceTone },
     ],
     rows,
     'No suppliers found.',
@@ -1879,7 +2112,7 @@ export function generateSupplierLedgerReportDoc(
     },
   )
 
-  return doc
+  return finishReport(doc)
 }
 
 export function generateSupplierLedgerReportBlob(

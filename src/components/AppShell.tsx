@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { MoreHorizontal, X } from 'lucide-react'
 import { PRIMARY_NAV_ITEMS, SECONDARY_NAV_ITEMS, type NavItem } from '../lib/navigation'
 import { SaiGangaLogo } from './SaiGangaLogo'
+import { useCompanySettings } from '../hooks/useCompanySettings'
+import { setPdfCompanyInfo } from '../lib/pdfCompany'
 
 function IconBadge({ item, size }: { item: NavItem; size: 'lg' | 'sm' }) {
   return (
@@ -43,6 +45,18 @@ export function AppShell() {
   const location = useLocation()
   const [moreOpen, setMoreOpen] = useState(false)
   const isSecondaryActive = SECONDARY_NAV_ITEMS.some((item) => location.pathname.startsWith(item.path))
+
+  // Every PDF prints the shop's address, phone and GSTIN under the logo.
+  const { data: companySettings } = useCompanySettings()
+  useEffect(() => {
+    if (!companySettings) return
+    setPdfCompanyInfo({
+      businessName: companySettings.business_name,
+      address: companySettings.address,
+      phone: companySettings.phone,
+      gstNumber: companySettings.gst_number,
+    })
+  }, [companySettings])
 
   return (
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
