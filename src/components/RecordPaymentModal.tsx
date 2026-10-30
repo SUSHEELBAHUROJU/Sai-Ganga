@@ -102,32 +102,22 @@ export function RecordPaymentModal({
       return
     }
 
-    recordPayment.mutate(
-      {
-        customer_id: customerId,
-        amount: amountVal,
-        date,
-        payment_mode: mode,
-        payment_app: mode === 'online' ? app : null,
-        note: note.trim() || null,
-        paid_to: selectedParty
-          ? { party_type: selectedParty.party_type, party_id: selectedParty.party_id }
-          : null,
-      },
-      {
-        onSuccess: () => {
-          const remaining = Math.max(0, outstandingBalance - amountVal)
-          const what = selectedParty
-            ? `₹${formatQty(amountVal)} paid by ${customerName} to ${selectedParty.name}`
-            : `₹${formatQty(amountVal)} received from ${customerName}`
-          showToast(
-            remaining > 0 ? `${what} — ₹${formatQty(remaining)} still due` : `${what} — fully paid!`,
-          )
-          onClose()
-        },
-        onError: () => showToast('Could not save payment — nothing was saved. Try again.', 'error'),
-      },
-    )
+    // The ledger screens update the moment this is called (optimistic update
+    // in useRecordPayment), so close right away rather than waiting on the
+    // network. useRecordPayment reports the outcome, and rolls the figures
+    // back if the save fails.
+    onClose()
+    recordPayment.mutate({
+      customer_id: customerId,
+      amount: amountVal,
+      date,
+      payment_mode: mode,
+      payment_app: mode === 'online' ? app : null,
+      note: note.trim() || null,
+      paid_to: selectedParty
+        ? { party_type: selectedParty.party_type, party_id: selectedParty.party_id }
+        : null,
+    })
   }
 
   return (

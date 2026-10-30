@@ -92,7 +92,8 @@ function TransactionRow({
             Bal: ₹{formatQty(entry.running_balance)}
           </p>
         </div>
-        {!entry.bill_number && (
+        {/* A 'pending-' row is a payment still saving — nothing to delete yet. */}
+        {!entry.bill_number && !entry.id.startsWith('pending-') && (
           <button
             type="button"
             aria-label="Delete entry"

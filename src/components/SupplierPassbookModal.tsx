@@ -128,7 +128,7 @@ function TransactionRow({
             Bal: {supplierBalanceText(entry.running_balance, formatQty)}
           </p>
         </div>
-        {!isPurchase && (
+        {!isPurchase && !entry.id.startsWith('pending-') && (
           <button
             type="button"
             aria-label="Delete entry"
