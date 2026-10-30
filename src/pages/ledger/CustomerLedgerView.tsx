@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Wallet, ChevronRight, Search, SearchX, Share2, ArrowDownLeft, ArrowUpRight, Scale } from 'lucide-react'
+import { Wallet, ChevronRight, Search, SearchX, Share2, ArrowDownLeft, ArrowUpRight } from 'lucide-react'
 import { useCustomerLedgerBalances, useCustomerLedgerPeriod } from '../../hooks/useLedger'
-import { useSupplierLedgerBalances } from '../../hooks/useSupplierLedger'
 import { Chip } from '../../components/Chip'
 import { LoadingState, EmptyState } from '../../components/States'
 import { CustomerPassbookModal } from '../../components/CustomerPassbookModal'
@@ -33,76 +32,7 @@ function BalanceTag({ balance }: { balance: number }) {
   )
 }
 
-/**
- * Where we stand with suppliers, next to what customers owe us — both read
- * live from the ledger views, so a payment on either side shows up at once.
- */
-function NetPositionCard({ receivable, onOpenSuppliers }: { receivable: number; onOpenSuppliers?: () => void }) {
-  const { data: supplierBalances, isLoading } = useSupplierLedgerBalances()
-
-  const payable = (supplierBalances ?? []).reduce((sum, p) => sum + Math.max(0, p.balance), 0)
-  const advance = (supplierBalances ?? []).reduce((sum, p) => sum + Math.max(0, -p.balance), 0)
-  const owingCount = (supplierBalances ?? []).filter((p) => p.balance > 0).length
-  const net = Math.round((receivable - payable) * 100) / 100
-
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          <Scale className="h-4 w-4" />
-          Net position (live)
-        </span>
-        {onOpenSuppliers && (
-          <button
-            type="button"
-            onClick={onOpenSuppliers}
-            className="-mr-2 flex min-h-[44px] items-center gap-0.5 rounded-lg px-2 text-xs font-semibold text-teal-600 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950/40"
-          >
-            Supplier ledger
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        )}
-      </div>
-
-      {isLoading ? (
-        <p className="text-sm text-slate-400">Loading supplier balances…</p>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-lg bg-green-50 p-2.5 dark:bg-green-950/30">
-              <p className="text-[11px] font-medium text-green-700 dark:text-green-400">Customers owe us</p>
-              <p className="truncate text-lg font-bold text-green-700 dark:text-green-400">₹{formatQty(receivable)}</p>
-            </div>
-            <div className="rounded-lg bg-red-50 p-2.5 dark:bg-red-950/30">
-              <p className="text-[11px] font-medium text-red-700 dark:text-red-400">
-                We owe suppliers{owingCount > 0 ? ` (${owingCount})` : ''}
-              </p>
-              <p className="truncate text-lg font-bold text-red-600 dark:text-red-400">₹{formatQty(payable)}</p>
-            </div>
-          </div>
-
-          <div className="mt-2 flex items-baseline justify-between gap-2 border-t border-slate-100 pt-2 dark:border-slate-800">
-            <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
-              {net >= 0 ? 'Net in our favour' : 'Net we owe'}
-            </span>
-            <span
-              className={`text-xl font-bold ${net >= 0 ? 'text-teal-600 dark:text-teal-400' : 'text-red-600 dark:text-red-400'}`}
-            >
-              ₹{formatQty(Math.abs(net))}
-            </span>
-          </div>
-          {advance > 0 && (
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Plus ₹{formatQty(advance)} paid in advance to suppliers.
-            </p>
-          )}
-        </>
-      )}
-    </div>
-  )
-}
-
-export function CustomerLedgerView({ onOpenSuppliers }: { onOpenSuppliers?: () => void } = {}) {
+export function CustomerLedgerView() {
   const { data: balances, isLoading: loadingBalances } = useCustomerLedgerBalances()
   const { showToast } = useToast()
 
@@ -284,8 +214,6 @@ export function CustomerLedgerView({ onOpenSuppliers }: { onOpenSuppliers?: () =
           </div>
         </div>
       )}
-
-      <NetPositionCard receivable={totalReceivables} onOpenSuppliers={onOpenSuppliers} />
 
       {/* Search Input */}
       <div className="relative">

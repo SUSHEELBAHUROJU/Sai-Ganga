@@ -33,11 +33,7 @@ export function LedgerPage() {
         ))}
       </div>
 
-      {side === 'customers' ? (
-        <CustomerLedgerView onOpenSuppliers={() => setSide('suppliers')} />
-      ) : (
-        <SupplierLedgerView />
-      )}
+      {side === 'customers' ? <CustomerLedgerView /> : <SupplierLedgerView />}
     </div>
   )
 }
