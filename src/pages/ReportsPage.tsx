@@ -1,5 +1,14 @@
-import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useState, type ReactNode } from 'react'
+import {
+  Calculator,
+  ChartLine,
+  ClipboardList,
+  HandCoins,
+  ReceiptIndianRupee,
+  TrendingUp,
+  Warehouse,
+  type LucideIcon,
+} from 'lucide-react'
 import { DailySummaryTab } from './reports/DailySummaryTab'
 import { MonthlyTab } from './reports/MonthlyTab'
 import { CurrentStockView } from './reports/CurrentStockView'
@@ -8,87 +17,143 @@ import { ExpenseReportTab } from './reports/ExpenseReportTab'
 import { SalesReportTab } from './reports/SalesReportTab'
 import { CostPerKgTab } from './reports/CostPerKgTab'
 import { DateRangeField } from '../components/DateRangeField'
+import { HubGroup, HubSectionHeader, HubTile } from '../components/Hub'
+import { useHubSection } from '../hooks/useHubSection'
 import { todayISODate } from '../lib/date'
 
-const TABS = [
-  { key: 'daily', label: 'Summary' },
-  { key: 'monthly', label: 'Trend' },
-  { key: 'stock', label: 'Stock' },
-  { key: 'dues', label: 'Dues' },
-  { key: 'sales_report', label: 'Sales Report' },
-  { key: 'expense_report', label: 'Expenses' },
-  { key: 'cost_per_kg', label: 'Cost per kg' },
-] as const
+type DateRange = { fromDate: string; toDate: string }
 
-// The two downloadable reports own their own month/range picker, so the
-// shared range control above doesn't apply to them.
-const TABS_WITHOUT_SHARED_RANGE: readonly string[] = ['stock', 'sales_report', 'expense_report', 'cost_per_kg']
-
-type TabKey = (typeof TABS)[number]['key']
-
-function isTabKey(value: string | null): value is TabKey {
-  return TABS.some((t) => t.key === value)
+type Report = {
+  title: string
+  description: string
+  icon: LucideIcon
+  iconClass: string
+  /** Uses the shared date range picker shown above it; the others pick their own month/range. */
+  usesSharedRange?: boolean
+  /** Has a PDF to download / share. */
+  pdf?: boolean
+  render: (range: DateRange) => ReactNode
 }
 
-export function ReportsPage() {
-  const [searchParams] = useSearchParams()
-  const tabParam = searchParams.get('tab')
-  // Honours ?tab=stock so the Dashboard's "View all" / low-stock links land
-  // straight on the right tab instead of always opening on Summary.
-  const [activeTab, setActiveTab] = useState<TabKey>(isTabKey(tabParam) ? tabParam : 'daily')
+// Keys match the old tab keys, so links like /reports?tab=stock still land here.
+const REPORTS = {
+  daily: {
+    title: 'Business Summary',
+    description: 'Production, sales, purchases and recycling for any dates',
+    icon: ClipboardList,
+    iconClass: 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
+    usesSharedRange: true,
+    render: (r) => <DailySummaryTab fromDate={r.fromDate} toDate={r.toDate} />,
+  },
+  monthly: {
+    title: 'Trends',
+    description: 'Day-by-day chart of what you made and sold',
+    icon: ChartLine,
+    iconClass: 'bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300',
+    usesSharedRange: true,
+    render: (r) => <MonthlyTab fromDate={r.fromDate} toDate={r.toDate} />,
+  },
+  sales_report: {
+    title: 'Sales Report',
+    description: 'Every bill with weight and amount for a month or range',
+    icon: TrendingUp,
+    iconClass: 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-300',
+    pdf: true,
+    render: () => <SalesReportTab />,
+  },
+  dues: {
+    title: 'Customer Dues & Collections',
+    description: 'Who owes you money, and cash / online collected',
+    icon: HandCoins,
+    iconClass: 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300',
+    usesSharedRange: true,
+    render: (r) => <ReceivablesTab fromDate={r.fromDate} toDate={r.toDate} />,
+  },
+  expense_report: {
+    title: 'Expense Report',
+    description: 'Purchases, transport, salaries and other spending',
+    icon: ReceiptIndianRupee,
+    iconClass: 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300',
+    pdf: true,
+    render: () => <ExpenseReportTab />,
+  },
+  stock: {
+    title: 'Current Stock',
+    description: 'Pipes, raw material and scrap in hand right now',
+    icon: Warehouse,
+    iconClass: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
+    render: () => <CurrentStockView />,
+  },
+  cost_per_kg: {
+    title: 'Cost per kg of Pipe',
+    description: 'What 1 kg of pipe cost you to make in a month',
+    icon: Calculator,
+    iconClass: 'bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300',
+    pdf: true,
+    render: () => <CostPerKgTab />,
+  },
+} satisfies Record<string, Report>
 
-  // Shared across Summary and Trend so picking a range once applies to both —
-  // Stock is always live/current and doesn't take a range.
+type ReportKey = keyof typeof REPORTS
+const REPORT_KEYS = Object.keys(REPORTS) as ReportKey[]
+
+const GROUPS: { title: string; keys: ReportKey[] }[] = [
+  { title: 'Business Overview', keys: ['daily', 'monthly'] },
+  { title: 'Sales & Money', keys: ['sales_report', 'dues'] },
+  { title: 'Expenses', keys: ['expense_report'] },
+  { title: 'Stock & Costing', keys: ['stock', 'cost_per_kg'] },
+]
+
+export function ReportsPage() {
+  const { active, open, close } = useHubSection<ReportKey>('tab', REPORT_KEYS)
+
+  // Kept here, above the opened report, so a range picked once carries over
+  // between Summary, Trends and Dues.
   const today = todayISODate()
-  const [fromDate, setFromDate] = useState(today)
-  const [toDate, setToDate] = useState(today)
+  const [range, setRange] = useState<DateRange>({ fromDate: today, toDate: today })
+
+  if (active) {
+    const report: Report = REPORTS[active]
+    return (
+      <div className="pb-4">
+        <HubSectionHeader hubLabel="Reports" title={report.title} description={report.description} onBack={close} />
+        {report.usesSharedRange && (
+          <div className="mb-5">
+            <DateRangeField fromDate={range.fromDate} toDate={range.toDate} onChange={setRange} />
+          </div>
+        )}
+        {report.render(range)}
+      </div>
+    )
+  }
 
   return (
-    <div className="pb-4">
-      <h2 className="mb-4 text-xl font-semibold text-slate-900 dark:text-slate-100">Reports</h2>
-
-      {/* Same bleed-and-scroll wrapper as Settings' tab strip: four tabs are
-          wider than a 320px screen, so they scroll inside their own row
-          instead of widening the page. */}
-      <div className="-mx-4 mb-5 overflow-x-auto px-4 md:mx-0 md:px-0">
-        <div className="flex gap-1 border-b border-slate-200 dark:border-slate-800">
-          {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={`min-h-[44px] shrink-0 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-                activeTab === tab.key
-                  ? 'border-teal-600 text-teal-600 dark:text-teal-400'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+    <div className="space-y-6 pb-4">
+      <div>
+        <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Reports</h2>
+        <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+          Pick a report. Ones marked PDF can be downloaded or shared.
+        </p>
       </div>
 
-      {!TABS_WITHOUT_SHARED_RANGE.includes(activeTab) && (
-        <div className="mb-5">
-          <DateRangeField
-            fromDate={fromDate}
-            toDate={toDate}
-            onChange={(range) => {
-              setFromDate(range.fromDate)
-              setToDate(range.toDate)
-            }}
-          />
-        </div>
-      )}
-
-      {activeTab === 'daily' && <DailySummaryTab fromDate={fromDate} toDate={toDate} />}
-      {activeTab === 'monthly' && <MonthlyTab fromDate={fromDate} toDate={toDate} />}
-      {activeTab === 'stock' && <CurrentStockView />}
-      {activeTab === 'dues' && <ReceivablesTab fromDate={fromDate} toDate={toDate} />}
-      {activeTab === 'sales_report' && <SalesReportTab />}
-      {activeTab === 'expense_report' && <ExpenseReportTab />}
-      {activeTab === 'cost_per_kg' && <CostPerKgTab />}
+      {GROUPS.map((group) => (
+        <HubGroup key={group.title} title={group.title}>
+          {group.keys.map((key) => {
+            const report: Report = REPORTS[key]
+            return (
+              <HubTile
+                key={key}
+                icon={report.icon}
+                iconClass={report.iconClass}
+                title={report.title}
+                description={report.description}
+                badge={report.pdf ? 'PDF' : undefined}
+                onClick={() => open(key)}
+              />
+            )
+          })}
+        </HubGroup>
+      ))}
     </div>
   )
 }
