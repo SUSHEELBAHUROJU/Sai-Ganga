@@ -132,11 +132,11 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
     if (!bill) return
     voidBill.mutate(bill.id, {
       onSuccess: () => {
-        showToast(`Bill ${bill.bill_number} marked as VOIDED`)
+        showToast(`Bill ${bill.bill_number} cancelled`)
         setConfirmVoidOpen(false)
         onClose()
       },
-      onError: () => showToast('Failed to void bill', 'error'),
+      onError: () => showToast('Could not cancel the bill', 'error'),
     })
   }
 
@@ -149,7 +149,7 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
           {isVoided && (
             <div className="flex items-center gap-2 rounded-lg bg-red-100 p-3 text-xs font-bold text-red-800 dark:bg-red-950/80 dark:text-red-200">
               <Ban className="h-4 w-4 shrink-0" />
-              <span>THIS BILL HAS BEEN VOIDED / CANCELED. It remains preserved for accounting audit rules.</span>
+              <span>THIS BILL IS CANCELLED. It is kept only for your records.</span>
             </div>
           )}
 
@@ -251,7 +251,7 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
                     className="flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-100 sm:flex-none dark:border-red-900 dark:bg-red-950/60 dark:text-red-300"
                   >
                     <Ban className="h-3.5 w-3.5" />
-                    Void Bill
+                    Cancel Bill
                   </button>
                 </>
               )}
@@ -310,9 +310,9 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
 
     <ConfirmDialog
       open={confirmVoidOpen}
-      title={`Void Bill ${bill.bill_number}?`}
-      message={`Are you sure you want to void Bill ${bill.bill_number}? The bill number will remain preserved as VOIDED for GST compliance and audit rules.`}
-      confirmLabel="Void Bill"
+      title={`Cancel Bill ${bill.bill_number}?`}
+      message={`Cancel Bill ${bill.bill_number}? Its pipes go back to stock and the customer no longer owes this amount. The bill number is kept, marked CANCELLED.`}
+      confirmLabel="Cancel Bill"
       danger
       onConfirm={handleConfirmVoid}
       onCancel={() => setConfirmVoidOpen(false)}

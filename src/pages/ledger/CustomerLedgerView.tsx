@@ -28,7 +28,7 @@ function BalanceTag({ balance }: { balance: number }) {
     )
   }
   return (
-    <span className="whitespace-nowrap text-sm font-bold text-green-600 dark:text-green-400">Settled</span>
+    <span className="whitespace-nowrap text-sm font-bold text-green-600 dark:text-green-400">Fully Paid</span>
   )
 }
 
@@ -140,7 +140,7 @@ export function CustomerLedgerView() {
       <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            Ledger Date Filter
+            Choose Dates
           </span>
           <button
             type="button"
@@ -158,7 +158,7 @@ export function CustomerLedgerView() {
           toDate={toDate}
           showAllOption
           isAll={isAll}
-          allLabel="Pull All"
+          allLabel="Show All"
           onSelectAll={() => setIsAll(true)}
           onChange={(r) => {
             setIsAll(false)
@@ -177,7 +177,7 @@ export function CustomerLedgerView() {
           </span>
           <div>
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-              Total You Are Owed (All Time)
+              Total to Collect
             </p>
             <p className="text-2xl font-bold text-red-600 dark:text-red-400">
               ₹{formatQty(totalReceivables)}
@@ -189,7 +189,7 @@ export function CustomerLedgerView() {
           <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
               <ArrowUpRight className="h-4 w-4 text-red-500" />
-              <span>Billed in Period</span>
+              <span>Bills in These Dates</span>
             </div>
             <p className="mt-1 truncate text-lg font-bold text-red-600 dark:text-red-400">
               ₹{formatQty(periodData?.totalDue ?? 0)}
@@ -199,7 +199,7 @@ export function CustomerLedgerView() {
           <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
               <ArrowDownLeft className="h-4 w-4 text-green-500" />
-              <span>Received in Period</span>
+              <span>Received in These Dates</span>
             </div>
             <p className="mt-1 truncate text-lg font-bold text-green-600 dark:text-green-400">
               ₹{formatQty(periodData?.totalReceived ?? 0)}
@@ -207,7 +207,7 @@ export function CustomerLedgerView() {
           </div>
 
           <div className="col-span-2 rounded-xl border border-slate-200 bg-white p-3 sm:col-span-1 dark:border-slate-800 dark:bg-slate-900">
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Owed (Overall)</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total to Collect</p>
             <p className="mt-1 truncate text-lg font-bold text-slate-900 dark:text-slate-100">
               ₹{formatQty(totalReceivables)}
             </p>
@@ -229,7 +229,7 @@ export function CustomerLedgerView() {
 
       {/* Filter / Sort Chips */}
       <div className="flex flex-wrap gap-2">
-        <Chip label="Highest Due First" selected={sortMode === 'due'} onClick={() => setSortMode('due')} />
+        <Chip label="Most Due First" selected={sortMode === 'due'} onClick={() => setSortMode('due')} />
         <Chip label="A - Z" selected={sortMode === 'name'} onClick={() => setSortMode('name')} />
         {!isAll && (
           <>

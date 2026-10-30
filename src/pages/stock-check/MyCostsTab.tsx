@@ -470,7 +470,7 @@ export function MyCostsTab() {
 
       {!isLoading && (periods ?? []).length === 0 && (
         <EmptyNote>
-          No weeks in this range yet. Save a stock count in "Enter Count" — weeks start from the second count.
+          No weeks in this range yet. Save a stock count in "New Count" — weeks start from the second count.
         </EmptyNote>
       )}
 

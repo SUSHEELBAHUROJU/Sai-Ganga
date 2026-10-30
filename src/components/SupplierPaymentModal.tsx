@@ -36,8 +36,8 @@ type SupplierPaymentModalProps = {
 
 const ENTRY_TYPES: { value: SupplierEntryType; label: string }[] = [
   { value: 'payment', label: 'Payment Made' },
-  { value: 'refund', label: 'Refund Received' },
-  { value: 'due', label: 'Opening / Manual Due' },
+  { value: 'refund', label: 'Money Back' },
+  { value: 'due', label: 'Old Due' },
 ]
 
 const PAYMENT_MODES = Object.entries(SUPPLIER_PAYMENT_MODE_LABEL) as [SupplierPaymentMode, string][]

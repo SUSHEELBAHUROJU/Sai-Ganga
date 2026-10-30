@@ -54,7 +54,7 @@ export function AddManualDueModal({ open, onClose, customerId, customerName }: A
   }
 
   return (
-    <Modal title="Add Manual Due / Charge" open={open} onClose={onClose}>
+    <Modal title="Add Old Due / Extra Charge" open={open} onClose={onClose}>
       <div className="space-y-4">
         <p className="text-sm text-slate-500 dark:text-slate-400">
           For <span className="font-semibold text-slate-900 dark:text-slate-100">{customerName}</span> —

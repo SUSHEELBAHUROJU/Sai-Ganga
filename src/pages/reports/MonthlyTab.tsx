@@ -45,7 +45,7 @@ export function MonthlyTab({ fromDate, toDate }: { fromDate: string; toDate: str
 
           <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
             <h3 className="mb-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
-              Production &amp; sales trend
+              Made &amp; sold, day by day
             </h3>
             <p className="mb-3 text-xs text-slate-400 dark:text-slate-500">
               Kilograms per day · {rangeLabel}

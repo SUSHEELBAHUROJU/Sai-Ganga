@@ -24,7 +24,7 @@ export function CurrentStockView() {
     <div className="space-y-6">
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400">Finished Goods</h3>
+          <h3 className="text-sm font-semibold text-slate-500 dark:text-slate-400">Pipes</h3>
           <label className="flex min-h-[44px] items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
             <input
               type="checkbox"

@@ -22,7 +22,7 @@ function PeriodDetail({ period }: { period: StockCheckPeriod }) {
   return (
     <div className="space-y-4 border-t border-slate-200 pt-3 dark:border-slate-800">
       <div>
-        <SectionTitle>Materials Consumed</SectionTitle>
+        <SectionTitle>Material Used</SectionTitle>
         <div className="space-y-1.5">
           {period.materials.map((m) => {
             const share = period.consumed_kg > 0 ? (m.consumed_kg / period.consumed_kg) * 100 : null
@@ -79,7 +79,7 @@ function PeriodDetail({ period }: { period: StockCheckPeriod }) {
       </div>
 
       <div>
-        <SectionTitle>Pipes Produced</SectionTitle>
+        <SectionTitle>Pipes Made</SectionTitle>
         {period.production.length === 0 ? (
           <EmptyNote>No production recorded in this period.</EmptyNote>
         ) : (
@@ -108,7 +108,7 @@ function PeriodDetail({ period }: { period: StockCheckPeriod }) {
       </div>
 
       <div>
-        <SectionTitle>Cost to Produce</SectionTitle>
+        <SectionTitle>Cost to Make</SectionTitle>
         <CostPerKgBreakdown
           materialCost={period.consumed_cost}
           materialProducedKg={period.produced_kg}
@@ -117,7 +117,7 @@ function PeriodDetail({ period }: { period: StockCheckPeriod }) {
           units={period.units}
         />
         <p className="mt-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-          Monthly bills, rent and salaries are shared by days — this stretch gets the days it covers.
+          Monthly salary, rent and current bill are divided by days — this week gets its share.
         </p>
       </div>
 
@@ -130,7 +130,7 @@ function PeriodDetail({ period }: { period: StockCheckPeriod }) {
         </p>
         <div className="grid grid-cols-2 gap-2">
           <Stat label="Cost / kg pipe" value={costPerKg === null ? '—' : `₹${formatQty(costPerKg)}`} sub="material + running" />
-          <Stat label="Yield" value={pct(yieldPercent(period))} />
+          <Stat label="Output %" value={pct(yieldPercent(period))} />
           <Stat label="Waste" value={`${formatQty(period.waste_kg)} kg`} sub={pct(wastePercent(period))} />
           <Stat label="Factory waste recorded" value={`${formatQty(period.factory_waste_kg)} kg`} />
         </div>
@@ -179,7 +179,7 @@ function PeriodCard({
       </button>
 
       <div className="grid grid-cols-2 gap-2">
-        <Stat label="Consumed" value={`${formatQty(period.consumed_kg)} kg`} sub={`₹${formatQty(period.consumed_cost)}`} />
+        <Stat label="Used" value={`${formatQty(period.consumed_kg)} kg`} sub={`₹${formatQty(period.consumed_cost)}`} />
         <Stat label="Produced" value={`${formatQty(period.produced_kg)} kg`} sub={`${formatQty(period.produced_pcs)} pcs`} />
         <Stat
           label="Cost / kg pipe"
@@ -197,7 +197,7 @@ function PeriodCard({
       )}
       {producedMoreThanUsed && (
         <p className="text-xs font-semibold text-amber-600 dark:text-amber-400">
-          More pipe produced than material consumed — check the counts, purchases and production entries.
+          More pipe made than material used — check the counts, purchases and production.
         </p>
       )}
 

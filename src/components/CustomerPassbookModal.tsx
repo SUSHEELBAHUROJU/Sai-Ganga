@@ -161,7 +161,7 @@ export function CustomerPassbookModal({ open, customer, onClose, initialRange }:
   if (!customer) return null
 
   const balance = customer.balance
-  const balanceLabel = balance > 0 ? 'Due' : balance < 0 ? 'Advance / Credit' : 'Settled'
+  const balanceLabel = balance > 0 ? 'Due' : balance < 0 ? 'Advance' : 'Fully Paid'
   const balanceColor =
     balance > 0
       ? 'text-red-600 dark:text-red-400'
@@ -224,7 +224,7 @@ export function CustomerPassbookModal({ open, customer, onClose, initialRange }:
           <div className="rounded-xl bg-slate-50 p-4 text-center dark:bg-slate-800">
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Current Balance</p>
             <p className={`text-3xl font-bold ${balanceColor}`}>
-              {balance === 0 ? 'Settled' : `₹${formatQty(Math.abs(balance))}`}
+              {balance === 0 ? 'Fully Paid' : `₹${formatQty(Math.abs(balance))}`}
             </p>
             {balance !== 0 && <p className={`text-sm font-semibold ${balanceColor}`}>{balanceLabel}</p>}
           </div>
@@ -242,20 +242,20 @@ export function CustomerPassbookModal({ open, customer, onClose, initialRange }:
               onClick={() => setManualDueOpen(true)}
               className="flex items-center justify-center gap-1.5 rounded-lg border border-red-300 bg-red-50 py-2.5 text-sm font-bold text-red-700 hover:bg-red-100 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300"
             >
-              Add Manual Due
+              Add Due
             </button>
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-850">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              Filter By Date Range
+              Choose Dates
             </p>
             <DateRangeField
               fromDate={fromDate}
               toDate={toDate}
               showAllOption
               isAll={isAll}
-              allLabel="Pull All"
+              allLabel="Show All"
               onSelectAll={() => setIsAll(true)}
               onChange={(r) => {
                 setIsAll(false)
@@ -305,7 +305,7 @@ export function CustomerPassbookModal({ open, customer, onClose, initialRange }:
             <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <span className="flex items-center gap-1.5">
                 <Receipt className="h-3.5 w-3.5" />
-                Transaction History
+                All Entries
               </span>
               {!isAll && (
                 <button
@@ -313,7 +313,7 @@ export function CustomerPassbookModal({ open, customer, onClose, initialRange }:
                   onClick={() => setIsAll(true)}
                   className="font-bold text-teal-600 hover:underline dark:text-teal-400 normal-case"
                 >
-                  Pull all data
+                  Show all
                 </button>
               )}
             </div>
@@ -333,7 +333,7 @@ export function CustomerPassbookModal({ open, customer, onClose, initialRange }:
                   onClick={() => setIsAll(true)}
                   className="mt-2 text-xs font-bold text-teal-600 hover:underline dark:text-teal-400"
                 >
-                  Pull all data for this customer
+                  Show all entries for this customer
                 </button>
               </div>
             )}

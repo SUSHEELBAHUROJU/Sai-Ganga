@@ -151,7 +151,7 @@ export function SupplierLedgerView() {
       <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            Ledger Date Filter
+            Choose Dates
           </span>
           <button
             type="button"
@@ -169,7 +169,7 @@ export function SupplierLedgerView() {
           toDate={toDate}
           showAllOption
           isAll={isAll}
-          allLabel="Pull All"
+          allLabel="Show All"
           onSelectAll={() => setIsAll(true)}
           onChange={(r) => {
             setIsAll(false)
@@ -211,7 +211,7 @@ export function SupplierLedgerView() {
           <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
               <ArrowUpRight className="h-4 w-4 text-red-500" />
-              <span>Purchased in Period</span>
+              <span>Bought in These Dates</span>
             </div>
             <p className="mt-1 truncate text-lg font-bold text-red-600 dark:text-red-400">
               ₹{formatQty(periodData?.totalPurchased ?? 0)}
@@ -221,7 +221,7 @@ export function SupplierLedgerView() {
           <div className="rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
               <ArrowDownLeft className="h-4 w-4 text-green-500" />
-              <span>Paid in Period</span>
+              <span>Paid in These Dates</span>
             </div>
             <p className="mt-1 truncate text-lg font-bold text-green-600 dark:text-green-400">
               ₹{formatQty(periodData?.totalPaid ?? 0)}
@@ -229,7 +229,7 @@ export function SupplierLedgerView() {
           </div>
 
           <div className="col-span-2 rounded-xl border border-slate-200 bg-white p-3 sm:col-span-1 dark:border-slate-800 dark:bg-slate-900">
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">You Owe (Overall)</p>
+            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total to Pay</p>
             <p className="mt-1 truncate text-lg font-bold text-slate-900 dark:text-slate-100">
               ₹{formatQty(totals.payable)}
             </p>
@@ -266,8 +266,8 @@ export function SupplierLedgerView() {
 
       {/* Sort / Range Filter Chips */}
       <div className="flex flex-wrap gap-2">
-        <Chip label="Highest Payable" selected={sortMode === 'payable'} onClick={() => setSortMode('payable')} />
-        <Chip label="Highest Advance" selected={sortMode === 'advance'} onClick={() => setSortMode('advance')} />
+        <Chip label="Most to Pay" selected={sortMode === 'payable'} onClick={() => setSortMode('payable')} />
+        <Chip label="Most Advance" selected={sortMode === 'advance'} onClick={() => setSortMode('advance')} />
         <Chip label="A - Z" selected={sortMode === 'name'} onClick={() => setSortMode('name')} />
         {!isAll && (
           <>

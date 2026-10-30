@@ -44,7 +44,7 @@ export function RecyclingBalance({
     <div className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
       <div className="flex items-center justify-between gap-1">
         <div className="min-w-0 flex-1 text-center">
-          <p className="text-[11px] text-slate-500 dark:text-slate-400">Scrap Consumed</p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">Scrap Used</p>
           <p className="text-base font-semibold text-slate-900 dark:text-slate-100">
             {formatQty(consumedKg)} kg
           </p>
@@ -77,7 +77,7 @@ export function RecyclingBalance({
 
       {overproduced && (
         <p className="mt-2 text-center text-xs text-amber-700 dark:text-amber-400">
-          Granules produced is more than scrap consumed — worth double-checking.
+          More granules made than scrap used — please check.
         </p>
       )}
     </div>

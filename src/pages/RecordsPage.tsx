@@ -385,9 +385,9 @@ export function RecordsPage() {
         (isFiltered ? (
           <EmptyState
             icon={SearchX}
-            title="No entries match these filters"
-            hint="Try widening the date range or clearing the type filter."
-            actionLabel="Reset filters"
+            title="No entries for these dates"
+            hint="Choose more dates, or tap All under Type."
+            actionLabel="Show All"
             onAction={resetFilters}
           />
         ) : (
@@ -482,7 +482,7 @@ export function RecordsPage() {
                               )}
                               {saleBill.status === 'voided' && (
                                 <span className="rounded-md bg-slate-200 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-                                  Voided
+                                  Cancelled
                                 </span>
                               )}
                               {saleBill.status === 'active' && (
@@ -654,7 +654,7 @@ export function RecordsPage() {
                             <span>
                               {saleBill.status === 'active'
                                 ? `To change or remove these pipes, use Edit Bill — that keeps stock, bill ${saleBill.bill_number} and the customer's due in step.`
-                                : `Bill ${saleBill.bill_number} is voided — its pipes are back in stock and it no longer counts towards the customer's due.`}
+                                : `Bill ${saleBill.bill_number} is cancelled — its pipes are back in stock and the customer does not owe it.`}
                             </span>
                           </p>
                         )}

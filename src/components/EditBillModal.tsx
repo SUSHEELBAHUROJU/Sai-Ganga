@@ -276,7 +276,7 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
     }
 
     if (isFutureISODate(billDate)) {
-      showToast('Invoice date cannot be in the future', 'error')
+      showToast('Bill date cannot be in the future', 'error')
       return
     }
 

@@ -191,8 +191,8 @@ function drawInvoiceCopy(doc: jsPDF, bill: BillRow, top: number, opts: CopyOptio
   const logoH = drawLogo(doc, MARGIN_X, y, 46)
 
   // A voided bill must be unmistakable on paper, so it takes over the badge.
-  const badgeLabel = isVoided ? 'VOIDED' : 'INVOICE'
-  const badgeW = isVoided ? 24 : 22
+  const badgeLabel = isVoided ? 'CANCELLED' : 'INVOICE'
+  const badgeW = isVoided ? 28 : 22
   const badgeH = 6.4
   const badgeX = PAGE_W - MARGIN_X - badgeW
   doc.setFillColor(...(isVoided ? RED : NAVY))
@@ -524,7 +524,7 @@ export function generateLedgerStatementDoc(
     { label: 'Payments received', value: rs(received), tone: 'green', note: `${sortedAsc.filter((e) => e.type === 'received').length} entries` },
     {
       label: closing > 0.004 ? 'Balance due' : closing < -0.004 ? 'Advance with us' : 'Balance',
-      value: closing > 0.004 || closing < -0.004 ? rs(Math.abs(closing)) : 'Settled',
+      value: closing > 0.004 || closing < -0.004 ? rs(Math.abs(closing)) : 'Fully Paid',
       tone: closing > 0.004 ? 'red' : closing < -0.004 ? 'green' : 'navy',
     },
   ])
@@ -562,7 +562,7 @@ export function generateLedgerStatementDoc(
   y = drawNote(
     doc,
     y + 1,
-    'Bill Amount adds to what is owed; Received reduces it. "Due" is the amount payable to us; "Advance" is extra paid, adjusted against the next bill.',
+    'Bill Amount is added to the balance; Received is taken off. "Due" is money still to be paid to us; "Advance" is extra paid, used for the next bill.',
   )
 
   drawSummaryBlock(
@@ -575,7 +575,7 @@ export function generateLedgerStatementDoc(
     ],
     {
       label: closing > 0.004 ? 'BALANCE DUE' : closing < -0.004 ? 'ADVANCE' : 'BALANCE',
-      value: closing > 0.004 || closing < -0.004 ? rs(Math.abs(closing)) : 'Settled',
+      value: closing > 0.004 || closing < -0.004 ? rs(Math.abs(closing)) : 'Fully Paid',
     },
   )
 
@@ -956,15 +956,15 @@ function drawPartyBlock(doc: jsPDF, y: number, label: string, name: string): num
   return y + 12
 }
 
-/** "12,000.00 Due" / "500.00 Advance" / "Settled" — a customer's balance in words. */
+/** "12,000.00 Due" / "500.00 Advance" / "Fully Paid" — a customer's balance in words. */
 function customerBalanceText(balance: number): string {
   if (balance > 0.004) return `${money(balance)} Due`
   if (balance < -0.004) return `${money(-balance)} Advance`
-  return 'Settled'
+  return 'Fully Paid'
 }
 
 const balanceTone = (text: string): Rgb =>
-  text.endsWith('Due') || text.endsWith('Payable') ? RED : text.endsWith('Advance') ? GREEN : DARK_TEXT
+  text.endsWith('Due') || text.endsWith('To Pay') ? RED : text.endsWith('Advance') ? GREEN : DARK_TEXT
 
 export type ExpenseReportData = {
   purchases: {
@@ -1424,11 +1424,11 @@ export function generateStockCheckReportDoc(period: StockCheckPeriod): jsPDF {
       { label: 'Cost / kg of pipe', value: cpk === null ? '-' : rs(cpk), tone: 'red' },
       { label: 'Pipe produced', value: `${num(period.produced_kg)} kg`, tone: 'green', note: `${num(period.produced_pcs)} pieces` },
       { label: 'Material used', value: `${num(period.consumed_kg)} kg`, note: rs(period.consumed_cost) },
-      { label: 'Yield', value: yp === null ? '-' : `${num(yp)}%`, tone: 'gray', note: `Waste ${num(period.waste_kg)} kg` },
+      { label: 'Output %', value: yp === null ? '-' : `${num(yp)}%`, tone: 'gray', note: `Waste ${num(period.waste_kg)} kg` },
     ])
   }
 
-  y = drawSectionTitle(doc, y, 'Materials Consumed')
+  y = drawSectionTitle(doc, y, 'Material Used')
   y = drawReportTable(
     doc,
     y,
@@ -1462,7 +1462,7 @@ export function generateStockCheckReportDoc(period: StockCheckPeriod): jsPDF {
       : undefined,
   )
 
-  y = drawSectionTitle(doc, y, 'Pipes Produced')
+  y = drawSectionTitle(doc, y, 'Pipes Made')
   y = drawReportTable(
     doc,
     y,
@@ -1486,7 +1486,7 @@ export function generateStockCheckReportDoc(period: StockCheckPeriod): jsPDF {
   )
 
   const perKg = (amount: number) => (period.produced_kg > 0 ? money(amount / period.produced_kg) : '-')
-  y = drawSectionTitle(doc, y, 'Running Costs')
+  y = drawSectionTitle(doc, y, 'Salary, Rent & Bills')
   y = drawReportTable(
     doc,
     y,
@@ -1517,18 +1517,18 @@ export function generateStockCheckReportDoc(period: StockCheckPeriod): jsPDF {
     doc,
     y,
     [
-      { label: 'Material Consumed', value: `${num(period.consumed_kg)} kg` },
+      { label: 'Material Used', value: `${num(period.consumed_kg)} kg` },
       { label: 'Material Cost', value: `Rs. ${money(period.consumed_cost)}` },
-      { label: 'Running Costs', value: `Rs. ${money(period.overhead_cost)}` },
+      { label: 'Salary, Rent & Bills', value: `Rs. ${money(period.overhead_cost)}` },
       { label: 'Pipe Produced', value: `${num(period.produced_kg)} kg` },
       { label: 'Material / kg', value: materialPerKg === null ? '-' : `Rs. ${money(materialPerKg)}` },
-      { label: 'Running costs / kg', value: runningPerKg === null ? '-' : `Rs. ${money(runningPerKg)}` },
+      { label: 'Salary, rent & bills / kg', value: runningPerKg === null ? '-' : `Rs. ${money(runningPerKg)}` },
       ...(period.units !== null && period.produced_kg > 0
         ? [{ label: 'Electricity units / kg', value: num(period.units / period.produced_kg) }]
         : []),
-      { label: 'Yield', value: yieldPct === null ? '-' : `${num(yieldPct)}%` },
+      { label: 'Output %', value: yieldPct === null ? '-' : `${num(yieldPct)}%` },
       {
-        label: 'Waste (consumed - produced)',
+        label: 'Waste (used - made)',
         value: `${num(period.waste_kg)} kg${wastePct === null ? '' : ` (${num(wastePct)}%)`}`,
       },
       { label: 'Factory Waste Recorded', value: `${num(period.factory_waste_kg)} kg` },
@@ -1587,7 +1587,7 @@ export function generateMyCostsReportDoc(period: StockCheckPeriod, myCosts: MyCo
 
   const perKgRow = (label: string, kg: number, rate: number, amount: number) =>
     rate > 0 ? [{ label: `${label} ${num(kg)} kg x Rs. ${money(rate)}`, value: `Rs. ${money(amount)}` }] : []
-  y = drawSectionTitle(doc, y, 'Cost to Produce')
+  y = drawSectionTitle(doc, y, 'Cost to Make')
   drawSummaryBlock(
     doc,
     y,
@@ -1634,7 +1634,7 @@ export function generateProductionCostReportDoc(report: ProductionCostReport, pe
         tone: 'red',
       },
       { label: 'Material / kg', value: matPerKg === null ? '-' : rs(matPerKg) },
-      { label: 'Running costs / kg', value: runPerKg === null ? '-' : rs(runPerKg) },
+      { label: 'Salary, rent & bills / kg', value: runPerKg === null ? '-' : rs(runPerKg) },
       { label: 'Pipe produced', value: `${num(report.producedKg)} kg`, tone: 'green', note: `${num(report.producedPcs)} pieces` },
     ])
   }
@@ -1650,7 +1650,7 @@ export function generateProductionCostReportDoc(report: ProductionCostReport, pe
   if (report.unpricedKg > 0.01) notes.push(`${num(report.unpricedKg)} kg used has no purchase price and is not in the cost.`)
   if (notes.length) y = drawNote(doc, y - 2, notes.join(' '))
 
-  y = drawSectionTitle(doc, y, 'Materials Consumed')
+  y = drawSectionTitle(doc, y, 'Material Used')
   y = drawReportTable(
     doc,
     y,
@@ -1673,7 +1673,7 @@ export function generateProductionCostReportDoc(report: ProductionCostReport, pe
   )
 
   const perKg = (amount: number) => (report.producedKg > 0 ? money(amount / report.producedKg) : '-')
-  y = drawSectionTitle(doc, y, 'Running Costs')
+  y = drawSectionTitle(doc, y, 'Salary, Rent & Bills')
   y = drawReportTable(
     doc,
     y,
@@ -1693,7 +1693,7 @@ export function generateProductionCostReportDoc(report: ProductionCostReport, pe
     report.overheads.length ? ['TOTAL', money(report.overheadCost), perKg(report.overheadCost)] : undefined,
   )
 
-  y = drawSectionTitle(doc, y, 'Pipes Produced')
+  y = drawSectionTitle(doc, y, 'Pipes Made')
   y = drawReportTable(
     doc,
     y,
@@ -1726,7 +1726,7 @@ export function generateProductionCostReportDoc(report: ProductionCostReport, pe
     [
       { label: 'Pipe Produced', value: `${num(report.producedKg)} kg` },
       { label: 'Material / kg', value: materialPerKg === null ? '-' : `Rs. ${money(materialPerKg)}` },
-      { label: 'Running costs / kg', value: runningPerKg === null ? '-' : `Rs. ${money(runningPerKg)}` },
+      { label: 'Salary, rent & bills / kg', value: runningPerKg === null ? '-' : `Rs. ${money(runningPerKg)}` },
       ...(report.units !== null && report.producedKg > 0
         ? [{ label: 'Electricity units / kg', value: num(report.units / report.producedKg) }]
         : []),
@@ -1741,12 +1741,12 @@ export function generateProductionCostReportBlob(report: ProductionCostReport, p
   return reportBlob(generateProductionCostReportDoc(report, periodLabel), `Production_Cost_${slug(periodLabel)}.pdf`)
 }
 
-/** Balance wording for the supplier statement — "Payable" / "Advance" rather
+/** Balance wording for the supplier statement — "To Pay" / "Advance" rather
  *  than accounting Cr/Dr, since the owner and supplier both read it. */
 function supplierBalanceLabel(balance: number): string {
-  if (balance > 0) return `${money(balance)} Payable`
+  if (balance > 0) return `${money(balance)} To Pay`
   if (balance < 0) return `${money(-balance)} Advance`
-  return 'Settled'
+  return 'Fully Paid'
 }
 
 function supplierParticulars(entry: SupplierPassbookEntry): string {
@@ -1774,7 +1774,7 @@ function supplierParticulars(entry: SupplierPassbookEntry): string {
     ].filter(Boolean)
     return extras.length ? `${parts.join(' ')} (${extras.join(', ')})` : parts.join(' ')
   }
-  const label = entry.kind === 'refund' ? 'Refund received' : 'Opening / manual due'
+  const label = entry.kind === 'refund' ? 'Money back from supplier' : 'Old due'
   return entry.note ? `${label} - ${entry.note}` : label
 }
 
@@ -1856,7 +1856,7 @@ export function generateSupplierStatementDoc(
     { label: 'Paid to them', value: rs(periodPaid), tone: 'green', note: 'after refunds' },
     {
       label: finalBalance > 0.004 ? 'We owe them' : finalBalance < -0.004 ? 'Advance with them' : 'Balance',
-      value: Math.abs(finalBalance) > 0.004 ? rs(Math.abs(finalBalance)) : 'Settled',
+      value: Math.abs(finalBalance) > 0.004 ? rs(Math.abs(finalBalance)) : 'Fully Paid',
       tone: finalBalance > 0.004 ? 'red' : finalBalance < -0.004 ? 'green' : 'navy',
     },
   ])
@@ -1878,7 +1878,7 @@ export function generateSupplierStatementDoc(
     'No purchases or payments yet.',
     sortedAsc.length ? ['', 'TOTAL', money(periodPurchased), money(periodPaid), supplierBalanceLabel(finalBalance)] : undefined,
   )
-  y = drawNote(doc, y + 1, '"Payable" is what we still owe the supplier; "Advance" is paid ahead of deliveries. Transport is not included.')
+  y = drawNote(doc, y + 1, '"To Pay" is what we still owe the supplier; "Advance" is money paid before delivery. Transport is not included.')
 
   drawSummaryBlock(
     doc,
@@ -1892,7 +1892,7 @@ export function generateSupplierStatementDoc(
       { label: '- Paid', value: rs(periodPaid) },
     ],
     {
-      label: finalBalance < 0 ? 'ADVANCE' : 'PAYABLE',
+      label: finalBalance < 0 ? 'ADVANCE' : 'TO PAY',
       value: `Rs. ${money(Math.abs(finalBalance))}`,
     },
   )

@@ -94,7 +94,7 @@ function StockRow({ itemType, itemId, label, unit, initialBalance, initialThresh
         </label>
 
         <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-slate-500 sm:flex-none sm:flex-row sm:items-center sm:gap-1.5 dark:text-slate-400">
-          Low-stock at
+          Warn below
           <input
             type="number"
             min="0"
@@ -153,10 +153,10 @@ export function StockSettingsTab() {
       </p>
 
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-slate-500 dark:text-slate-400">Pipe Products</h3>
+        <h3 className="mb-2 text-sm font-semibold text-slate-500 dark:text-slate-400">Pipes</h3>
         {activePipes.length === 0 ? (
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            No active pipe sizes. Add some in the Pipe Sizes tab first.
+            No pipe sizes yet. Add them in Settings → Pipe Sizes.
           </p>
         ) : (
           <div className="space-y-2">
@@ -179,7 +179,7 @@ export function StockSettingsTab() {
         <h3 className="mb-2 text-sm font-semibold text-slate-500 dark:text-slate-400">Scrap</h3>
         {activeScrapTypes.length === 0 ? (
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            No active scrap types. Add some in the Scrap Types tab first.
+            No scrap types yet. Add them in Settings → Scrap Types.
           </p>
         ) : (
           <div className="space-y-2">
@@ -202,7 +202,7 @@ export function StockSettingsTab() {
         <h3 className="mb-2 text-sm font-semibold text-slate-500 dark:text-slate-400">Raw Materials</h3>
         {activeMaterials.length === 0 ? (
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            No active raw material types. Add some in the Raw Materials tab first.
+            No raw material yet. Add it in Settings → Raw Material.
           </p>
         ) : (
           <div className="space-y-2">
