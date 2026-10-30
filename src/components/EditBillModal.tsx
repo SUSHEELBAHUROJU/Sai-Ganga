@@ -320,7 +320,9 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
         },
         onError: (err) =>
           showToast(
-            err instanceof DuplicateBillNumberError ? err.message : 'Failed to update bill',
+            err instanceof DuplicateBillNumberError || /voided/i.test(err.message)
+              ? err.message
+              : 'Could not save the bill — nothing was changed. Check your connection and try again.',
             'error',
           ),
       },

@@ -47,6 +47,24 @@ function invalidateForKind(queryClient: QueryClient, kind: RecordKind) {
   }
 }
 
+/**
+ * Thrown for a sale line that belongs to a bill. Changing it here would move
+ * stock while the bill — and the customer's due — kept the old figures, so
+ * such a line is only ever changed through its bill (EditBillModal).
+ */
+export class BilledSaleError extends Error {
+  constructor() {
+    super('This sale is on a bill. Use Edit Bill to change or remove it.')
+    this.name = 'BilledSaleError'
+  }
+}
+
+async function assertSaleNotBilled(id: string) {
+  const { data, error } = await supabase.from('sales_entries').select('bill_id').eq('id', id).single()
+  if (error) throw error
+  if (data.bill_id) throw new BilledSaleError()
+}
+
 export function useUpdateRecord() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -59,6 +77,7 @@ export function useUpdateRecord() {
       id: string
       patch: Record<string, unknown>
     }) => {
+      if (kind === 'sale') await assertSaleNotBilled(id)
       const { error } = await supabase
         .from(TABLE_FOR_KIND[kind])
         .update(patch as never)
@@ -73,48 +92,11 @@ export function useDeleteRecord() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ kind, id }: { kind: RecordKind; id: string }) => {
-      if (kind === 'sale') {
-        // Fetch sale entry to check for linked bill
-        const { data: saleRow } = await supabase
-          .from('sales_entries')
-          .select('id, bill_id')
-          .eq('id', id)
-          .single()
-
-        const billId = saleRow?.bill_id
-
-        // Delete sale entry
-        const { error } = await supabase.from('sales_entries').delete().eq('id', id)
-        if (error) throw error
-
-        // If attached to a bill, check if any remaining sales entries exist
-        if (billId) {
-          const { count } = await supabase
-            .from('sales_entries')
-            .select('id', { count: 'exact', head: true })
-            .eq('bill_id', billId)
-
-          if (count === 0) {
-            // Mark bill as voided so sequence remains intact for tax/audit
-            await supabase.from('bills').update({ status: 'voided' }).eq('id', billId)
-          }
-        }
-      } else {
-        const { error } = await supabase.from(TABLE_FOR_KIND[kind]).delete().eq('id', id)
-        if (error) throw error
-      }
+      if (kind === 'sale') await assertSaleNotBilled(id)
+      const { error } = await supabase.from(TABLE_FOR_KIND[kind]).delete().eq('id', id)
+      if (error) throw error
     },
-    onSuccess: (_data, { kind }) => {
-      invalidateForKind(queryClient, kind)
-      queryClient.invalidateQueries({ queryKey: ['bills'] })
-      if (kind === 'sale') {
-        // Deleting a sale can void its bill (last line item removed above),
-        // which drops that bill's due from the ledger views.
-        queryClient.invalidateQueries({ queryKey: ['ledger_balances'] })
-        queryClient.invalidateQueries({ queryKey: ['bill_payment_status'] })
-        queryClient.invalidateQueries({ queryKey: ['ledger_passbook'] })
-      }
-    },
+    onSuccess: (_data, { kind }) => invalidateForKind(queryClient, kind),
   })
 }
 

@@ -12,6 +12,7 @@ import {
   Share2,
   CalendarClock,
   Undo2,
+  Lock,
 } from 'lucide-react'
 import {
   useRecords,
@@ -27,7 +28,7 @@ import {
   type SaleRecordRow,
   type GroupedTransaction,
 } from '../hooks/useRecords'
-import { useDeleteRecord } from '../hooks/useRecordMutations'
+import { useDeleteRecord, BilledSaleError } from '../hooks/useRecordMutations'
 import { useBill } from '../hooks/useBills'
 import { useBillPaymentStatuses } from '../hooks/useLedger'
 import { Chip } from '../components/Chip'
@@ -146,7 +147,8 @@ export function RecordsPage() {
           showToast(`${RECORD_KIND_LABEL[deleting.kind]} entry deleted`)
           setDeleting(null)
         },
-        onError: () => showToast('Could not delete entry', 'error'),
+        onError: (err) =>
+          showToast(err instanceof BilledSaleError ? err.message : 'Could not delete entry', 'error'),
       },
     )
   }
@@ -426,11 +428,12 @@ export function RecordsPage() {
                 const isCollapsed = isMultiItem ? (collapsedGroups[group.id] ?? true) : false
                 const isSale = group.kind === 'sale'
                 const saleBill = group.bill
+                const isVoided = saleBill?.status === 'voided'
 
                 return (
                   <div
                     key={group.id}
-                    className="rounded-xl border border-slate-200 bg-white shadow-sm transition-all dark:border-slate-800 dark:bg-slate-900"
+                    className={`rounded-xl border border-slate-200 bg-white shadow-sm transition-all dark:border-slate-800 dark:bg-slate-900 ${isVoided ? 'border-dashed opacity-70' : ''}`}
                   >
                     {/* Group Card Header */}
                     <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 sm:p-4">
@@ -477,14 +480,21 @@ export function RecordsPage() {
                                   {billStatuses.get(saleBill.id)!.payment_status}
                                 </span>
                               )}
-                              <button
-                                type="button"
-                                onClick={() => setEditingBillId(saleBill.id)}
-                                className="inline-flex min-h-[44px] items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                                Edit Bill
-                              </button>
+                              {saleBill.status === 'voided' && (
+                                <span className="rounded-md bg-slate-200 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                                  Voided
+                                </span>
+                              )}
+                              {saleBill.status === 'active' && (
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingBillId(saleBill.id)}
+                                  className="inline-flex min-h-[44px] items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                  Edit Bill
+                                </button>
+                              )}
                             </div>
                           ) : (
                             <button
@@ -512,7 +522,7 @@ export function RecordsPage() {
 
                       {/* Header Right Side (Total + Expand Toggle) */}
                       <div className="flex items-center gap-3 shrink-0">
-                        <div className="text-right">
+                        <div className={`text-right ${isVoided ? 'line-through decoration-slate-400' : ''}`}>
                           {group.totalAmount !== null ? (
                             <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
                               ₹{formatQty(group.totalAmount)}
@@ -554,6 +564,10 @@ export function RecordsPage() {
                           const { title: itemTitle, amount, amountKgPcs } = describeRecord(item)
                           const returnedKg =
                             item.kind === 'raw_material_purchase' ? rawPurchaseReturnedKg(item.row) : 0
+                          // A billed sale line changes only through its bill —
+                          // editing it here would move stock but leave the
+                          // bill and the customer's due on the old figures.
+                          const lockedByBill = item.kind === 'sale' && saleBill !== null
 
                           return (
                             <div
@@ -571,7 +585,9 @@ export function RecordsPage() {
                                   </p>
                                 )}
 
-                                {item.row.notes && (
+                                {/* "Billed: <customer>" is written automatically on billed
+                                    sales and only repeats the card's header. */}
+                                {item.row.notes && !(lockedByBill && item.row.notes.startsWith('Billed: ')) && (
                                   <p className="truncate italic text-slate-400 dark:text-slate-500">
                                     {item.row.notes}
                                   </p>
@@ -599,27 +615,49 @@ export function RecordsPage() {
                                       <Undo2 className="h-4 w-4" />
                                     </button>
                                   )}
-                                  <button
-                                    type="button"
-                                    aria-label={`Edit ${RECORD_KIND_LABEL[item.kind]} entry`}
-                                    onClick={() => setEditing(item)}
-                                    className="flex h-11 w-11 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
-                                  >
-                                    <Pencil className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    aria-label={`Delete ${RECORD_KIND_LABEL[item.kind]} entry`}
-                                    onClick={() => setDeleting(item)}
-                                    className="flex h-11 w-11 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </button>
+                                  {lockedByBill ? (
+                                    <span
+                                      title={`On bill ${saleBill?.bill_number} — use Edit Bill`}
+                                      aria-label={`On bill ${saleBill?.bill_number}`}
+                                      className="flex h-11 w-11 items-center justify-center text-slate-300 dark:text-slate-600"
+                                    >
+                                      <Lock className="h-4 w-4" />
+                                    </span>
+                                  ) : (
+                                    <>
+                                      <button
+                                        type="button"
+                                        aria-label={`Edit ${RECORD_KIND_LABEL[item.kind]} entry`}
+                                        onClick={() => setEditing(item)}
+                                        className="flex h-11 w-11 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+                                      >
+                                        <Pencil className="h-4 w-4" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        aria-label={`Delete ${RECORD_KIND_LABEL[item.kind]} entry`}
+                                        onClick={() => setDeleting(item)}
+                                        className="flex h-11 w-11 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50"
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </button>
+                                    </>
+                                  )}
                                 </div>
                               </div>
                             </div>
                           )
                         })}
+                        {isSale && saleBill && (
+                          <p className="flex items-start gap-1.5 px-1 pt-1 text-xs text-slate-500 dark:text-slate-400">
+                            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                            <span>
+                              {saleBill.status === 'active'
+                                ? `To change or remove these pipes, use Edit Bill — that keeps stock, bill ${saleBill.bill_number} and the customer's due in step.`
+                                : `Bill ${saleBill.bill_number} is voided — its pipes are back in stock and it no longer counts towards the customer's due.`}
+                            </span>
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>

@@ -1499,6 +1499,34 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      update_bill_with_sales: {
+        Args: { p_bill: Json }
+        Returns: {
+          bill_date: string
+          bill_number: string
+          created_at: string
+          customer_address: string | null
+          customer_id: string | null
+          customer_name: string
+          customer_phone: string | null
+          discount: number
+          grand_total: number
+          id: string
+          line_items: Json
+          notes: string | null
+          status: string
+          subtotal: number
+          tax: number
+          transport_charges: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "bills"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       expense_allocations: {
         Args: { p_from: string; p_to: string }
         Returns: {

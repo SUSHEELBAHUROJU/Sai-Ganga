@@ -140,10 +140,11 @@ export function useCreateBill() {
 
       // Link sales entries if provided
       if (sale_entry_ids && sale_entry_ids.length > 0) {
-        await supabase
+        const { error: linkError } = await supabase
           .from('sales_entries')
           .update({ bill_id: createdBill.id })
           .in('id', sale_entry_ids)
+        if (linkError) throw linkError
       }
 
       return createdBill
@@ -231,51 +232,28 @@ export function useUpdateBill() {
 
   return useMutation({
     mutationFn: async (input: UpdateBillInput): Promise<BillRow> => {
-      const { id, ...patch } = input
-
-      const { data, error } = await supabase
-        .from('bills')
-        .update({
-          ...patch,
-          discount: patch.discount ?? 0,
-          tax: patch.tax ?? 0,
-          transport_charges: patch.transport_charges ?? 0,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id)
-        .select()
-        .single()
+      // The bill and its sale entries are rewritten together in one
+      // transaction (update_bill_with_sales), so a failed save can never
+      // leave a bill whose pipes have dropped out of stock.
+      const { data, error } = await supabase.rpc('update_bill_with_sales', {
+        p_bill: {
+          ...input,
+          discount: input.discount ?? 0,
+          tax: input.tax ?? 0,
+          transport_charges: input.transport_charges ?? 0,
+        },
+      })
 
       if (error) {
         // bill_number is the table's only unique column, so a 23505 here can
         // only mean the invoice number is taken. The modal pre-checks against
         // its cached list; this is the backstop for a concurrent save.
-        if (error.code === '23505' && patch.bill_number) {
-          throw new DuplicateBillNumberError(patch.bill_number)
+        if (error.code === '23505' && input.bill_number) {
+          throw new DuplicateBillNumberError(input.bill_number)
         }
-        throw error
+        throw new Error(error.message)
       }
-      const updatedBill = data as unknown as BillRow
-
-      // Re-sync sales entries linked to this bill
-      await supabase.from('sales_entries').delete().eq('bill_id', id)
-
-      const salesToInsert = (input.line_items || [])
-        .filter((l) => l.pipe_product_id && l.quantity_pcs && l.quantity_pcs > 0)
-        .map((l) => ({
-          entry_date: input.bill_date,
-          customer_id: input.customer_id || null,
-          pipe_product_id: l.pipe_product_id!,
-          quantity: l.quantity_pcs!,
-          notes: `Billed: ${input.customer_name}`,
-          bill_id: id,
-        }))
-
-      if (salesToInsert.length > 0) {
-        await supabase.from('sales_entries').insert(salesToInsert)
-      }
-
-      return updatedBill
+      return data as unknown as BillRow
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['bills'] })
