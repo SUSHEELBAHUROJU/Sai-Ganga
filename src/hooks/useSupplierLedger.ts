@@ -42,6 +42,10 @@ export type SupplierPassbookEntry = {
   paid_by: string | null
   note: string | null
   created_at: string
+  /** Set when a customer paid this party on our behalf — the same payment is
+   *  a 'received' in that customer's ledger, so it is managed from there. */
+  paid_by_customer_id: string | null
+  paid_by_customer_name: string | null
 }
 
 export const SUPPLIER_PAYMENT_MODE_LABEL: Record<SupplierPaymentMode, string> = {
@@ -308,7 +312,9 @@ export function useUpdateSupplierLedgerEntry() {
   })
 }
 
-/** Undo a mis-entered payment or adjustment. Safe: balance is always recomputed live. */
+/** Undo a mis-entered payment or adjustment. Safe: balance is always recomputed live.
+ *  A payment a customer made for us also removes its 'received' in that
+ *  customer's ledger (a DB trigger), so the customer side is refreshed too. */
 export function useDeleteSupplierLedgerEntry() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -316,6 +322,11 @@ export function useDeleteSupplierLedgerEntry() {
       const { error } = await supabase.from('supplier_ledger_transactions').delete().eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => invalidateSupplierLedger(queryClient),
+    onSuccess: () => {
+      invalidateSupplierLedger(queryClient)
+      for (const key of ['ledger_balances', 'ledger_passbook', 'bill_payment_status', 'ledger_collections', 'ledger_period']) {
+        queryClient.invalidateQueries({ queryKey: [key] })
+      }
+    },
   })
 }
