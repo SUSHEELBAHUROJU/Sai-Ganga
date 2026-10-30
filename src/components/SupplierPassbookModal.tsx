@@ -46,6 +46,7 @@ function entryTitle(entry: SupplierPassbookEntry): string {
       return `Returned · ${entry.item_name ?? 'Material'}`
     case 'payment': {
       const mode = supplierPaymentModeText(entry.payment_mode, entry.payment_app)
+      if (entry.paid_by_customer_name) return `Paid by customer ${entry.paid_by_customer_name} · ${mode}`
       return entry.paid_to ? `Paid · ${mode} → ${entry.paid_to}` : `Paid · ${mode}`
     }
     case 'refund':
@@ -80,6 +81,9 @@ function TransactionRow({
 }) {
   // Purchases and returns are managed from Records, not from the ledger.
   const isPurchase = entry.kind === 'purchase' || entry.kind === 'return'
+  // A customer's payment on our behalf belongs to that customer's ledger:
+  // its amount/date/mode can't be edited here, only removed (both sides go).
+  const isFromCustomer = entry.paid_by_customer_name !== null
   // What the factory owes goes up (purchase, due, refund) in red; payments and returns in green.
   const raisesBalance = entry.kind !== 'payment' && entry.kind !== 'return'
   const detail = entryDetail(entry)
@@ -102,7 +106,7 @@ function TransactionRow({
 
   return (
     <div className="flex items-start justify-between gap-3 rounded-lg border border-slate-200/70 bg-white px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900">
-      {isPurchase ? (
+      {isPurchase || isFromCustomer ? (
         body
       ) : (
         // Payments / dues / refunds open for editing; purchases are edited from Records.
@@ -404,7 +408,9 @@ export function SupplierPassbookModal({ open, party, onClose, initialRange }: Su
         title="Remove this entry?"
         message={
           deleting
-            ? `Remove this ${deleting.kind} of ₹${formatQty(deleting.amount)}? The supplier's balance will be recalculated.`
+            ? deleting.paid_by_customer_name
+              ? `Remove this ₹${formatQty(deleting.amount)} payment made by ${deleting.paid_by_customer_name}? It is removed from ${deleting.paid_by_customer_name}'s ledger too, and both balances are recalculated.`
+              : `Remove this ${deleting.kind} of ₹${formatQty(deleting.amount)}? The supplier's balance will be recalculated.`
             : ''
         }
         confirmLabel="Remove"

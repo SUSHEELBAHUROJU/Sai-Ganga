@@ -1207,6 +1207,7 @@ export type Database = {
           amount: number
           bank_account: string | null
           created_at: string
+          customer_ledger_txn_id: string | null
           created_by: string | null
           date: string
           id: string
@@ -1226,6 +1227,7 @@ export type Database = {
           amount: number
           bank_account?: string | null
           created_at?: string
+          customer_ledger_txn_id?: string | null
           created_by?: string | null
           date?: string
           id?: string
@@ -1245,6 +1247,7 @@ export type Database = {
           amount?: number
           bank_account?: string | null
           created_at?: string
+          customer_ledger_txn_id?: string | null
           created_by?: string | null
           date?: string
           id?: string
@@ -1575,12 +1578,17 @@ export type Database = {
         Args: { p_material_id: string; p_upto: string }
         Returns: number
       }
+      record_customer_payment_to_supplier: {
+        Args: { p: Json }
+        Returns: Database["public"]["Tables"]["ledger_transactions"]["Row"]
+      }
       rpc_collections_by_mode: {
         Args: { p_from: string; p_to: string }
         Returns: {
           cash_total: number
           combined_total: number
           online_total: number
+          to_supplier_total: number
         }[]
       }
       rpc_customer_passbook: {
@@ -1594,6 +1602,9 @@ export type Database = {
           entry_date: string
           id: string
           note: string
+          paid_to_party_id: string
+          paid_to_party_name: string
+          paid_to_party_type: string
           payment_app: string
           payment_mode: string
           running_balance: number
@@ -1731,6 +1742,8 @@ export type Database = {
           kind: string
           note: string
           paid_by: string
+          paid_by_customer_id: string
+          paid_by_customer_name: string
           paid_to: string
           payment_app: string
           payment_mode: string

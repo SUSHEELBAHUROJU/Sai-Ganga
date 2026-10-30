@@ -59,12 +59,19 @@ function TransactionRow({
           </button>
         ) : (
           <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-            {entry.bill_number ? `Bill ${entry.bill_number}` : isDue ? 'Due' : 'Payment Received'}
+            {entry.bill_number
+              ? `Bill ${entry.bill_number}`
+              : isDue
+                ? 'Due'
+                : entry.paid_to_party_name
+                  ? `Paid to ${entry.paid_to_party_name}`
+                  : 'Payment Received'}
           </p>
         )}
         <p className="text-xs text-slate-500 dark:text-slate-400">
           {formatDateLabel(entry.entry_date)}
           {modeLabel ? ` · ${modeLabel}` : ''}
+          {entry.paid_to_party_name ? ' · direct to supplier' : ''}
           {entry.bill_total_kg ? ` · ${formatQty(entry.bill_total_kg)} kg` : ''}
         </p>
         {entry.note && (
@@ -74,7 +81,7 @@ function TransactionRow({
       <div className="flex shrink-0 items-center gap-2 text-right">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
-            {isDue ? 'Order Amount' : 'Payment Received'}
+            {isDue ? 'Order Amount' : entry.paid_to_party_name ? 'Paid to Supplier' : 'Payment Received'}
           </p>
           <p
             className={`font-mono text-sm font-bold ${isDue ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}
@@ -361,7 +368,9 @@ export function CustomerPassbookModal({ open, customer, onClose, initialRange }:
         title="Remove this entry?"
         message={
           deleting
-            ? `Remove this ${deleting.type === 'due' ? 'due' : 'payment'} of ₹${formatQty(deleting.amount)}? This will recalculate the customer's balance.`
+            ? deleting.paid_to_party_name
+              ? `Remove this ₹${formatQty(deleting.amount)} payment to ${deleting.paid_to_party_name}? It is removed from ${deleting.paid_to_party_name}'s ledger too, and both balances are recalculated.`
+              : `Remove this ${deleting.type === 'due' ? 'due' : 'payment'} of ₹${formatQty(deleting.amount)}? This will recalculate the customer's balance.`
             : ''
         }
         confirmLabel="Remove"

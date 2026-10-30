@@ -596,7 +596,9 @@ export function generateLedgerStatementDoc(
       ? `Bill ${entry.bill_number}${entry.bill_total_kg ? ` (${formatQty(entry.bill_total_kg)} kg)` : ''}`
       : isDue
         ? 'Due'
-        : 'Payment'
+        : entry.paid_to_party_name
+          ? `Paid to ${entry.paid_to_party_name} (supplier)`
+          : 'Payment'
 
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(8)
@@ -1613,6 +1615,9 @@ function supplierParticulars(entry: SupplierPassbookEntry): string {
     const rate = entry.price_per_kg != null ? ` @ Rs. ${money(entry.price_per_kg)}` : ''
     const base = `Returned - ${entry.item_name ?? 'Material'} ${num(entry.quantity_kg)} kg${rate}`
     return entry.note ? `${base} - ${entry.note}` : base
+  }
+  if (entry.kind === 'payment' && entry.paid_by_customer_name) {
+    return `Paid by customer ${entry.paid_by_customer_name} - ${supplierPaymentModeText(entry.payment_mode, entry.payment_app)}`
   }
   if (entry.kind === 'payment') {
     const parts = [
