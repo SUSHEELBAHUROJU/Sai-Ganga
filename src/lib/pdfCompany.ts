@@ -1,36 +1,14 @@
 /**
- * Company details printed under the logo on every PDF. Filled from
- * Settings → Billing by AppShell (setPdfCompanyInfo), so each PDF carries the
- * same address, phone and GSTIN without every screen passing them in. Kept
+ * The business name the PDFs print in their footer and on the bill's "For …"
+ * line, taken from Settings → Billing by AppShell (setPdfCompanyInfo). Kept
  * apart from pdfGenerator so the app shell can set it without loading jsPDF.
+ * Address, phone and GSTIN are deliberately not carried: the owner wants none
+ * of them on any PDF.
  */
-export type PdfCompanyInfo = {
-  businessName: string
-  address: string
-  phone: string | null
-  gstNumber: string
-}
+export type PdfCompanyInfo = { businessName: string }
 
-export const pdfCompany: PdfCompanyInfo = {
-  businessName: 'Sai Ganga PVC Pipes & Fittings',
-  address: '',
-  phone: null,
-  gstNumber: '',
-}
+export const pdfCompany: PdfCompanyInfo = { businessName: 'Sai Ganga PVC Pipes & Fittings' }
 
 export function setPdfCompanyInfo(info: Partial<PdfCompanyInfo>): void {
   if (info.businessName?.trim()) pdfCompany.businessName = info.businessName.trim()
-  if (info.address !== undefined) pdfCompany.address = info.address?.trim() ?? ''
-  if (info.phone !== undefined) pdfCompany.phone = info.phone?.trim() || null
-  if (info.gstNumber !== undefined) pdfCompany.gstNumber = info.gstNumber?.trim() ?? ''
-}
-
-/** "Ph: 98…   |   GSTIN: 36…" — whichever of the two are set. */
-export function companyContactLine(): string {
-  return [
-    pdfCompany.phone ? `Ph: ${pdfCompany.phone}` : null,
-    pdfCompany.gstNumber ? `GSTIN: ${pdfCompany.gstNumber}` : null,
-  ]
-    .filter(Boolean)
-    .join('   |   ')
 }

@@ -46,16 +46,10 @@ export function AppShell() {
   const [moreOpen, setMoreOpen] = useState(false)
   const isSecondaryActive = SECONDARY_NAV_ITEMS.some((item) => location.pathname.startsWith(item.path))
 
-  // Every PDF prints the shop's address, phone and GSTIN under the logo.
+  // The PDFs print the business name from Settings → Billing in their footer.
   const { data: companySettings } = useCompanySettings()
   useEffect(() => {
-    if (!companySettings) return
-    setPdfCompanyInfo({
-      businessName: companySettings.business_name,
-      address: companySettings.address,
-      phone: companySettings.phone,
-      gstNumber: companySettings.gst_number,
-    })
+    if (companySettings) setPdfCompanyInfo({ businessName: companySettings.business_name })
   }, [companySettings])
 
   return (

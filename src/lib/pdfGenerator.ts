@@ -21,7 +21,7 @@ import {
 import { formatInvoiceDate, formatStatementDate, todayISODate } from './date'
 import { formatPipeProductLabel } from './format'
 import { LOGO_ASPECT, LOGO_DATA_URL } from './pdfLogo'
-import { pdfCompany as company, companyContactLine } from './pdfCompany'
+import { pdfCompany as company } from './pdfCompany'
 
 /* ==========================================================================
  * Bill PDF — compact two-copy A4 layout
@@ -186,8 +186,8 @@ function drawInvoiceCopy(doc: jsPDF, bill: BillRow, top: number, opts: CopyOptio
   let y = top
 
   // ---------------------------------------------------------------- header
-  // Logo on the left, the shop's address / phone / GSTIN beside it, and the
-  // INVOICE badge on the right.
+  // Logo on the left, the INVOICE badge on the right. No address, phone or
+  // GSTIN — the owner wants none of those on any PDF.
   const logoH = drawLogo(doc, MARGIN_X, y, 46)
 
   // A voided bill must be unmistakable on paper, so it takes over the badge.
@@ -207,25 +207,6 @@ function drawInvoiceCopy(doc: jsPDF, bill: BillRow, top: number, opts: CopyOptio
     doc.setFontSize(7)
     doc.setTextColor(...MUTED_TEXT)
     doc.text(opts.sheetLabel, PAGE_W - MARGIN_X, y + 10.6, { align: 'right' })
-  }
-
-  const infoX = MARGIN_X + 50
-  const infoW = badgeX - infoX - 4
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7)
-  doc.setTextColor(...DARK_TEXT)
-  let infoY = y + 3.6
-  if (company.address) {
-    ;(doc.splitTextToSize(company.address, infoW) as string[]).slice(0, 2).forEach((line) => {
-      doc.text(line, infoX, infoY)
-      infoY += 3.2
-    })
-  }
-  const contact = companyContactLine()
-  if (contact) {
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(...NAVY)
-    doc.text(contact, infoX, infoY)
   }
 
   y += Math.max(logoH, 11.5) + 1.6
@@ -259,10 +240,6 @@ function drawInvoiceCopy(doc: jsPDF, bill: BillRow, top: number, opts: CopyOptio
   opts.addrLines.forEach((line, i) => {
     doc.text(line, MARGIN_X, metaTop + 8.9 + i * 3.3)
   })
-  if (bill.customer_phone) {
-    doc.setFont('helvetica', 'bold')
-    doc.text(`Ph: ${bill.customer_phone}`, MARGIN_X, metaTop + 8.9 + opts.addrLines.length * 3.3)
-  }
 
   const metaRow = (label: string, value: string, offsetY: number) => {
     doc.setFont('helvetica', 'normal')
@@ -413,9 +390,8 @@ export function generateBillPdfDoc(bill: BillRow): jsPDF {
   const totalKg = allItems.reduce((sum, i) => sum + (i.weight_kg ?? 0), 0)
 
   const addrLines = wrapAddress(doc, bill.customer_address)
-  // Address lines plus the customer's phone line, if any.
-  const metaLines = addrLines.length + (bill.customer_phone ? 1 : 0)
-  const metaH = META_H_BASE + Math.max(0, metaLines - 1) * META_H_PER_EXTRA_LINE
+  // The customer is printed by name and address only — no phone number.
+  const metaH = META_H_BASE + Math.max(0, addrLines.length - 1) * META_H_PER_EXTRA_LINE
 
   // Space left for item rows once the fixed sections are accounted for. The
   // totals overhead is charged to every sheet (not just the last) so each
@@ -530,7 +506,7 @@ export function generateLedgerStatementDoc(
     : 'All Time'
 
   let y = drawReportHeader(doc, 'Account Statement', periodLabel)
-  y = drawPartyBlock(doc, y, 'Statement for', customer.name, customer.phone)
+  y = drawPartyBlock(doc, y, 'Statement for', customer.name)
 
   const billed = sortedAsc.filter((e) => e.type === 'due').reduce((sum, e) => sum + e.amount, 0)
   const received = sortedAsc.filter((e) => e.type === 'received').reduce((sum, e) => sum + e.amount, 0)
@@ -647,32 +623,16 @@ type ReportContext = { title: string; periodLabel: string }
 const reportContexts = new WeakMap<jsPDF, ReportContext>()
 
 /**
- * First-page header: the logo with the shop's address / phone / GSTIN under
- * it on the left; the report's title, period and generation date on the
- * right; a navy-and-red rule beneath — the logo's own colours.
+ * First-page header: the logo on the left; the report's title, period and
+ * generation date on the right; a navy-and-red rule beneath — the logo's own
+ * colours. No address, phone or GSTIN on any PDF.
  */
 function drawReportHeader(doc: jsPDF, title: string, periodLabel: string): number {
   reportContexts.set(doc, { title, periodLabel })
   const top = 10
   const logoH = drawLogo(doc, REPORT_MARGIN, top, 62)
 
-  let infoY = top + logoH + 3.6
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(7.5)
-  doc.setTextColor(...DARK_TEXT)
-  if (company.address) {
-    ;(doc.splitTextToSize(company.address, 100) as string[]).slice(0, 2).forEach((line) => {
-      doc.text(line, REPORT_MARGIN, infoY)
-      infoY += 3.4
-    })
-  }
-  const contact = companyContactLine()
-  if (contact) {
-    doc.setFont('helvetica', 'bold')
-    doc.setTextColor(...NAVY)
-    doc.text(contact, REPORT_MARGIN, infoY)
-    infoY += 3.4
-  }
+  const infoY = top + logoH
 
   const right = PAGE_W - REPORT_MARGIN
   doc.setFont('helvetica', 'bold')
@@ -984,8 +944,8 @@ function drawSummaryBlock(
 
 const rs = (n: number | null | undefined) => `Rs. ${money(n)}`
 
-/** Who a statement is for — name large, phone beside it. */
-function drawPartyBlock(doc: jsPDF, y: number, label: string, name: string, detail: string | null): number {
+/** Who a statement is for — name only (no phone numbers on any PDF). */
+function drawPartyBlock(doc: jsPDF, y: number, label: string, name: string): number {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(7)
   doc.setTextColor(...RED)
@@ -993,13 +953,6 @@ function drawPartyBlock(doc: jsPDF, y: number, label: string, name: string, deta
   doc.setFontSize(fitFontSize(doc, name, REPORT_W - 60, [14, 13, 12, 11]))
   doc.setTextColor(...NAVY)
   doc.text(name, REPORT_MARGIN, y + 7.2)
-  if (detail) {
-    const nameW = doc.getTextWidth(name)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(9)
-    doc.setTextColor(...MUTED_TEXT)
-    doc.text(detail, REPORT_MARGIN + nameW + 4, y + 7.2)
-  }
   return y + 12
 }
 
@@ -1851,7 +1804,6 @@ export function generateSupplierStatementDoc(
     y,
     party.party_type === 'supplier' ? 'Raw material supplier' : 'Scrap dealer',
     party.name,
-    party.phone,
   )
 
   const tableRows: string[][] = []
@@ -1986,7 +1938,7 @@ export function generateCustomerLedgerReportDoc(
     const act = periodData?.customerActivity.get(c.customer_id)
     const dueCol = periodData ? (act?.due ? money(act.due) : '-') : money(c.total_due)
     const recvCol = periodData ? (act?.received ? money(act.received) : '-') : money(c.total_received)
-    return [c.name, c.phone ?? '-', dueCol, recvCol, customerBalanceText(c.balance)]
+    return [c.name, dueCol, recvCol, customerBalanceText(c.balance)]
   })
 
   y = drawSectionTitle(doc, y, `Customers (${balances.length})`)
@@ -1994,8 +1946,7 @@ export function generateCustomerLedgerReportDoc(
     doc,
     y,
     [
-      { header: 'CUSTOMER', x: 2, width: 62 },
-      { header: 'PHONE', x: 66, width: 30 },
+      { header: 'CUSTOMER', x: 2, width: 96 },
       { header: periodData ? 'BILLED (PERIOD)' : 'TOTAL BILLED', x: 126, align: 'right' },
       { header: periodData ? 'RECEIVED (PERIOD)' : 'TOTAL RECEIVED', x: 155, align: 'right' },
       { header: 'BALANCE', x: 184, align: 'right', bold: true, color: balanceTone },
