@@ -38,16 +38,16 @@ type Report = {
 // Keys match the old tab keys, so links like /reports?tab=stock still land here.
 const REPORTS = {
   daily: {
-    title: 'Business Summary',
-    description: 'Production, sales, purchases and recycling for any dates',
+    title: 'Day Summary',
+    description: 'Pipes made, sold, material bought — any date',
     icon: ClipboardList,
     iconClass: 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300',
     usesSharedRange: true,
     render: (r) => <DailySummaryTab fromDate={r.fromDate} toDate={r.toDate} />,
   },
   monthly: {
-    title: 'Trends',
-    description: 'Day-by-day chart of what you made and sold',
+    title: 'Daily Chart',
+    description: 'Made and sold, day by day',
     icon: ChartLine,
     iconClass: 'bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300',
     usesSharedRange: true,
@@ -55,15 +55,15 @@ const REPORTS = {
   },
   sales_report: {
     title: 'Sales Report',
-    description: 'Every bill with weight and amount for a month or range',
+    description: 'All bills of a month — kg and amount',
     icon: TrendingUp,
     iconClass: 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-300',
     pdf: true,
     render: () => <SalesReportTab />,
   },
   dues: {
-    title: 'Customer Dues & Collections',
-    description: 'Who owes you money, and cash / online collected',
+    title: 'Money to Collect',
+    description: 'Who has to pay you, and money received',
     icon: HandCoins,
     iconClass: 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300',
     usesSharedRange: true,
@@ -71,22 +71,22 @@ const REPORTS = {
   },
   expense_report: {
     title: 'Expense Report',
-    description: 'Purchases, transport, salaries and other spending',
+    description: 'Material, transport, salary and other spending',
     icon: ReceiptIndianRupee,
     iconClass: 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300',
     pdf: true,
     render: () => <ExpenseReportTab />,
   },
   stock: {
-    title: 'Current Stock',
-    description: 'Pipes, raw material and scrap in hand right now',
+    title: 'Stock in Hand',
+    description: 'Pipes, material and scrap you have now',
     icon: Warehouse,
     iconClass: 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300',
     render: () => <CurrentStockView />,
   },
   cost_per_kg: {
-    title: 'Cost per kg of Pipe',
-    description: 'What 1 kg of pipe cost you to make in a month',
+    title: 'Cost of 1 kg Pipe',
+    description: 'How much 1 kg pipe costs you to make',
     icon: Calculator,
     iconClass: 'bg-teal-100 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300',
     pdf: true,
@@ -98,10 +98,10 @@ type ReportKey = keyof typeof REPORTS
 const REPORT_KEYS = Object.keys(REPORTS) as ReportKey[]
 
 const GROUPS: { title: string; keys: ReportKey[] }[] = [
-  { title: 'Business Overview', keys: ['daily', 'monthly'] },
+  { title: 'Daily Work', keys: ['daily', 'monthly'] },
   { title: 'Sales & Money', keys: ['sales_report', 'dues'] },
   { title: 'Expenses', keys: ['expense_report'] },
-  { title: 'Stock & Costing', keys: ['stock', 'cost_per_kg'] },
+  { title: 'Stock & Cost', keys: ['stock', 'cost_per_kg'] },
 ]
 
 export function ReportsPage() {
@@ -132,7 +132,7 @@ export function ReportsPage() {
       <div>
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Reports</h2>
         <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-          Pick a report. Ones marked PDF can be downloaded or shared.
+          Tap a report to open it. PDF reports can be shared on WhatsApp.
         </p>
       </div>
 

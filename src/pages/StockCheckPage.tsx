@@ -10,10 +10,10 @@ import { daysBetween, formatShortDate, todayISODate } from '../lib/date'
 type TabKey = 'count' | 'saved' | 'report' | 'mine'
 
 const TABS: { key: TabKey; label: string; hint: string; icon: LucideIcon }[] = [
-  { key: 'count', label: 'Enter Count', hint: 'Weigh stock today', icon: PencilLine },
-  { key: 'saved', label: 'Saved Counts', hint: 'Past counts', icon: History },
-  { key: 'report', label: 'Weekly Report', hint: 'Used & cost', icon: ClipboardList },
-  { key: 'mine', label: 'My Costs', hint: 'Your own rates', icon: Wallet },
+  { key: 'count', label: 'New Count', hint: 'Weigh stock today', icon: PencilLine },
+  { key: 'saved', label: 'Old Counts', hint: 'Counts done before', icon: History },
+  { key: 'report', label: 'Week Report', hint: 'Material used, cost', icon: ClipboardList },
+  { key: 'mine', label: 'My Costs', hint: 'With your own rates', icon: Wallet },
 ]
 
 /** A count is due once a week; this many days after the last one it's flagged. */
@@ -47,7 +47,7 @@ export function StockCheckPage() {
       <div className="mb-4">
         <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Stock Check</h2>
         <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-          Count your raw material once a week. Two counts show how much was used and what it cost.
+          Weigh your material once a week. The app shows how much was used and its cost.
         </p>
       </div>
 
@@ -134,15 +134,15 @@ function CountStatusCard({
   const due = daysSince === null || daysSince >= COUNT_DUE_AFTER_DAYS
 
   const title = !last
-    ? 'No stock count yet'
+    ? 'No count done yet'
     : daysSince === 0
       ? 'Counted today'
-      : `Last counted ${formatShortDate(last.count_date)} · ${daysSince} ${daysSince === 1 ? 'day' : 'days'} ago`
+      : `Last count: ${formatShortDate(last.count_date)} (${daysSince} ${daysSince === 1 ? 'day' : 'days'} ago)`
   const detail = !last
-    ? 'Do your first count now — the weekly report starts from the second one.'
+    ? 'Do your first count today. The report comes after your second count.'
     : due
-      ? "This week's count is due."
-      : `Next count due in ${COUNT_DUE_AFTER_DAYS - (daysSince ?? 0)} ${COUNT_DUE_AFTER_DAYS - (daysSince ?? 0) === 1 ? 'day' : 'days'}. ${counts.length} ${counts.length === 1 ? 'count' : 'counts'} saved.`
+      ? 'Time for this week’s count.'
+      : `Next count in ${COUNT_DUE_AFTER_DAYS - (daysSince ?? 0)} ${COUNT_DUE_AFTER_DAYS - (daysSince ?? 0) === 1 ? 'day' : 'days'}.`
 
   return (
     <div
@@ -171,7 +171,7 @@ function CountStatusCard({
           onClick={onStartCount}
           className="shrink-0 rounded-lg bg-purple-600 px-3 py-2 text-sm font-semibold text-white hover:bg-purple-700"
         >
-          Count now
+          Count Now
         </button>
       )}
     </div>
