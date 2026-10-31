@@ -11,10 +11,13 @@ import type { RecordKind } from '../hooks/useRecords'
 import type { ProductionCostReport } from '../hooks/useProductionCost'
 import {
   costPerKgProduced,
+  costBreakdown,
   myCostSummary,
   materialCostPerKg,
   runningCostPerKg,
   yieldPercent,
+  type CostBreakdown,
+  type CostPartKey,
   type MyCosts,
   type StockCheckPeriod,
 } from '../hooks/useStockChecks'
@@ -1409,6 +1412,113 @@ export function generateRecordsReportBlob(report: RecordsReportData, periodLabel
   )
 }
 
+/** The same colour for each part as on screen (purple, amber, sky, slate, rose). */
+const PART_RGB: Record<CostPartKey, Rgb> = {
+  material: [147, 51, 234],
+  electricity: [245, 158, 11],
+  wages: [14, 165, 233],
+  other: [148, 163, 184],
+  expenses: [251, 113, 133],
+}
+
+const sharePct = (n: number) => `${n >= 10 ? Math.round(n) : num(Math.round(n * 10) / 10)}%`
+
+/**
+ * "Cost of 1 kg Pipe — Breakdown": a coloured bar of each part's share, then
+ * a table — each part's Rs. in 1 kg of pipe and its share of the price, with
+ * its pieces under it (each material with the kg of it in 1 kg of pipe).
+ */
+function drawCostBreakdown(doc: jsPDF, y: number, breakdown: CostBreakdown, sourceNote: string): number {
+  y = drawSectionTitle(doc, y, 'Cost of 1 kg Pipe - Breakdown')
+  y = ensureSpace(doc, y, 40)
+  y = drawNote(doc, y - 1, sourceNote) + 2
+
+  // Bar
+  const barH = 6
+  let x = REPORT_MARGIN
+  breakdown.parts.forEach((p) => {
+    const w = (REPORT_W * Math.max(p.share, 0.6)) / 100
+    doc.setFillColor(...PART_RGB[p.key])
+    doc.rect(x, y, Math.min(w, REPORT_MARGIN + REPORT_W - x), barH, 'F')
+    x += w
+  })
+  y += barH + 4.5
+  // Legend
+  x = REPORT_MARGIN
+  doc.setFontSize(8)
+  breakdown.parts.forEach((p) => {
+    const text = `${p.label} ${sharePct(p.share)}`
+    doc.setFillColor(...PART_RGB[p.key])
+    doc.circle(x + 1.3, y - 1.1, 1.3, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...DARK_TEXT)
+    doc.text(text, x + 3.6, y)
+    x += doc.getTextWidth(text) + 9
+  })
+  y += 4
+
+  // Table
+  const col = { kg: 120, rs: 154, share: 184 }
+  const drawHead = () => {
+    doc.setFillColor(...NAVY)
+    doc.rect(REPORT_MARGIN, y, REPORT_W, TABLE_HEAD_H, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(7.6)
+    doc.setTextColor(255, 255, 255)
+    doc.text('PART', REPORT_MARGIN + 2, y + 4.7)
+    doc.text('KG IN 1 KG PIPE', REPORT_MARGIN + col.kg, y + 4.7, { align: 'right' })
+    doc.text('Rs. IN 1 KG PIPE', REPORT_MARGIN + col.rs, y + 4.7, { align: 'right' })
+    doc.text('SHARE', REPORT_MARGIN + col.share, y + 4.7, { align: 'right' })
+    y += TABLE_HEAD_H
+  }
+  drawHead()
+
+  const row = (label: string, kgPerKg: number | undefined, perKg: number, share: number, isPart: boolean, color?: Rgb) => {
+    if (y + TABLE_ROW_H > REPORT_BOTTOM) {
+      y = newReportPage(doc)
+      drawHead()
+    }
+    if (isPart) {
+      doc.setFillColor(...ROW_ALT_BG)
+      doc.rect(REPORT_MARGIN, y, REPORT_W, TABLE_ROW_H, 'F')
+    }
+    doc.setFont('helvetica', isPart ? 'bold' : 'normal')
+    doc.setFontSize(8.2)
+    doc.setTextColor(...(isPart ? NAVY : DARK_TEXT))
+    if (color) {
+      doc.setFillColor(...color)
+      doc.circle(REPORT_MARGIN + 3.4, y + 3.3, 1.3, 'F')
+    }
+    doc.text(fitToWidth(doc, label, 90), REPORT_MARGIN + (isPart ? 6.5 : 10), y + 4.5)
+    if (kgPerKg !== undefined) doc.text(`${kgPerKg.toLocaleString('en-IN', { maximumFractionDigits: 3 })} kg`, REPORT_MARGIN + col.kg, y + 4.5, { align: 'right' })
+    doc.text(money(perKg), REPORT_MARGIN + col.rs, y + 4.5, { align: 'right' })
+    doc.text(sharePct(share), REPORT_MARGIN + col.share, y + 4.5, { align: 'right' })
+    doc.setDrawColor(...BORDER_GRAY)
+    doc.setLineWidth(0.15)
+    doc.line(REPORT_MARGIN, y + TABLE_ROW_H, PAGE_W - REPORT_MARGIN, y + TABLE_ROW_H)
+    y += TABLE_ROW_H
+  }
+
+  breakdown.parts.forEach((p) => {
+    row(p.label, p.kgPerKg, p.perKg, p.share, true, PART_RGB[p.key])
+    // A lone piece is shown only when its name adds something (e.g. "Tea & snacks" under Other costs).
+    const showItems = p.items.length > 1 || (p.items.length === 1 && (p.key === 'material' || p.items[0].label.toLowerCase() !== p.label.toLowerCase()))
+    if (showItems) p.items.forEach((i) => row(i.label, i.kgPerKg, i.perKg, i.share, false))
+  })
+
+  // Total
+  y = ensureSpace(doc, y, TABLE_ROW_H + 4)
+  doc.setFillColor(...NAVY)
+  doc.rect(REPORT_MARGIN, y, REPORT_W, TABLE_ROW_H + 1, 'F')
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9)
+  doc.setTextColor(255, 255, 255)
+  doc.text(`COST OF 1 KG PIPE  (Rs. ${money(breakdown.totalCost)} / ${num(breakdown.producedKg)} kg)`, REPORT_MARGIN + 2, y + 5)
+  doc.text(money(breakdown.costPerKg), REPORT_MARGIN + col.rs, y + 5, { align: 'right' })
+  doc.text('100%', REPORT_MARGIN + col.share, y + 5, { align: 'right' })
+  return y + TABLE_ROW_H + 1
+}
+
 /**
  * Weekly stock check: what was consumed (at each material's latest price), what was
  * produced (per pipe size), and the result — cost per kg of pipe and waste.
@@ -1426,6 +1536,17 @@ export function generateStockCheckReportDoc(period: StockCheckPeriod): jsPDF {
       { label: 'Material used', value: `${num(period.consumed_kg)} kg`, note: rs(period.consumed_cost) },
       { label: 'Output %', value: yp === null ? '-' : `${num(yp)}%`, tone: 'gray', note: `Waste ${num(period.waste_kg)} kg` },
     ])
+  }
+  {
+    const breakdown = costBreakdown(period)
+    if (breakdown) {
+      y = drawCostBreakdown(
+        doc,
+        y,
+        breakdown,
+        'From the app: material at its latest purchase price, and the salaries, current bill and other expenses recorded in the app.',
+      )
+    }
   }
 
   y = drawSectionTitle(doc, y, 'Material Used')
@@ -1562,6 +1683,10 @@ export function generateMyCostsReportDoc(period: StockCheckPeriod, myCosts: MyCo
     { label: 'Material cost', value: rs(mine.materialCost), note: `${num(mine.usedKg)} kg used` },
     { label: 'Pipe produced', value: `${num(period.produced_kg)} kg`, tone: 'green' },
   ])
+  {
+    const breakdown = costBreakdown(period, myCosts)
+    if (breakdown) y = drawCostBreakdown(doc, y, breakdown, 'From your own costs: your material prices, wages, electricity and other costs.')
+  }
 
   y = drawSectionTitle(doc, y, 'Materials Used')
   y = drawReportTable(
