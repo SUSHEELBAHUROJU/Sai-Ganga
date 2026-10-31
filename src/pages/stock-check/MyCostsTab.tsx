@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, Plus, Share2, X } from 'lucide-react'
+import { ChevronDown, ChevronUp, PencilLine, Plus, Share2, X } from 'lucide-react'
 import { DateRangeField } from '../../components/DateRangeField'
 import { SaveButton } from '../../components/SaveButton'
 import { LoadingState, EmptyNote } from '../../components/States'
@@ -10,6 +10,8 @@ import {
   newWeekMyCosts,
   myCostSummary,
   costPerKgProduced,
+  costBreakdown,
+  type CostBreakdown,
   type ManualRates,
   type MyCosts,
   type StockCheckPeriod,
@@ -19,9 +21,19 @@ import { useToast } from '../../lib/toast'
 import { formatShortDate, todayISODate } from '../../lib/date'
 import { formatQty } from '../../lib/format'
 import { SectionTitle, Stat } from './weekParts'
+import { CostBreakdownBar, CostBreakdownTable } from '../../components/CostBreakdownView'
 import { threeMonthsAgo, useSharePdf } from './weekUtils'
 
 const rupeesPerKg = (n: number | null) => (n === null ? '—' : `₹${formatQty(n)}`)
+
+/** "89%" for material, electricity and wages — the week-by-week columns. */
+function sharesOf(b: CostBreakdown | null) {
+  const share = (key: string) => {
+    const part = b?.parts.find((p) => p.key === key)
+    return part ? `${Math.round(part.share)}%` : '—'
+  }
+  return { material: share('material'), electricity: share('electricity'), wages: share('wages') }
+}
 
 /** A typed number, or null when blank or not a valid amount. */
 function parseAmount(value: string): number | null {
@@ -404,7 +416,10 @@ function MyCostsCard({
   expanded: boolean
   onToggle: () => void
 }) {
+  const [editing, setEditing] = useState(false)
   const yourCostPerKg = saved ? myCostSummary(period, saved).costPerKg : null
+  // Your figures once saved; the app's own figures until then.
+  const breakdown = costBreakdown(period, saved)
 
   return (
     <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
@@ -415,7 +430,8 @@ function MyCostsCard({
           </p>
           <p className="text-xs text-slate-500 dark:text-slate-400">{stockCheckPeriodLabel(period)}</p>
         </div>
-        <span className="text-slate-400">
+        <span className="flex items-center gap-1 text-xs font-semibold text-purple-700 dark:text-purple-300">
+          {expanded ? 'Hide' : 'See breakdown'}
           {expanded ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
         </span>
       </button>
@@ -431,8 +447,40 @@ function MyCostsCard({
         />
       </div>
 
-      {/* Seeded once on opening; a background refetch won't wipe typing. */}
-      {expanded && <MyCostsForm period={period} seed={saved ?? seed} saved={saved} />}
+      {breakdown && (
+        <button type="button" onClick={onToggle} className="block w-full text-left" aria-label="See cost breakdown">
+          <CostBreakdownBar breakdown={breakdown} />
+        </button>
+      )}
+
+      {expanded && (
+        <div className="space-y-3 border-t border-slate-200 pt-3 dark:border-slate-800">
+          {breakdown ? (
+            <>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {breakdown.source === 'mine'
+                  ? 'How 1 kg of pipe’s cost is made up — from your costs.'
+                  : 'From the app’s figures (latest material prices and expenses in the app). Enter your costs to use your own rates.'}
+              </p>
+              <CostBreakdownTable breakdown={breakdown} />
+            </>
+          ) : (
+            <p className="text-xs text-slate-500 dark:text-slate-400">No pipe made in this week, so there is no cost per kg.</p>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setEditing((v) => !v)}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-purple-300 bg-purple-50 py-2.5 text-sm font-semibold text-purple-700 hover:bg-purple-100 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-300"
+          >
+            <PencilLine className="h-4 w-4" />
+            {editing ? 'Close' : saved ? 'Change my costs' : 'Enter my costs'}
+          </button>
+
+          {/* Seeded once on opening; a background refetch won't wipe typing. */}
+          {editing && <MyCostsForm period={period} seed={saved ?? seed} saved={saved} />}
+        </div>
+      )}
     </div>
   )
 }
@@ -462,8 +510,8 @@ export function MyCostsTab() {
       />
 
       <p className="text-xs text-slate-500 dark:text-slate-400">
-        Work out the cost of 1 kg of pipe your way — your material prices, operator pay, electricity and other costs.
-        Tap a week to enter them.
+        Cost of 1 kg of pipe your way — your material prices, wages, electricity and other costs. Tap a week to see what
+        the cost is made of, and to enter your costs.
       </p>
 
       {(isLoading || costsLoading) && <LoadingState />}
@@ -478,7 +526,7 @@ export function MyCostsTab() {
         <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
           <SectionTitle>Week by Week</SectionTitle>
           <div className="-mx-1 overflow-x-auto">
-            <table className="w-full min-w-[320px] text-left text-xs">
+            <table className="w-full min-w-[460px] text-left text-xs">
               <thead className="text-slate-500 dark:text-slate-400">
                 <tr>
                   <th className="px-1 py-1 font-semibold">Week ending</th>
@@ -486,6 +534,9 @@ export function MyCostsTab() {
                   <th className="px-1 py-1 text-right font-semibold">Recycled used</th>
                   <th className="px-1 py-1 text-right font-semibold">App ₹/kg</th>
                   <th className="px-1 py-1 text-right font-semibold">Your ₹/kg</th>
+                  <th className="px-1 py-1 text-right font-semibold">Material</th>
+                  <th className="px-1 py-1 text-right font-semibold">Electricity</th>
+                  <th className="px-1 py-1 text-right font-semibold">Wages</th>
                 </tr>
               </thead>
               <tbody className="text-slate-800 dark:text-slate-200">
@@ -493,6 +544,7 @@ export function MyCostsTab() {
                   const appCpk = costPerKgProduced(p)
                   const saved = allMyCosts.get(p.count_id)
                   const yourCpk = saved ? myCostSummary(p, saved).costPerKg : null
+                  const shares = sharesOf(costBreakdown(p, saved))
                   return (
                     <tr key={p.count_id} className="border-t border-slate-100 dark:border-slate-800">
                       <td className="px-1 py-1.5">{formatShortDate(p.count_date)}</td>
@@ -502,6 +554,9 @@ export function MyCostsTab() {
                       <td className="px-1 py-1.5 text-right font-semibold text-purple-700 dark:text-purple-300">
                         {yourCpk === null ? '—' : formatQty(yourCpk)}
                       </td>
+                      <td className="px-1 py-1.5 text-right">{shares.material}</td>
+                      <td className="px-1 py-1.5 text-right">{shares.electricity}</td>
+                      <td className="px-1 py-1.5 text-right">{shares.wages}</td>
                     </tr>
                   )
                 })}

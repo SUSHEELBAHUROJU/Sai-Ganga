@@ -401,3 +401,136 @@ export function myCostSummary(period: StockCheckPeriod, costs: MyCosts) {
     costPerKg,
   }
 }
+
+/* --------------------------------------------------------------------------
+ * What 1 kg of pipe's cost is made of
+ * ------------------------------------------------------------------------ */
+
+export type CostPartKey = 'material' | 'electricity' | 'wages' | 'other' | 'expenses'
+
+export type CostItem = {
+  label: string
+  /** Rupees for the whole cycle. */
+  amount: number
+  /** Rupees in 1 kg of pipe. */
+  perKg: number
+  /** Percent of the cost of 1 kg of pipe. */
+  share: number
+  /** Material only: kg of it used for each 1 kg of pipe made. */
+  kgPerKg?: number
+}
+
+export type CostPart = CostItem & { key: CostPartKey; items: CostItem[] }
+
+export type CostBreakdown = {
+  /** 'mine' — from My Costs; 'app' — the app's own figures (no My Costs saved). */
+  source: 'mine' | 'app'
+  totalCost: number
+  costPerKg: number
+  producedKg: number
+  /** Largest first; parts worth ₹0 are left out. */
+  parts: CostPart[]
+}
+
+export const COST_PART_LABEL: Record<CostPartKey, string> = {
+  material: 'Material',
+  electricity: 'Electricity',
+  wages: 'Wages',
+  other: 'Other costs',
+  expenses: 'Expenses in app',
+}
+
+/** App expense types that are electricity, by name — the app has no separate flag for it. */
+const ELECTRICITY_NAME = /electric|current|power|eb bill|meter/i
+
+/**
+ * Splits the cost of 1 kg of pipe into material (each material, with how many
+ * kg of it went into 1 kg of pipe), electricity, wages and other costs — each
+ * as ₹ per kg and as a share of the price.
+ *
+ * Uses the owner's My Costs when saved; otherwise the app's own figures:
+ * material at the latest purchase price, and the expenses recorded in the app
+ * (salaries as wages, electricity by name, the rest as other).
+ */
+export function costBreakdown(period: StockCheckPeriod, saved?: MyCosts): CostBreakdown | null {
+  const producedKg = Number(period.produced_kg)
+  if (!(producedKg > 0)) return null
+
+  type Raw = { key: CostPartKey; items: { label: string; amount: number; kg?: number }[] }
+  let raw: Raw[]
+
+  if (saved) {
+    const s = myCostSummary(period, saved)
+    raw = [
+      {
+        key: 'material',
+        items: s.lines.map((l) => ({ label: l.material.material_name, amount: l.cost, kg: Number(l.material.consumed_kg) })),
+      },
+      {
+        key: 'electricity',
+        items: [
+          { label: 'Pipe making', amount: s.electricityPipe },
+          { label: 'Recycling', amount: s.electricityRecycled },
+        ],
+      },
+      {
+        key: 'wages',
+        items: [
+          { label: 'Operator - pipe', amount: s.operatorPipe },
+          { label: 'Operator - recycling', amount: s.operatorRecycled },
+        ],
+      },
+      { key: 'other', items: saved.extras.map((e) => ({ label: e.name, amount: e.amount })) },
+      { key: 'expenses', items: [{ label: COST_PART_LABEL.expenses, amount: s.appExpenses }] },
+    ]
+  } else {
+    const overheads = period.overheads.map((o) => ({ ...o, amount: Number(o.amount) }))
+    raw = [
+      {
+        key: 'material',
+        items: period.materials
+          .filter((m) => m.consumed_kg > 0)
+          .map((m) => ({ label: m.material_name, amount: Number(m.consumed_cost), kg: Number(m.consumed_kg) })),
+      },
+      {
+        key: 'electricity',
+        items: overheads
+          .filter((o) => !o.is_salary && ELECTRICITY_NAME.test(o.category_name))
+          .map((o) => ({ label: o.category_name, amount: o.amount })),
+      },
+      {
+        key: 'wages',
+        items: overheads.filter((o) => o.is_salary).map((o) => ({ label: o.category_name, amount: o.amount })),
+      },
+      {
+        key: 'other',
+        items: overheads
+          .filter((o) => !o.is_salary && !ELECTRICITY_NAME.test(o.category_name))
+          .map((o) => ({ label: o.category_name, amount: o.amount })),
+      },
+    ]
+  }
+
+  const totalCost = raw.reduce((sum, p) => sum + p.items.reduce((s, i) => s + i.amount, 0), 0)
+  if (!(totalCost > 0)) return null
+
+  const item = (label: string, amount: number, kg?: number): CostItem => ({
+    label,
+    amount,
+    perKg: amount / producedKg,
+    share: (amount / totalCost) * 100,
+    ...(kg !== undefined ? { kgPerKg: kg / producedKg } : {}),
+  })
+
+  const parts: CostPart[] = raw
+    .map((p) => {
+      const items = p.items.filter((i) => i.amount > 0).map((i) => item(i.label, i.amount, i.kg))
+      const amount = items.reduce((s, i) => s + i.amount, 0)
+      const kg = p.key === 'material' ? p.items.reduce((s, i) => s + (i.kg ?? 0), 0) : undefined
+      return { key: p.key, ...item(COST_PART_LABEL[p.key], amount, kg), items: items.sort((a, b) => b.amount - a.amount) }
+    })
+    .filter((p) => p.amount > 0)
+    .sort((a, b) => b.amount - a.amount)
+
+  return { source: saved ? 'mine' : 'app', totalCost, costPerKg: totalCost / producedKg, producedKg, parts }
+}
