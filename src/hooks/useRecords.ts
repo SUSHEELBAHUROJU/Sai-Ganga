@@ -185,7 +185,7 @@ export type RecordsFilter = {
 }
 
 // PostgREST caps any unlimited select at max_rows (1000) and silently drops
-// the rest — same risk documented in csvExport.ts. Records already bounds
+// the rest — same risk fetchTable in backup.ts pages around. Records already bounds
 // its range to MAX_QUERY_RANGE_DAYS, but a very active date range could
 // still exceed this per table, so cap explicitly (ordered so the newest
 // rows in range survive) and surface it rather than truncating silently.

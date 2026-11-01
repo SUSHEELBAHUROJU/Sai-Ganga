@@ -190,6 +190,11 @@ function SettingsHub({ onOpen }: { onOpen: (key: SectionKey) => void }) {
     suppliers: countLabel(suppliers, 'supplier', 'suppliers'),
     scrap_dealers: countLabel(dealers, 'dealer', 'dealers'),
     security: isPinSet() ? 'PIN on' : 'PIN off',
+    backup: company?.last_backup_at
+      ? `${Math.floor((Date.now() - new Date(company.last_backup_at).getTime()) / 86_400_000)}d ago`
+      : company && 'last_backup_at' in company
+        ? 'Never'
+        : null,
   }
 
   return (

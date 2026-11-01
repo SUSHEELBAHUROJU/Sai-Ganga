@@ -1,438 +1,171 @@
 import { useState } from 'react'
-import { Download, DatabaseBackup } from 'lucide-react'
-import { fetchAllRows, rowsToCsv, downloadCsv } from '../../lib/csvExport'
-import type { Database } from '../../types/database'
-import { todayISODate } from '../../lib/date'
+import { useQueryClient } from '@tanstack/react-query'
+import { CalendarCheck, CircleAlert, CloudUpload, Download, ShieldCheck } from 'lucide-react'
+import { useCompanySettings } from '../../hooks/useCompanySettings'
+import {
+  BACKUP_DUE_AFTER_DAYS,
+  BACKUP_TABLES,
+  backupFileBase,
+  buildBackupSheets,
+  fetchBackupData,
+  recordBackupTaken,
+} from '../../lib/backup'
+import { buildXlsx } from '../../lib/xlsxWriter'
 import { useToast } from '../../lib/toast'
 
-type ExportDef = {
-  key: string
-  label: string
-  description: string
-  table: keyof Database['public']['Tables']
-  select: string
-  columns: string[]
-  flatten: (row: Record<string, unknown>) => Record<string, unknown>
+const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+/** Whole days since an ISO timestamp. */
+function daysSince(iso: string): number {
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
 }
 
-function nested(row: Record<string, unknown>, key: string): Record<string, unknown> | null {
-  const value = row[key]
-  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+function saveToDevice(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
 }
 
-const EXPORTS: ExportDef[] = [
-  {
-    key: 'production',
-    label: 'Production Entries',
-    description: 'Every pipe production entry ever logged',
-    table: 'production_entries',
-    select: '*, pipe_products(diameter_inches, weight_kg)',
-    columns: ['entry_date', 'diameter_inches', 'weight_kg', 'quantity_pcs', 'notes', 'created_at'],
-    flatten: (row) => {
-      const p = nested(row, 'pipe_products')
-      return {
-        entry_date: row.entry_date,
-        diameter_inches: p?.diameter_inches ?? '',
-        weight_kg: p?.weight_kg ?? '',
-        quantity_pcs: row.quantity,
-        notes: row.notes,
-        created_at: row.created_at,
-      }
-    },
-  },
-  {
-    key: 'sales',
-    label: 'Sales Entries',
-    description: 'Every sale ever logged, with customer',
-    table: 'sales_entries',
-    select: '*, pipe_products(diameter_inches, weight_kg), customers(name)',
-    columns: [
-      'entry_date',
-      'customer',
-      'diameter_inches',
-      'weight_kg',
-      'quantity_pcs',
-      'notes',
-      'created_at',
-    ],
-    flatten: (row) => {
-      const p = nested(row, 'pipe_products')
-      const c = nested(row, 'customers')
-      return {
-        entry_date: row.entry_date,
-        customer: c?.name ?? '',
-        diameter_inches: p?.diameter_inches ?? '',
-        weight_kg: p?.weight_kg ?? '',
-        quantity_pcs: row.quantity,
-        notes: row.notes,
-        created_at: row.created_at,
-      }
-    },
-  },
-  {
-    key: 'recycling',
-    label: 'Recycling Entries',
-    description: 'Granules produced from recycling',
-    table: 'recycling_entries',
-    select: '*, scrap_types(name)',
-    columns: [
-      'entry_date',
-      'source_material',
-      'granules_output_kg',
-      'notes',
-      'created_at',
-    ],
-    flatten: (row) => {
-      const s = nested(row, 'scrap_types')
-      return {
-        entry_date: row.entry_date,
-        source_material: s?.name ?? '',
-        granules_output_kg: row.total_output_kg ?? '',
-        notes: row.notes,
-        created_at: row.created_at,
-      }
-    },
-  },
-  {
-    key: 'raw_material_purchases',
-    label: 'Raw Material Purchases',
-    description: 'Virgin/recycled granule purchases',
-    table: 'raw_material_purchases',
-    select: '*, raw_material_types(name), raw_material_suppliers(name)',
-    columns: [
-      'entry_date',
-      'material',
-      'supplier_name',
-      'total_qty_kg',
-      'price_per_kg',
-      'purchase_price',
-      'transport_charges',
-      'total_cost',
-      'notes',
-      'created_at',
-    ],
-    flatten: (row) => {
-      const t = nested(row, 'raw_material_types')
-      const s = nested(row, 'raw_material_suppliers')
-      const cost = Number(row.cost) || 0
-      const transport = Number(row.transport_charges) || 0
-      return {
-        entry_date: row.entry_date,
-        material: t?.name ?? '',
-        // Structured supplier, falling back to the free text older rows used.
-        supplier_name: (s?.name as string | undefined) ?? row.supplier_name ?? '',
-        total_qty_kg: row.total_qty_kg,
-        price_per_kg: row.price_per_kg ?? '',
-        purchase_price: row.cost ?? '',
-        transport_charges: transport,
-        total_cost: row.cost == null ? '' : cost + transport,
-        notes: row.notes,
-        created_at: row.created_at,
-      }
-    },
-  },
-  {
-    key: 'purchase_returns',
-    label: 'Purchase Returns',
-    description: 'Raw material sent back to suppliers',
-    table: 'raw_material_purchase_returns',
-    select:
-      '*, raw_material_purchases(entry_date, total_qty_kg, price_per_kg, raw_material_types(name), raw_material_suppliers(name))',
-    columns: ['return_date', 'material', 'supplier_name', 'purchase_date', 'returned_kg', 'price_per_kg', 'reason', 'created_at'],
-    flatten: (row) => {
-      const p = nested(row, 'raw_material_purchases')
-      const t = p ? nested(p, 'raw_material_types') : null
-      const sp = p ? nested(p, 'raw_material_suppliers') : null
-      return {
-        return_date: row.return_date,
-        material: t?.name ?? '',
-        supplier_name: sp?.name ?? '',
-        purchase_date: p?.entry_date ?? '',
-        returned_kg: row.quantity_kg,
-        price_per_kg: p?.price_per_kg ?? '',
-        reason: row.reason,
-        created_at: row.created_at,
-      }
-    },
-  },
-  {
-    key: 'stock_counts',
-    label: 'Stock Counts',
-    description: 'Every weekly raw material count, one row per material',
-    table: 'stock_count_items',
-    select: '*, stock_counts(count_date, notes), raw_material_types(name)',
-    columns: ['count_date', 'material', 'entry_mode', 'pack_kg', 'num_bags', 'quantity_kg', 'notes', 'created_at'],
-    flatten: (row) => {
-      const c = nested(row, 'stock_counts')
-      const t = nested(row, 'raw_material_types')
-      return {
-        count_date: c?.count_date ?? '',
-        material: t?.name ?? '',
-        entry_mode: row.entry_mode,
-        pack_kg: row.pack_kg ?? '',
-        num_bags: row.num_bags ?? '',
-        quantity_kg: row.quantity_kg,
-        notes: c?.notes ?? '',
-        created_at: row.created_at,
-      }
-    },
-  },
-  {
-    key: 'scrap_purchases',
-    label: 'Scrap Purchases',
-    description: 'Scrap bought from dealers',
-    table: 'scrap_purchases',
-    select: '*, scrap_types(name), scrap_dealers(name)',
-    columns: [
-      'entry_date',
-      'scrap_type',
-      'dealer',
-      'quantity_kg',
-      'price_per_kg',
-      'purchase_price',
-      'transport_charges',
-      'total_cost',
-      'notes',
-      'created_at',
-    ],
-    flatten: (row) => {
-      const t = nested(row, 'scrap_types')
-      const d = nested(row, 'scrap_dealers')
-      const cost = Number(row.cost) || 0
-      const transport = Number(row.transport_charges) || 0
-      return {
-        entry_date: row.entry_date,
-        scrap_type: t?.name ?? '',
-        dealer: d?.name ?? '',
-        quantity_kg: row.quantity_kg,
-        price_per_kg: row.price_per_kg ?? '',
-        purchase_price: row.cost ?? '',
-        transport_charges: transport,
-        total_cost: row.cost == null ? '' : cost + transport,
-        notes: row.notes,
-        created_at: row.created_at,
-      }
-    },
-  },
-  {
-    key: 'factory_waste',
-    label: 'Factory Waste',
-    description: 'In-house scrap waste logged',
-    table: 'factory_waste_entries',
-    select: '*, scrap_types(name)',
-    columns: ['entry_date', 'scrap_type', 'quantity_kg', 'notes', 'created_at'],
-    flatten: (row) => {
-      const t = nested(row, 'scrap_types')
-      return {
-        entry_date: row.entry_date,
-        scrap_type: t?.name ?? '',
-        quantity_kg: row.quantity_kg,
-        notes: row.notes,
-        created_at: row.created_at,
-      }
-    },
-  },
-  {
-    key: 'pipe_sizes',
-    label: 'Pipe Sizes',
-    description: 'Every pipe size, active or removed',
-    table: 'pipe_products',
-    select: '*',
-    columns: ['diameter_inches', 'weight_kg', 'is_active', 'created_at'],
-    flatten: (row) => row,
-  },
-  {
-    key: 'raw_material_types',
-    label: 'Raw Material Types',
-    description: 'Virgin/recycled granule types',
-    table: 'raw_material_types',
-    select: '*',
-    columns: ['name', 'default_pack_kg', 'is_active', 'created_at'],
-    flatten: (row) => row,
-  },
-  {
-    key: 'scrap_types',
-    label: 'Scrap Types',
-    description: 'Scrap material types',
-    table: 'scrap_types',
-    select: '*',
-    columns: ['name', 'is_active', 'created_at'],
-    flatten: (row) => row,
-  },
-  {
-    key: 'customers',
-    label: 'Customers',
-    description: 'Everyone pipes have been sold to',
-    table: 'customers',
-    select: '*',
-    columns: ['name', 'phone', 'address', 'is_active', 'created_at'],
-    flatten: (row) => row,
-  },
-  {
-    key: 'scrap_dealers',
-    label: 'Scrap Dealers',
-    description: 'Everyone scrap has been bought from',
-    table: 'scrap_dealers',
-    select: '*',
-    columns: ['name', 'phone', 'address', 'is_active', 'created_at'],
-    flatten: (row) => row,
-  },
-  {
-    key: 'suppliers',
-    label: 'Suppliers',
-    description: 'Everyone raw material has been bought from',
-    table: 'raw_material_suppliers',
-    select: '*',
-    columns: ['name', 'phone', 'address', 'is_active', 'created_at'],
-    flatten: (row) => row,
-  },
-  {
-    key: 'supplier_payments',
-    label: 'Supplier Payments',
-    description: 'Payments, refunds and opening dues for suppliers and scrap dealers',
-    table: 'supplier_ledger_transactions',
-    select: '*, raw_material_suppliers(name), scrap_dealers(name)',
-    columns: [
-      'date',
-      'party_type',
-      'party_name',
-      'type',
-      'amount',
-      'payment_mode',
-      'payment_app',
-      'paid_to',
-      'reference_no',
-      'bank_account',
-      'paid_by',
-      'note',
-      'created_at',
-    ],
-    flatten: (row) => {
-      const party = nested(row, 'raw_material_suppliers') ?? nested(row, 'scrap_dealers')
-      return {
-        date: row.date,
-        party_type: row.party_type,
-        party_name: party?.name ?? '',
-        type: row.type,
-        amount: row.amount,
-        payment_mode: row.payment_mode,
-        payment_app: row.payment_app,
-        paid_to: row.paid_to,
-        reference_no: row.reference_no,
-        bank_account: row.bank_account,
-        paid_by: row.paid_by,
-        note: row.note,
-        created_at: row.created_at,
-      }
-    },
-  },
-  {
-    key: 'expenses',
-    label: 'Expenses',
-    description: 'Salaries, bills and every other expense logged',
-    table: 'expenses',
-    select: '*, expense_categories(name)',
-    columns: ['paid_date', 'expense_type', 'amount', 'for_from', 'for_to', 'units', 'notes', 'created_at'],
-    flatten: (row) => {
-      const c = nested(row, 'expense_categories')
-      return {
-        paid_date: row.entry_date,
-        expense_type: c?.name ?? '',
-        amount: row.amount,
-        for_from: row.period_start,
-        for_to: row.period_end,
-        units: row.units ?? '',
-        notes: row.notes,
-        created_at: row.created_at,
-      }
-    },
-  },
-  {
-    key: 'expense_types',
-    label: 'Expense Types',
-    description: 'Expense categories, active or removed',
-    table: 'expense_categories',
-    select: '*',
-    columns: ['name', 'period_type', 'in_production_cost', 'tracks_units', 'is_active', 'created_at'],
-    flatten: (row) => row,
-  },
-]
-
+/**
+ * Full backup in one Excel file — every table of the app, one sheet each —
+ * to download or send straight to Google Drive from the phone's share sheet.
+ * The automatic 15-day Google Drive backup (see backup/README.md) makes the
+ * same file; this screen shows when the last one of either kind was taken.
+ */
 export function BackupTab() {
-  const [exporting, setExporting] = useState<string | null>(null)
+  const { data: company } = useCompanySettings()
+  const queryClient = useQueryClient()
   const { showToast } = useToast()
+  const [progress, setProgress] = useState<string | null>(null)
 
-  async function handleExport(def: ExportDef) {
-    setExporting(def.key)
+  const lastAt = company?.last_backup_at ?? null
+  const days = lastAt ? daysSince(lastAt) : null
+  const due = days === null || days >= BACKUP_DUE_AFTER_DAYS
+  const canShareFiles =
+    typeof navigator !== 'undefined' &&
+    'canShare' in navigator &&
+    navigator.canShare({ files: [new File([''], 'x.xlsx', { type: XLSX_TYPE })] })
+
+  async function makeBackup(mode: 'share' | 'download') {
+    setProgress('Reading data…')
     try {
-      const rows = await fetchAllRows(def.table, def.select)
-      const flattened = rows.map(def.flatten)
-      const csv = rowsToCsv(def.columns, flattened)
-      downloadCsv(`${def.key}_${todayISODate()}.csv`, csv)
-      showToast(`${def.label} exported (${rows.length} row${rows.length === 1 ? '' : 's'})`)
-    } catch {
-      showToast(`Could not export ${def.label}`, 'error')
-    } finally {
-      setExporting(null)
-    }
-  }
+      const now = new Date()
+      const data = await fetchBackupData((done, total) => setProgress(`Reading data ${done} of ${total}…`))
+      setProgress('Making Excel file…')
+      const bytes = buildXlsx(buildBackupSheets(data, now, company?.business_name ?? 'Sai Ganga'))
+      const filename = `${backupFileBase(now)}.xlsx`
+      const blob = new Blob([bytes as BlobPart], { type: XLSX_TYPE })
 
-  // Sequential, not parallel — triggering several downloads at once is
-  // exactly the pattern browsers throttle/block as a popup-spam heuristic.
-  async function handleExportAll() {
-    for (const def of EXPORTS) {
-      await handleExport(def)
+      if (mode === 'share' && canShareFiles) {
+        try {
+          await navigator.share({ title: filename, files: [new File([blob], filename, { type: XLSX_TYPE })] })
+        } catch (err) {
+          // Closing the share sheet isn't a failure, but nothing was saved either.
+          if ((err as { name?: string })?.name === 'AbortError') {
+            showToast('Backup not saved — the share was closed', 'error')
+            return
+          }
+          throw err
+        }
+      } else {
+        saveToDevice(blob, filename)
+      }
+
+      await recordBackupTaken('app')
+      queryClient.invalidateQueries({ queryKey: ['company_settings'] })
+      const rows = Object.values(data).reduce((sum, r) => sum + r.length, 0)
+      showToast(`Backup saved — ${rows} entries in ${BACKUP_TABLES.length} sheets`)
+    } catch {
+      showToast('Could not make the backup. Check your internet and try again.', 'error')
+    } finally {
+      setProgress(null)
     }
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
-        <span className="shrink-0 rounded-full bg-teal-50 p-2.5 text-teal-600 dark:bg-teal-950/60 dark:text-teal-400">
-          <DatabaseBackup className="h-5 w-5" />
+    <div className="space-y-4">
+      {/* When was the last backup? */}
+      <div
+        className={`flex items-center gap-3 rounded-2xl border p-4 ${
+          due
+            ? 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30'
+            : 'border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30'
+        }`}
+      >
+        <span
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
+            due
+              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300'
+              : 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+          }`}
+        >
+          {due ? <CircleAlert className="h-5 w-5" /> : <CalendarCheck className="h-5 w-5" />}
         </span>
-        <div className="min-w-0 flex-1">
-          <p className="font-medium text-slate-900 dark:text-slate-100">Back up your records</p>
-          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-            Download every entry as a spreadsheet (CSV) file you can open in Excel or Google Sheets.
-            Do this regularly — it's the only copy of your data that lives outside this app.
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            {lastAt === null
+              ? 'No backup taken yet'
+              : `Last backup: ${new Date(lastAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} (${days === 0 ? 'today' : `${days} ${days === 1 ? 'day' : 'days'} ago`})`}
+          </p>
+          <p className="text-xs text-slate-600 dark:text-slate-400">
+            {lastAt && (company?.last_backup_by === 'auto' ? 'Automatic backup to Google Drive. ' : 'Taken from this app. ')}
+            {due ? 'Please take a backup now.' : `Next backup in ${BACKUP_DUE_AFTER_DAYS - (days ?? 0)} days.`}
           </p>
         </div>
       </div>
 
-      <button
-        type="button"
-        onClick={handleExportAll}
-        disabled={exporting !== null}
-        className="flex w-full items-center justify-center gap-2 rounded-lg bg-teal-600 py-3 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-40"
-      >
-        <Download className="h-4 w-4" />
-        {exporting ? 'Exporting…' : 'Export Everything'}
-      </button>
+      <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <div>
+          <p className="font-semibold text-slate-900 dark:text-slate-100">Full backup in one Excel file</p>
+          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+            All your data — bills, sales, payments, purchases, stock, expenses and settings — in one file, one sheet
+            each. Keep it in Google Drive. It is the only copy of your data outside this app.
+          </p>
+        </div>
 
-      <ul className="space-y-2">
-        {EXPORTS.map((def) => (
-          <li
-            key={def.key}
-            className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-4 py-3 dark:border-slate-800"
-          >
-            <div className="min-w-0">
-              <p className="font-medium text-slate-900 dark:text-slate-100">{def.label}</p>
-              <p className="truncate text-xs text-slate-500 dark:text-slate-400">{def.description}</p>
-            </div>
+        <button
+          type="button"
+          onClick={() => makeBackup('share')}
+          disabled={progress !== null}
+          className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-teal-600 text-base font-semibold text-white hover:bg-teal-700 disabled:opacity-60"
+        >
+          <CloudUpload className="h-5 w-5" />
+          {progress ?? (canShareFiles ? 'Save Backup to Google Drive' : 'Download Backup (Excel)')}
+        </button>
+        {canShareFiles && (
+          <>
+            <p className="-mt-1 text-center text-xs text-slate-500 dark:text-slate-400">
+              Then choose <span className="font-semibold">Drive</span> in the share list.
+            </p>
             <button
               type="button"
-              onClick={() => handleExport(def)}
-              disabled={exporting !== null}
-              aria-label={`Download ${def.label}`}
-              className="flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+              onClick={() => makeBackup('download')}
+              disabled={progress !== null}
+              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
             >
-              <Download className="h-3.5 w-3.5" />
-              {exporting === def.key ? 'Exporting…' : 'CSV'}
+              <Download className="h-4 w-4" />
+              Download to this phone instead
             </button>
-          </li>
-        ))}
-      </ul>
+          </>
+        )}
+      </div>
+
+      <div className="flex gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-sm dark:border-slate-800 dark:bg-slate-900">
+        <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-teal-600 dark:text-teal-400" />
+        <div className="space-y-1 text-slate-600 dark:text-slate-300">
+          <p className="font-semibold text-slate-900 dark:text-slate-100">Automatic backup every {BACKUP_DUE_AFTER_DAYS} days</p>
+          <p>
+            Once set up, a backup is saved to the <span className="font-semibold">Sai Ganga Backups</span> folder in
+            your Google Drive every {BACKUP_DUE_AFTER_DAYS} days, without opening the app.
+            {company?.last_backup_by === 'auto' ? ' It is working.' : ' It is set up once, from a computer.'}
+          </p>
+        </div>
+      </div>
     </div>
   )
 }
