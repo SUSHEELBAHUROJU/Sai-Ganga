@@ -1681,8 +1681,27 @@ export function generateMyCostsReportDoc(period: StockCheckPeriod, myCosts: MyCo
     { label: 'Cost / kg of pipe', value: mine.costPerKg === null ? '-' : rs(mine.costPerKg), tone: 'red' },
     { label: 'Total cost', value: rs(mine.totalCost) },
     { label: 'Material cost', value: rs(mine.materialCost), note: `${num(mine.usedKg)} kg used` },
-    { label: 'Pipe produced', value: `${num(period.produced_kg)} kg`, tone: 'green' },
+    { label: 'Pipe produced', value: `${num(period.produced_kg)} kg`, tone: 'green', note: `${num(period.produced_pcs)} pieces` },
   ])
+  {
+    // Material in vs pipe out: what was consumed and how much of it was lost.
+    const wastePct = period.consumed_kg > 0 ? (period.waste_kg / period.consumed_kg) * 100 : null
+    y = drawKeyFigures(doc, y - 1, [
+      {
+        label: 'Material used',
+        value: `${num(period.consumed_kg)} kg`,
+        tone: 'gray',
+        note: period.produced_kg > 0 ? `${(period.consumed_kg / period.produced_kg).toLocaleString('en-IN', { maximumFractionDigits: 3 })} kg per kg pipe` : undefined,
+      },
+      {
+        label: 'Wastage',
+        value: `${num(period.waste_kg)} kg`,
+        tone: 'red',
+        note: wastePct === null ? undefined : `${num(Math.round(wastePct * 10) / 10)}% of material used`,
+      },
+      { label: 'Recycled used', value: `${num(period.recycled_used_kg)} kg`, tone: 'gray' },
+    ])
+  }
   {
     const breakdown = costBreakdown(period, myCosts)
     if (breakdown) y = drawCostBreakdown(doc, y, breakdown, 'From your own costs: your material prices, wages, electricity and other costs.')
@@ -1730,7 +1749,12 @@ export function generateMyCostsReportDoc(period: StockCheckPeriod, myCosts: MyCo
       ...myCosts.extras.map((e) => ({ label: e.name.slice(0, 30), value: `Rs. ${money(e.amount)}` })),
       ...(myCosts.includeAppExpenses ? [{ label: 'Other expenses', value: `Rs. ${money(mine.appExpenses)}` }] : []),
       { label: 'Total cost', value: `Rs. ${money(mine.totalCost)}` },
+      { label: 'Material used', value: `${num(period.consumed_kg)} kg` },
       { label: 'Pipe produced', value: `${num(period.produced_kg)} kg` },
+      {
+        label: 'Wastage (used - made)',
+        value: `${num(period.waste_kg)} kg${period.consumed_kg > 0 ? ` (${num(Math.round((period.waste_kg / period.consumed_kg) * 1000) / 10)}%)` : ''}`,
+      },
     ],
     { label: 'COST / KG PIPE', value: mine.costPerKg === null ? '-' : `Rs. ${money(mine.costPerKg)}` },
   )

@@ -22,9 +22,19 @@ import { formatShortDate, todayISODate } from '../../lib/date'
 import { formatQty } from '../../lib/format'
 import { SectionTitle, Stat } from './weekParts'
 import { CostBreakdownBar, CostBreakdownTable } from '../../components/CostBreakdownView'
-import { threeMonthsAgo, useSharePdf } from './weekUtils'
+import { threeMonthsAgo, useSharePdf, wastePercent } from './weekUtils'
 
 const rupeesPerKg = (n: number | null) => (n === null ? '—' : `₹${formatQty(n)}`)
+
+/** "12.5%" — one decimal, or a dash when nothing was used. */
+const percentText = (n: number | null) => (n === null ? '—' : `${formatQty(Math.round(n * 10) / 10)}%`)
+
+/** "1.044 kg per kg pipe" — material that went into each kg of pipe made. */
+function perKgPipe(period: StockCheckPeriod): string | undefined {
+  if (!(period.produced_kg > 0)) return undefined
+  const kg = period.consumed_kg / period.produced_kg
+  return `${kg.toLocaleString('en-IN', { maximumFractionDigits: 3 })} kg per kg pipe`
+}
 
 /** "89%" for material, electricity and wages — the week-by-week columns. */
 function sharesOf(b: CostBreakdown | null) {
@@ -438,6 +448,12 @@ function MyCostsCard({
 
       <div className="grid grid-cols-2 gap-2">
         <Stat label="Pipe made" value={`${formatQty(period.produced_kg)} kg`} sub={`${formatQty(period.produced_pcs)} pcs`} />
+        <Stat label="Material used" value={`${formatQty(period.consumed_kg)} kg`} sub={perKgPipe(period)} />
+        <Stat
+          label="Wastage"
+          value={`${formatQty(period.waste_kg)} kg`}
+          sub={`${percentText(wastePercent(period))} of material used`}
+        />
         <Stat label="Recycled used" value={`${formatQty(period.recycled_used_kg)} kg`} />
         <Stat label="App cost / kg" value={rupeesPerKg(costPerKgProduced(period))} />
         <Stat
@@ -526,11 +542,13 @@ export function MyCostsTab() {
         <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
           <SectionTitle>Week by Week</SectionTitle>
           <div className="-mx-1 overflow-x-auto">
-            <table className="w-full min-w-[460px] text-left text-xs">
+            <table className="w-full min-w-[600px] text-left text-xs">
               <thead className="text-slate-500 dark:text-slate-400">
                 <tr>
                   <th className="px-1 py-1 font-semibold">Week ending</th>
                   <th className="px-1 py-1 text-right font-semibold">Made</th>
+                  <th className="px-1 py-1 text-right font-semibold">Used</th>
+                  <th className="px-1 py-1 text-right font-semibold">Wastage</th>
                   <th className="px-1 py-1 text-right font-semibold">Recycled used</th>
                   <th className="px-1 py-1 text-right font-semibold">App ₹/kg</th>
                   <th className="px-1 py-1 text-right font-semibold">Your ₹/kg</th>
@@ -549,6 +567,11 @@ export function MyCostsTab() {
                     <tr key={p.count_id} className="border-t border-slate-100 dark:border-slate-800">
                       <td className="px-1 py-1.5">{formatShortDate(p.count_date)}</td>
                       <td className="px-1 py-1.5 text-right">{formatQty(p.produced_kg)}</td>
+                      <td className="px-1 py-1.5 text-right">{formatQty(p.consumed_kg)}</td>
+                      <td className="px-1 py-1.5 text-right">
+                        {formatQty(p.waste_kg)}
+                        <span className="text-slate-400 dark:text-slate-500"> ({percentText(wastePercent(p))})</span>
+                      </td>
                       <td className="px-1 py-1.5 text-right">{formatQty(p.recycled_used_kg)}</td>
                       <td className="px-1 py-1.5 text-right">{appCpk === null ? '—' : formatQty(appCpk)}</td>
                       <td className="px-1 py-1.5 text-right font-semibold text-purple-700 dark:text-purple-300">
