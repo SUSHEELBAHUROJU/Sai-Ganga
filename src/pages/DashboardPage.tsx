@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom'
-import { AlertTriangle, CalendarPlus, ChevronRight } from 'lucide-react'
+import { AlertTriangle, CalendarPlus, ChevronRight, CloudUpload } from 'lucide-react'
 import { useTodaySummary, useMissedDays } from '../hooks/useDashboard'
 import { useDismissedNudges } from '../hooks/useDismissedNudges'
+import { useCompanySettings } from '../hooks/useCompanySettings'
+import { BACKUP_DUE_AFTER_DAYS } from '../lib/backupSchedule'
 import { useFinishedGoodsStock, useRawMaterialStock, useScrapStock } from '../hooks/useStock'
 import { DashboardCurrentStock } from './dashboard/DashboardCurrentStock'
 import { ACTION_STYLES, type ActionKey } from '../lib/actionColors'
@@ -19,6 +21,17 @@ export function DashboardPage() {
   const { data: finishedGoods } = useFinishedGoodsStock()
   const { data: rawMaterials } = useRawMaterialStock()
   const { data: scrap } = useScrapStock()
+  const { data: company } = useCompanySettings()
+
+  // Backup reminder — only once the database records backups (the column
+  // exists), otherwise it could never be cleared.
+  const backupDaysAgo =
+    company && 'last_backup_at' in company
+      ? company.last_backup_at
+        ? Math.floor((Date.now() - new Date(company.last_backup_at).getTime()) / 86_400_000)
+        : null
+      : undefined
+  const backupDue = backupDaysAgo !== undefined && (backupDaysAgo === null || backupDaysAgo >= BACKUP_DUE_AFTER_DAYS)
 
   // One nudge at a time keeps the landing screen uncluttered. Most recent
   // first — that's the day the user can still recall the numbers for; clearing
@@ -135,6 +148,21 @@ export function DashboardPage() {
             {lowStockByCategory.map((c) => `${c.count} ${c.label}`).join(' · ')}
           </p>
           <ChevronRight className="h-5 w-5 shrink-0 text-red-400" />
+        </Link>
+      )}
+
+      {backupDue && (
+        <Link
+          to="/settings?section=backup"
+          className="flex items-center gap-3 rounded-xl border border-sky-200 bg-sky-50 p-4 hover:bg-sky-100 dark:border-sky-900 dark:bg-sky-950/40 dark:hover:bg-sky-950/70"
+        >
+          <CloudUpload className="h-5 w-5 shrink-0 text-sky-600 dark:text-sky-400" />
+          <p className="min-w-0 flex-1 text-sm font-medium text-sky-900 dark:text-sky-200">
+            {backupDaysAgo === null
+              ? 'No backup of your data yet — tap to save one to Google Drive'
+              : `Last backup was ${backupDaysAgo} days ago — tap to save a new one`}
+          </p>
+          <ChevronRight className="h-5 w-5 shrink-0 text-sky-400" />
         </Link>
       )}
     </div>

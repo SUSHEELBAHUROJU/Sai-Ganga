@@ -119,6 +119,8 @@ export type Database = {
           business_name: string
           gst_number: string
           id: string
+          last_backup_at: string | null
+          last_backup_by: string | null
           next_bill_number: number
           phone: string | null
           updated_at: string
@@ -130,6 +132,8 @@ export type Database = {
           business_name?: string
           gst_number?: string
           id?: string
+          last_backup_at?: string | null
+          last_backup_by?: string | null
           next_bill_number?: number
           phone?: string | null
           updated_at?: string
@@ -141,6 +145,8 @@ export type Database = {
           business_name?: string
           gst_number?: string
           id?: string
+          last_backup_at?: string | null
+          last_backup_by?: string | null
           next_bill_number?: number
           phone?: string | null
           updated_at?: string

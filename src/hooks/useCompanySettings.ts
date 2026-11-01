@@ -12,6 +12,10 @@ export type CompanySettings = {
   next_bill_number: number
   bill_start_date: string
   updated_at: string
+  /** When the last full backup was taken — null until the first one. */
+  last_backup_at?: string | null
+  /** 'app' (Download Data) or 'auto' (Google Drive script). */
+  last_backup_by?: string | null
 }
 
 export type UpdateCompanySettingsInput = Partial<Omit<CompanySettings, 'id' | 'updated_at'>>
