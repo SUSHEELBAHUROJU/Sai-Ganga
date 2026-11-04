@@ -72,6 +72,26 @@ export function rawPurchaseSupplierName(row: RawPurchaseRecordRow): string | nul
   return row.raw_material_suppliers?.name ?? row.supplier_name ?? null
 }
 
+/** What a purchase cost: rate per kg, material cost, transport, and the two together. */
+export type PurchaseMoney = { kg: number; rate: number | null; cost: number; transport: number; total: number }
+
+export function purchaseMoney(record: EntryRecord): PurchaseMoney | null {
+  if (record.kind !== 'raw_material_purchase' && record.kind !== 'scrap_purchase') return null
+  const kg = Number(record.kind === 'raw_material_purchase' ? record.row.total_qty_kg : record.row.quantity_kg) || 0
+  const cost = Number(record.row.cost) || 0
+  const transport = Number(record.row.transport_charges) || 0
+  const rate = record.row.price_per_kg != null ? Number(record.row.price_per_kg) : kg > 0 && cost > 0 ? cost / kg : null
+  return { kg, rate, cost, transport, total: cost + transport }
+}
+
+/** "4500 kg × ₹82/kg = ₹3,69,000 + ₹1,500 transport" — `rupee` is "₹" on screen, "Rs. " in PDFs. */
+export function purchasePriceText(m: PurchaseMoney, rupee = '₹'): string {
+  const money = (n: number) => `${rupee}${n.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`
+  const base =
+    m.rate !== null ? `${formatQty(m.kg)} kg × ${money(Math.round(m.rate * 100) / 100)}/kg = ${money(m.cost)}` : `No price entered`
+  return m.transport > 0 ? `${base} + ${money(m.transport)} transport` : base
+}
+
 /**
  * Display fields for a record card — title, optional subtitle, and amount.
  * Production/sale amounts are kg-primary (with pcs riding along) since the
@@ -398,13 +418,15 @@ export function buildRecordsReport(records: EntryRecord[]): RecordsReportData {
   const toEntry = (record: EntryRecord): RecordsReportEntry => {
     const { title, subtitle, amount, amountKgPcs } = describeRecord(record)
     const isExpense = record.kind === 'expense'
+    const money = purchaseMoney(record)
+    const rate = money?.rate != null ? ` @ Rs. ${formatQty(Math.round(money.rate * 100) / 100)}/kg` : ''
     return {
       type: 'entry',
       kind: record.kind,
       kindLabel: RECORD_KIND_LABEL[record.kind],
-      details: subtitle ? `${title} — ${subtitle}` : title,
+      details: (subtitle ? `${title} — ${subtitle}` : title) + rate,
       qty: isExpense ? '' : amountKgPcs ? kgPcsText(amountKgPcs.kg, amountKgPcs.pcs) : amount,
-      amount: isExpense ? Number(record.row.amount) || 0 : null,
+      amount: isExpense ? Number(record.row.amount) || 0 : money ? money.total : null,
     }
   }
 
@@ -440,7 +462,8 @@ export function buildRecordsReport(records: EntryRecord[]): RecordsReportData {
       for (let i = 0; i < dayRecords.length; i++) {
         const record = dayRecords[i]
         lines.push(toEntry(record))
-        amount += record.kind === 'expense' ? Number(record.row.amount) || 0 : 0
+        // Money paid out that day: expenses, and purchases (material + transport).
+        amount += record.kind === 'expense' ? Number(record.row.amount) || 0 : (purchaseMoney(record)?.total ?? 0)
 
         if (record.kind !== 'production' && record.kind !== 'sale') continue
 
@@ -550,6 +573,8 @@ export type GroupedTransaction = {
   /** Rupee total — set only for money-denominated kinds (expenses), where a
    *  kg figure would be meaningless. */
   totalAmount: number | null
+  /** Purchases only: material cost + transport of every item in the group. */
+  totalMoney: number | null
   bill: BillRef | null
   items: EntryRecord[]
 }
@@ -606,15 +631,13 @@ export function groupRecordsByTransaction(records: EntryRecord[]): [string, Grou
       } else if (record.kind === 'production') {
         title = 'Pipe Production'
       } else if (record.kind === 'raw_material_purchase') {
-        title = 'Raw Material Purchase'
-        const supplierName = rawPurchaseSupplierName(record.row)
-        subtitle = supplierName ? `Supplier: ${supplierName}` : null
+        // Who it was bought from; the badge already says it is a raw material purchase.
+        title = rawPurchaseSupplierName(record.row) ?? 'Raw Material Purchase'
       } else if (record.kind === 'expense') {
         title = record.row.expense_categories?.name ?? 'Expense'
         subtitle = formatExpensePeriod(record.row.period_start, record.row.period_end, record.row.entry_date)
       } else if (record.kind === 'scrap_purchase') {
-        title = 'Scrap Purchase'
-        subtitle = record.row.scrap_dealers?.name ? `Dealer: ${record.row.scrap_dealers.name}` : null
+        title = record.row.scrap_dealers?.name ?? 'Scrap Purchase'
       } else if (record.kind === 'recycling') {
         const sourceName = record.row.scrap_types?.name ?? ''
         if (sourceName.toLowerCase().includes('ldpe') || sourceName.toLowerCase().includes('old ldpe')) {
@@ -638,6 +661,7 @@ export function groupRecordsByTransaction(records: EntryRecord[]): [string, Grou
         totalKg: 0,
         totalPcs: 0,
         totalAmount: record.kind === 'expense' ? 0 : null,
+        totalMoney: record.kind === 'raw_material_purchase' || record.kind === 'scrap_purchase' ? 0 : null,
         bill,
         items: [],
       }
@@ -645,6 +669,8 @@ export function groupRecordsByTransaction(records: EntryRecord[]): [string, Grou
     }
 
     existingGroup.items.push(record)
+    const money = purchaseMoney(record)
+    if (money && existingGroup.totalMoney !== null) existingGroup.totalMoney += money.total
 
     // Accumulate total weight and pcs
     if (record.kind === 'production' || record.kind === 'sale') {

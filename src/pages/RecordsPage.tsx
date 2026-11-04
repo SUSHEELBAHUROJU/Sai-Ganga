@@ -22,6 +22,8 @@ import {
   describeRecordAmountText,
   RECORD_KIND_LABEL,
   rawPurchaseReturnedKg,
+  purchaseMoney,
+  purchasePriceText,
   type EntryRecord,
   type RecordKind,
   type RawPurchaseRecordRow,
@@ -534,6 +536,11 @@ export function RecordsPage() {
                               {formatQty(group.totalKg)} kg
                             </span>
                           )}
+                          {group.totalMoney !== null && group.totalMoney > 0 && (
+                            <span className="block text-sm font-semibold text-orange-700 dark:text-orange-400">
+                              ₹{group.totalMoney.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                            </span>
+                          )}
                         </div>
 
                         {isMultiItem && (
@@ -564,6 +571,7 @@ export function RecordsPage() {
                           const { title: itemTitle, amount, amountKgPcs } = describeRecord(item)
                           const returnedKg =
                             item.kind === 'raw_material_purchase' ? rawPurchaseReturnedKg(item.row) : 0
+                          const itemMoney = purchaseMoney(item)
                           // A billed sale line changes only through its bill —
                           // editing it here would move stock but leave the
                           // bill and the customer's due on the old figures.
@@ -576,8 +584,13 @@ export function RecordsPage() {
                             >
                               <div className="min-w-0 flex-1">
                                 <span className="font-medium text-slate-800 dark:text-slate-200">
-                                  {isMultiItem ? itemTitle : group.subtitle || itemTitle}
+                                  {/* Purchases always name the material — the card heading is the supplier. */}
+                                  {isMultiItem || itemMoney ? itemTitle : group.subtitle || itemTitle}
                                 </span>
+
+                                {itemMoney && (
+                                  <p className="text-slate-500 dark:text-slate-400">{purchasePriceText(itemMoney)}</p>
+                                )}
 
                                 {returnedKg > 0 && (
                                   <p className="font-semibold text-orange-700 dark:text-orange-400">
