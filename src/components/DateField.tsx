@@ -28,7 +28,7 @@ export function DateField({ value, onChange }: DateFieldProps) {
           const next = e.target.value
           onChange(!next || isFutureISODate(next) ? todayISODate() : next)
         }}
-        className="min-w-0 flex-1 bg-transparent text-sm font-medium text-slate-900 outline-none sm:w-[9.5rem] sm:flex-none dark:text-slate-100"
+        className="min-w-0 flex-1 bg-transparent text-base sm:text-sm font-medium text-slate-900 outline-none sm:w-[9.5rem] sm:flex-none dark:text-slate-100"
       />
       <span className="shrink-0 text-xs font-medium text-teal-600 dark:text-teal-400">
         {formatDateLabel(value)}

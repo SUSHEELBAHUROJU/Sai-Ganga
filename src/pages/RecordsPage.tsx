@@ -305,7 +305,7 @@ export function RecordsPage() {
                 setFromDate(next)
                 setToDate((prev) => clampRangeEnd(next, prev))
               }}
-              className="min-h-[44px] min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              className="min-h-[44px] min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
           </label>
           <label className="text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -320,7 +320,7 @@ export function RecordsPage() {
                 setToDate(next)
                 setFromDate((prev) => clampRangeStart(prev, next))
               }}
-              className="min-h-[44px] min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              className="min-h-[44px] min-w-0 rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
           </label>
         </div>

@@ -163,43 +163,26 @@ export function ExpenseReportTab() {
                 No purchases in this period.
               </p>
             ) : (
-              <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-                <table className="w-full min-w-[34rem] text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-slate-500 dark:text-slate-400">
-                      <th className="pb-2 font-medium">Date</th>
-                      <th className="pb-2 font-medium">Supplier</th>
-                      <th className="pb-2 font-medium">Item</th>
-                      <th className="pb-2 text-right font-medium">Qty</th>
-                      <th className="pb-2 text-right font-medium">₹/kg</th>
-                      <th className="pb-2 text-right font-medium">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.purchases.map((p, i) => (
-                      <tr
-                        key={`${p.entry_date}-${i}`}
-                        className="border-t border-slate-100 dark:border-slate-800"
-                      >
-                        <td className="whitespace-nowrap py-2 text-slate-600 dark:text-slate-400">
-                          {formatShortDate(p.entry_date)}
-                        </td>
-                        <td className="py-2 text-slate-700 dark:text-slate-300">{p.supplier}</td>
-                        <td className="py-2 text-slate-700 dark:text-slate-300">{p.item}</td>
-                        <td className="whitespace-nowrap py-2 text-right tabular-nums">
-                          {formatQty(p.quantityKg)} kg
-                        </td>
-                        <td className="whitespace-nowrap py-2 text-right tabular-nums text-slate-600 dark:text-slate-400">
-                          {p.ratePerKg === null ? '—' : `₹${formatQty(p.ratePerKg)}`}
-                        </td>
-                        <td className="whitespace-nowrap py-2 text-right font-medium tabular-nums">
-                          {p.total === null ? '—' : `₹${formatQty(p.total)}`}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              // A list, not a six-column table, so it fits a phone without hiding columns.
+              <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                {report.purchases.map((p, i) => (
+                  <li key={`${p.entry_date}-${i}`} className="flex items-start justify-between gap-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="font-medium text-slate-800 dark:text-slate-200">{p.supplier}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {formatShortDate(p.entry_date)} · {p.item} · {formatQty(p.quantityKg)} kg
+                        {p.ratePerKg === null ? '' : ` @ ₹${formatQty(p.ratePerKg)}/kg`}
+                      </p>
+                    </div>
+                    <p className="shrink-0 font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                      {/* A return is money back: "−₹4,000", not "₹-4,000". */}
+                      {p.total === null
+                        ? '—'
+                        : `${p.total < 0 ? '−' : ''}₹${Math.abs(p.total).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
+                    </p>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
 

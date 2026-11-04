@@ -60,35 +60,25 @@ export function MonthlyTab({ fromDate, toDate }: { fromDate: string; toDate: str
             {report.byProduct.length === 0 ? (
               <p className="text-sm text-slate-400 dark:text-slate-500">No activity in this range.</p>
             ) : (
-              // Scrolls within its own row (bled to the card edge on a phone
-              // so the affordance is visible) rather than widening the page.
-              // min-w keeps the three columns readable instead of crushing them.
-              <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-                <table className="w-full min-w-[22rem] text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-slate-500 dark:text-slate-400">
-                      <th className="pb-2 font-medium">Product</th>
-                      <th className="pb-2 text-right font-medium">Produced</th>
-                      <th className="pb-2 text-right font-medium">Sold</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.byProduct.map((p) => (
-                      <tr key={p.label} className="border-t border-slate-100 dark:border-slate-800">
-                        <td className="py-2 whitespace-nowrap text-slate-700 dark:text-slate-300">
-                          {p.label}
-                        </td>
-                        <td className="py-2 text-right tabular-nums">
-                          <AmountKgPcs kg={p.producedKg} pcs={p.producedPcs} />
-                        </td>
-                        <td className="py-2 text-right tabular-nums">
-                          <AmountKgPcs kg={p.soldKg} pcs={p.soldPcs} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              // One row per size with Made / Sold under it — a three-column
+              // table was wider than a phone and hid the Sold column.
+              <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                {report.byProduct.map((p) => (
+                  <li key={p.label} className="py-2">
+                    <p className="text-sm font-medium text-slate-800 dark:text-slate-200">{p.label}</p>
+                    <div className="mt-0.5 grid grid-cols-2 gap-2 text-sm tabular-nums">
+                      <div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Made</p>
+                        <AmountKgPcs kg={p.producedKg} pcs={p.producedPcs} />
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Sold</p>
+                        <AmountKgPcs kg={p.soldKg} pcs={p.soldPcs} />
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
 

@@ -236,7 +236,7 @@ export function WeeklyReportTab() {
         <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
           <SectionTitle>Week by Week</SectionTitle>
           <div className="-mx-1 overflow-x-auto">
-            <table className="w-full min-w-[320px] text-left text-xs">
+            <table className="w-full min-w-[280px] text-left text-xs">
               <thead className="text-slate-500 dark:text-slate-400">
                 <tr>
                   <th className="px-1 py-1 font-semibold">Week ending</th>

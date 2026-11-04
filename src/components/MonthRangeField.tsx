@@ -76,7 +76,7 @@ export function MonthRangeField({ value, onChange }: MonthRangeFieldProps) {
             type="month"
             value={value.month ?? ''}
             onChange={(e) => selectMonth(e.target.value)}
-            className="min-w-0 flex-1 bg-transparent text-sm font-medium text-slate-900 outline-none dark:text-slate-100"
+            className="min-w-0 flex-1 bg-transparent text-base sm:text-sm font-medium text-slate-900 outline-none dark:text-slate-100"
           />
         </label>
       ) : (
@@ -91,7 +91,7 @@ export function MonthRangeField({ value, onChange }: MonthRangeFieldProps) {
               const to = next > value.toDate ? next : value.toDate
               onChange({ fromDate: next, toDate: clampRangeEnd(next, to), month: null })
             }}
-            className="min-w-0 flex-1 basis-28 bg-transparent text-sm font-medium text-slate-900 outline-none sm:w-[8.5rem] sm:flex-none sm:basis-auto dark:text-slate-100"
+            className="min-w-0 flex-1 basis-28 bg-transparent text-base sm:text-sm font-medium text-slate-900 outline-none sm:w-[8.5rem] sm:flex-none sm:basis-auto dark:text-slate-100"
           />
           <span className="shrink-0 text-xs text-slate-400 dark:text-slate-500">to</span>
           <input
@@ -104,7 +104,7 @@ export function MonthRangeField({ value, onChange }: MonthRangeFieldProps) {
               const from = next < value.fromDate ? next : value.fromDate
               onChange({ fromDate: clampRangeStart(from, next), toDate: next, month: null })
             }}
-            className="min-w-0 flex-1 basis-28 bg-transparent text-sm font-medium text-slate-900 outline-none sm:w-[8.5rem] sm:flex-none sm:basis-auto dark:text-slate-100"
+            className="min-w-0 flex-1 basis-28 bg-transparent text-base sm:text-sm font-medium text-slate-900 outline-none sm:w-[8.5rem] sm:flex-none sm:basis-auto dark:text-slate-100"
           />
         </div>
       )}

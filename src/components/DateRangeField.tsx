@@ -57,7 +57,7 @@ export function DateRangeField({
             const to = next > toDate ? next : toDate
             onChange({ fromDate: next, toDate: clampRangeEnd(next, to) })
           }}
-          className={`min-w-0 flex-1 basis-28 bg-transparent text-sm font-medium outline-none sm:w-[8.5rem] sm:flex-none sm:basis-auto ${
+          className={`min-w-0 flex-1 basis-28 bg-transparent text-base sm:text-sm font-medium outline-none sm:w-[8.5rem] sm:flex-none sm:basis-auto ${
             isAll ? 'text-slate-400 dark:text-slate-500' : 'text-slate-900 dark:text-slate-100'
           }`}
         />
@@ -73,7 +73,7 @@ export function DateRangeField({
             const from = next < fromDate ? next : fromDate
             onChange({ fromDate: clampRangeStart(from, next), toDate: next })
           }}
-          className={`min-w-0 flex-1 basis-28 bg-transparent text-sm font-medium outline-none sm:w-[8.5rem] sm:flex-none sm:basis-auto ${
+          className={`min-w-0 flex-1 basis-28 bg-transparent text-base sm:text-sm font-medium outline-none sm:w-[8.5rem] sm:flex-none sm:basis-auto ${
             isAll ? 'text-slate-400 dark:text-slate-500' : 'text-slate-900 dark:text-slate-100'
           }`}
         />

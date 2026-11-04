@@ -89,7 +89,7 @@ function StockRow({ itemType, itemId, label, unit, initialBalance, initialThresh
             value={balance}
             onChange={(e) => setBalance(e.target.value)}
             placeholder="0"
-            className="min-h-[44px] w-full min-w-0 rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 sm:w-20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+            className="min-h-[44px] w-full min-w-0 rounded-md border border-slate-300 px-2 py-1.5 text-base sm:text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 sm:w-20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
           />
         </label>
 
@@ -102,7 +102,7 @@ function StockRow({ itemType, itemId, label, unit, initialBalance, initialThresh
             value={threshold}
             onChange={(e) => setThreshold(e.target.value)}
             placeholder="Off"
-            className="min-h-[44px] w-full min-w-0 rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 sm:w-20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+            className="min-h-[44px] w-full min-w-0 rounded-md border border-slate-300 px-2 py-1.5 text-base sm:text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 sm:w-20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
           />
         </label>
 
