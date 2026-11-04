@@ -11,7 +11,7 @@ import {
 } from '../../hooks/useStockChecks'
 import { generateStockCheckReportBlob, stockCheckPeriodLabel } from '../../lib/pdfGenerator'
 import { formatShortDate, todayISODate } from '../../lib/date'
-import { formatPipeProductLabel, formatQty } from '../../lib/format'
+import { formatPipeProductLabel, formatQty, formatRupees } from '../../lib/format'
 import { SectionTitle, Stat } from './weekParts'
 import { pct, threeMonthsAgo, useSharePdf, wastePercent } from './weekUtils'
 
@@ -45,10 +45,10 @@ function PeriodDetail({ period }: { period: StockCheckPeriod }) {
                 </div>
                 <div className="mt-1 flex items-center justify-between text-xs">
                   <span className="text-slate-500 dark:text-slate-400">
-                    {rate === null ? 'No rate' : `@ ₹${formatQty(rate)}/kg`}
+                    {rate === null ? 'No rate' : `@ ${formatRupees(rate)}/kg`}
                   </span>
                   <span className="font-mono font-bold text-purple-700 dark:text-purple-300">
-                    ₹{formatQty(m.consumed_cost)}
+                    {formatRupees(m.consumed_cost)}
                   </span>
                 </div>
                 {m.opening_count_date !== period.prev_count_date && (
@@ -73,7 +73,7 @@ function PeriodDetail({ period }: { period: StockCheckPeriod }) {
           })}
           <div className="flex items-center justify-between rounded-lg bg-purple-50 px-3 py-2 text-sm font-bold text-purple-800 dark:bg-purple-950/40 dark:text-purple-200">
             <span>Total · {formatQty(period.consumed_kg)} kg</span>
-            <span className="font-mono">₹{formatQty(period.consumed_cost)}</span>
+            <span className="font-mono">{formatRupees(period.consumed_cost)}</span>
           </div>
         </div>
       </div>
@@ -129,7 +129,7 @@ function PeriodDetail({ period }: { period: StockCheckPeriod }) {
           <span className="font-bold">{formatQty(period.produced_kg)} kg</span> of pipe
         </p>
         <div className="grid grid-cols-2 gap-2">
-          <Stat label="Cost / kg pipe" value={costPerKg === null ? '—' : `₹${formatQty(costPerKg)}`} sub="material + running" />
+          <Stat label="Cost / kg pipe" value={costPerKg === null ? '—' : `${formatRupees(costPerKg)}`} sub="material + running" />
           <Stat label="Output %" value={pct(yieldPercent(period))} />
           <Stat label="Waste" value={`${formatQty(period.waste_kg)} kg`} sub={pct(wastePercent(period))} />
           <Stat label="Factory waste recorded" value={`${formatQty(period.factory_waste_kg)} kg`} />
@@ -179,11 +179,11 @@ function PeriodCard({
       </button>
 
       <div className="grid grid-cols-2 gap-2">
-        <Stat label="Used" value={`${formatQty(period.consumed_kg)} kg`} sub={`₹${formatQty(period.consumed_cost)}`} />
+        <Stat label="Used" value={`${formatQty(period.consumed_kg)} kg`} sub={`${formatRupees(period.consumed_cost)}`} />
         <Stat label="Produced" value={`${formatQty(period.produced_kg)} kg`} sub={`${formatQty(period.produced_pcs)} pcs`} />
         <Stat
           label="Cost / kg pipe"
-          value={costPerKg === null ? '—' : `₹${formatQty(costPerKg)}`}
+          value={costPerKg === null ? '—' : `${formatRupees(costPerKg)}`}
           sub={period.overhead_cost > 0 ? 'material + running' : 'material only'}
         />
         <Stat label="Waste" value={`${formatQty(period.waste_kg)} kg`} sub={pct(wastePercent(period))} />
@@ -236,7 +236,7 @@ export function WeeklyReportTab() {
         <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
           <SectionTitle>Week by Week</SectionTitle>
           <div className="-mx-1 overflow-x-auto">
-            <table className="w-full min-w-[320px] text-left text-xs">
+            <table className="w-full min-w-[280px] text-left text-xs">
               <thead className="text-slate-500 dark:text-slate-400">
                 <tr>
                   <th className="px-1 py-1 font-semibold">Week ending</th>

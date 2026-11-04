@@ -1,4 +1,4 @@
-import { formatQty } from '../lib/format'
+import { formatQty, formatRupees } from '../lib/format'
 
 type CostPerKgBreakdownProps = {
   materialCost: number
@@ -11,7 +11,7 @@ type CostPerKgBreakdownProps = {
   units: number | null
 }
 
-const perKg = (amount: number, kg: number) => (kg > 0 ? `₹${formatQty(amount / kg)}/kg` : '—')
+const perKg = (amount: number, kg: number) => (kg > 0 ? `${formatRupees(amount / kg)}/kg` : '—')
 
 /**
  * What it cost to make 1 kg of pipe: material, then each running cost, then
@@ -44,7 +44,7 @@ export function CostPerKgBreakdown({
       )}
       <div className="flex items-center justify-between bg-purple-50 px-3 py-2.5 font-bold text-purple-800 dark:bg-purple-950/40 dark:text-purple-200">
         <span>Cost to make 1 kg</span>
-        <span className="font-mono">{total === null ? '—' : `₹${formatQty(total)}`}</span>
+        <span className="font-mono">{total === null ? '—' : `${formatRupees(total)}`}</span>
       </div>
       {units !== null && producedKg > 0 && (
         <p className="border-t border-slate-200/70 px-3 py-2 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-300">
@@ -74,7 +74,7 @@ function Row({
     >
       <span className="min-w-0 truncate">{label}</span>
       <span className="shrink-0 text-right">
-        <span className="font-mono">₹{formatQty(Math.round(amount * 100) / 100)}</span>
+        <span className="font-mono">{formatRupees(Math.round(amount * 100) / 100)}</span>
         <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">{perKgText}</span>
       </span>
     </div>

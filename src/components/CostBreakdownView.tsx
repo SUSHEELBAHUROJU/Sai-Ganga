@@ -1,5 +1,5 @@
 import type { CostBreakdown, CostPartKey } from '../hooks/useStockChecks'
-import { formatQty } from '../lib/format'
+import { formatQty, formatRupees } from '../lib/format'
 
 /** One colour per part, the same on the bar, the legend and the table. */
 const PART_COLOR: Record<CostPartKey, string> = {
@@ -10,7 +10,7 @@ const PART_COLOR: Record<CostPartKey, string> = {
   expenses: 'bg-rose-400',
 }
 
-const rupees = (n: number) => `₹${formatQty(Math.round(n * 100) / 100)}`
+const rupees = (n: number) => `${formatRupees(Math.round(n * 100) / 100)}`
 /** Kg of a material in 1 kg of pipe — three decimals, since it is usually below 1. */
 const kg3 = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 3 })
 const pct = (n: number) => `${n >= 10 ? Math.round(n) : formatQty(Math.round(n * 10) / 10)}%`

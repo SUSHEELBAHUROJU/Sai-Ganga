@@ -2,6 +2,17 @@ export function formatQty(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Number(n.toFixed(2)))
 }
 
+/**
+ * Money the Indian way: "₹1,50,000", "₹82.5", "−₹4,000". Every rupee amount
+ * on screen goes through this, so the same number never shows as ₹150000 in
+ * one place and ₹1,50,000 in another.
+ */
+export function formatRupees(n: number): string {
+  const value = Math.round((Number(n) || 0) * 100) / 100
+  const text = Math.abs(value).toLocaleString('en-IN', { maximumFractionDigits: 2 })
+  return value < 0 ? `−₹${text}` : `₹${text}`
+}
+
 export function formatPipeProductLabel(diameterInches: number, weightKg: number): string {
   return `${formatQty(diameterInches)}" × ${formatQty(weightKg)}kg`
 }

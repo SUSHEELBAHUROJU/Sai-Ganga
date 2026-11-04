@@ -19,12 +19,12 @@ import {
 import { generateMyCostsReportBlob, stockCheckPeriodLabel } from '../../lib/pdfGenerator'
 import { useToast } from '../../lib/toast'
 import { formatShortDate, todayISODate } from '../../lib/date'
-import { formatQty } from '../../lib/format'
+import { formatQty, formatRupees } from '../../lib/format'
 import { SectionTitle, Stat } from './weekParts'
 import { CostBreakdownBar, CostBreakdownTable } from '../../components/CostBreakdownView'
 import { threeMonthsAgo, useSharePdf, wastePercent } from './weekUtils'
 
-const rupeesPerKg = (n: number | null) => (n === null ? '—' : `₹${formatQty(n)}`)
+const rupeesPerKg = (n: number | null) => (n === null ? '—' : `${formatRupees(n)}`)
 
 /** "12.5%" — one decimal, or a dash when nothing was used. */
 const percentText = (n: number | null) => (n === null ? '—' : `${formatQty(Math.round(n * 10) / 10)}%`)
@@ -122,7 +122,7 @@ function PerKgRow({
           {kg > 0 ? `${formatQty(kg)} kg × ₹/kg` : 'None this week'}
         </p>
         {kg > 0 && detail && <p className="text-[11px] text-slate-500 dark:text-slate-400">{detail}</p>}
-        <p className="text-xs font-semibold text-purple-700 dark:text-purple-300">₹{formatQty(amount)}</p>
+        <p className="text-xs font-semibold text-purple-700 dark:text-purple-300">{formatRupees(amount)}</p>
       </div>
       <RupeeInput value={value} onChange={onChange} label={`${label} rupees per kg`} />
     </div>
@@ -248,10 +248,10 @@ function MyCostsForm({
                     {line.material.material_name}
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {formatQty(line.material.consumed_kg)} kg · app ₹{formatQty(line.appRate)}/kg
+                    {formatQty(line.material.consumed_kg)} kg · app {formatRupees(line.appRate)}/kg
                   </p>
                   <p className="text-xs font-semibold text-purple-700 dark:text-purple-300">
-                    ₹{formatQty(line.cost)}
+                    {formatRupees(line.cost)}
                     {line.manualRate === null && (
                       <span className="font-normal text-slate-400 dark:text-slate-500"> (app rate)</span>
                     )}
@@ -350,7 +350,7 @@ function MyCostsForm({
               className="mt-0.5 h-4 w-4 accent-purple-600"
             />
             <span className="text-xs text-slate-600 dark:text-slate-300">
-              Also add expenses recorded in the app (₹{formatQty(period.overhead_cost)}) — leave off if you've entered
+              Also add expenses recorded in the app ({formatRupees(period.overhead_cost)}) — leave off if you've entered
               salaries or electricity above.
             </span>
           </label>
@@ -367,12 +367,12 @@ function MyCostsForm({
         ].map(([label, amount]) => (
           <div key={label} className="flex justify-between">
             <span>{label}</span>
-            <span className="font-mono">₹{formatQty(Math.round(Number(amount) * 100) / 100)}</span>
+            <span className="font-mono">{formatRupees(Math.round(Number(amount) * 100) / 100)}</span>
           </div>
         ))}
         <div className="flex justify-between border-t border-purple-200 pt-1 font-bold dark:border-purple-900">
           <span>Total</span>
-          <span className="font-mono">₹{formatQty(Math.round(summary.totalCost * 100) / 100)}</span>
+          <span className="font-mono">{formatRupees(Math.round(summary.totalCost * 100) / 100)}</span>
         </div>
         <p className="text-xs text-purple-700/80 dark:text-purple-300/80">
           ÷ {formatQty(period.produced_kg)} kg pipe made
@@ -541,51 +541,40 @@ export function MyCostsTab() {
       {allMyCosts && (periods ?? []).length > 1 && (
         <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
           <SectionTitle>Week by Week</SectionTitle>
-          <div className="-mx-1 overflow-x-auto">
-            <table className="w-full min-w-[600px] text-left text-xs">
-              <thead className="text-slate-500 dark:text-slate-400">
-                <tr>
-                  <th className="px-1 py-1 font-semibold">Week ending</th>
-                  <th className="px-1 py-1 text-right font-semibold">Made</th>
-                  <th className="px-1 py-1 text-right font-semibold">Used</th>
-                  <th className="px-1 py-1 text-right font-semibold">Wastage</th>
-                  <th className="px-1 py-1 text-right font-semibold">Recycled used</th>
-                  <th className="px-1 py-1 text-right font-semibold">App ₹/kg</th>
-                  <th className="px-1 py-1 text-right font-semibold">Your ₹/kg</th>
-                  <th className="px-1 py-1 text-right font-semibold">Material</th>
-                  <th className="px-1 py-1 text-right font-semibold">Electricity</th>
-                  <th className="px-1 py-1 text-right font-semibold">Wages</th>
-                </tr>
-              </thead>
-              <tbody className="text-slate-800 dark:text-slate-200">
-                {(periods ?? []).map((p) => {
-                  const appCpk = costPerKgProduced(p)
-                  const saved = allMyCosts.get(p.count_id)
-                  const yourCpk = saved ? myCostSummary(p, saved).costPerKg : null
-                  const shares = sharesOf(costBreakdown(p, saved))
-                  return (
-                    <tr key={p.count_id} className="border-t border-slate-100 dark:border-slate-800">
-                      <td className="px-1 py-1.5">{formatShortDate(p.count_date)}</td>
-                      <td className="px-1 py-1.5 text-right">{formatQty(p.produced_kg)}</td>
-                      <td className="px-1 py-1.5 text-right">{formatQty(p.consumed_kg)}</td>
-                      <td className="px-1 py-1.5 text-right">
-                        {formatQty(p.waste_kg)}
-                        <span className="text-slate-400 dark:text-slate-500"> ({percentText(wastePercent(p))})</span>
-                      </td>
-                      <td className="px-1 py-1.5 text-right">{formatQty(p.recycled_used_kg)}</td>
-                      <td className="px-1 py-1.5 text-right">{appCpk === null ? '—' : formatQty(appCpk)}</td>
-                      <td className="px-1 py-1.5 text-right font-semibold text-purple-700 dark:text-purple-300">
-                        {yourCpk === null ? '—' : formatQty(yourCpk)}
-                      </td>
-                      <td className="px-1 py-1.5 text-right">{shares.material}</td>
-                      <td className="px-1 py-1.5 text-right">{shares.electricity}</td>
-                      <td className="px-1 py-1.5 text-right">{shares.wages}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          {/* One block per week instead of a ten-column table, so nothing is cut off on a phone. */}
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            {(periods ?? []).map((p) => {
+              const appCpk = costPerKgProduced(p)
+              const saved = allMyCosts.get(p.count_id)
+              const yourCpk = saved ? myCostSummary(p, saved).costPerKg : null
+              const shares = sharesOf(costBreakdown(p, saved))
+              return (
+                <li key={p.count_id} className="space-y-0.5 py-2 text-xs">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      Week ending {formatShortDate(p.count_date)}
+                    </span>
+                    <span className="shrink-0 text-right">
+                      <span className="text-sm font-bold text-purple-700 dark:text-purple-300">
+                        {yourCpk === null ? 'Your cost —' : `${formatRupees(yourCpk)}/kg`}
+                      </span>
+                      <span className="text-slate-500 dark:text-slate-400">
+                        {' '}
+                        · app {appCpk === null ? '—' : `${formatRupees(appCpk)}`}
+                      </span>
+                    </span>
+                  </div>
+                  <p className="text-slate-600 dark:text-slate-300">
+                    Made {formatQty(p.produced_kg)} kg · Used {formatQty(p.consumed_kg)} kg · Wastage{' '}
+                    {formatQty(p.waste_kg)} kg ({percentText(wastePercent(p))}) · Recycled {formatQty(p.recycled_used_kg)} kg
+                  </p>
+                  <p className="text-slate-500 dark:text-slate-400">
+                    Material {shares.material} · Electricity {shares.electricity} · Wages {shares.wages}
+                  </p>
+                </li>
+              )
+            })}
+          </ul>
         </div>
       )}
 

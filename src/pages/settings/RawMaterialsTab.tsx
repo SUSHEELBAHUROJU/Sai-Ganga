@@ -210,7 +210,7 @@ export function RawMaterialsTab() {
                 placeholder="Bag size in kg"
                 value={customPack}
                 onChange={(e) => setCustomPack(e.target.value)}
-                className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800"
+                className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800"
               />
             )}
           </div>

@@ -12,7 +12,7 @@ import {
 import { useCustomers } from '../hooks/useCustomers'
 import { usePipeProducts } from '../hooks/usePipeProducts'
 import { useToast } from '../lib/toast'
-import { formatPipeProductLabel, formatQty, piecesToKg } from '../lib/format'
+import { formatPipeProductLabel, formatQty, piecesToKg, formatRupees } from '../lib/format'
 import { isFutureISODate, todayISODate } from '../lib/date'
 
 type EditBillModalProps = {
@@ -639,7 +639,7 @@ export function EditBillModal({ open, bill, onClose }: EditBillModalProps) {
 
               <div className="flex items-baseline justify-between gap-2 border-t border-slate-100 pt-2 dark:border-slate-800">
                 <span className="text-xs text-slate-500 dark:text-slate-400">
-                  {formatQty(item.weight_kg)} kg × ₹{formatQty(item.price_per_kg)}
+                  {formatQty(item.weight_kg)} kg × {formatRupees(item.price_per_kg)}
                 </span>
                 <span className="font-mono text-base font-bold text-slate-900 dark:text-slate-100">
                   ₹{formatINR(item.amount)}

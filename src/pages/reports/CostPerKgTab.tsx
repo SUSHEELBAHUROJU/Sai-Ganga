@@ -12,7 +12,7 @@ import { useProductionCost } from '../../hooks/useProductionCost'
 import { generateProductionCostReportBlob } from '../../lib/pdfGenerator'
 import { useToast } from '../../lib/toast'
 import { todayISODate, formatRangeLabel } from '../../lib/date'
-import { formatPipeProductLabel, formatQty } from '../../lib/format'
+import { formatPipeProductLabel, formatQty, formatRupees } from '../../lib/format'
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -139,11 +139,11 @@ export function CostPerKgTab() {
                       {m.material_name}
                       <span className="ml-1.5 text-xs font-normal text-slate-500 dark:text-slate-400">
                         {formatQty(Math.round(m.consumed_kg * 100) / 100)} kg
-                        {m.consumed_kg ? ` @ ₹${formatQty(m.consumed_cost / m.consumed_kg)}/kg` : ''}
+                        {m.consumed_kg ? ` @ ${formatRupees(m.consumed_cost / m.consumed_kg)}/kg` : ''}
                       </span>
                     </span>
                     <span className="shrink-0 font-mono font-semibold">
-                      ₹{formatQty(Math.round(m.consumed_cost * 100) / 100)}
+                      {formatRupees(Math.round(m.consumed_cost * 100) / 100)}
                     </span>
                   </div>
                 ))}

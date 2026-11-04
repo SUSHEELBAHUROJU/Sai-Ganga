@@ -57,7 +57,7 @@ export function LineItemsList({ lines, onRemove, onUpdateQuantity }: LineItemsLi
                       const val = parseInt(e.target.value) || 1
                       onUpdateQuantity(line.localId, Math.max(1, val))
                     }}
-                    className="w-12 bg-transparent text-center font-mono text-sm font-bold text-slate-900 outline-none dark:text-slate-100"
+                    className="w-12 bg-transparent text-center font-mono text-base sm:text-sm font-bold text-slate-900 outline-none dark:text-slate-100"
                   />
                   <button
                     type="button"

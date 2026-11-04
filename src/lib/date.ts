@@ -22,6 +22,9 @@ export function isValidISODate(value: string | null): value is string {
  * day-grouped view until that date arrives. ISO strings compare lexically, so
  * a plain `>` is the whole test.
  */
+/** Shown when a future date is typed into a field and put back to today. */
+export const FUTURE_DATE_MESSAGE = 'Date can’t be in the future — set to today'
+
 export function isFutureISODate(value: string): boolean {
   return isValidISODate(value) && value > todayISODate()
 }

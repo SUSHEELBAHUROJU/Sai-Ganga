@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
+import { formatRupees } from '../lib/format'
 
 /** Which master table a ledger party lives in — raw_material_suppliers or scrap_dealers. */
 export type PartyType = 'supplier' | 'scrap_dealer'
@@ -72,9 +73,9 @@ export function supplierPaymentModeText(
 }
 
 /** "₹12,000 To Pay" / "₹5,000 Advance" / "Fully Paid" — the one wording used on every supplier-ledger screen. */
-export function supplierBalanceText(balance: number, format: (n: number) => string): string {
-  if (balance > 0) return `₹${format(balance)} To Pay`
-  if (balance < 0) return `₹${format(-balance)} Advance`
+export function supplierBalanceText(balance: number): string {
+  if (balance > 0) return `${formatRupees(balance)} To Pay`
+  if (balance < 0) return `${formatRupees(-balance)} Advance`
   return 'Fully Paid'
 }
 

@@ -291,7 +291,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
                 value={billDate}
                 max={todayISODate()}
                 onChange={(e) => setBillDate(e.target.value)}
-                className="ml-2 min-h-[44px] min-w-0 rounded-md border border-slate-300 px-2 py-1 text-sm font-semibold text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                className="ml-2 min-h-[44px] min-w-0 rounded-md border border-slate-300 px-2 py-1 text-base sm:text-sm font-semibold text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               />
             </label>
           </div>
@@ -311,7 +311,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
               <select
                 value={selectedCustomerId}
                 onChange={(e) => handleCustomerSelect(e.target.value)}
-                className="min-h-[44px] w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                className="min-h-[44px] w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
               >
                 <option value="">-- Custom / Select Customer --</option>
                 {(customers ?? []).map((c) => (
@@ -366,7 +366,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
               value={globalRate}
               onChange={(e) => handleApplyGlobalRate(e.target.value)}
               placeholder="e.g. 70"
-              className="min-h-[44px] w-28 rounded-lg border border-amber-300 px-3 py-1.5 text-sm font-bold text-slate-900 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 dark:border-amber-700 dark:bg-slate-900 dark:text-slate-100"
+              className="min-h-[44px] w-28 rounded-lg border border-amber-300 px-3 py-1.5 text-base sm:text-sm font-bold text-slate-900 outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 dark:border-amber-700 dark:bg-slate-900 dark:text-slate-100"
             />
             <span className="text-xs font-semibold text-amber-800 dark:text-amber-300">/ kg</span>
           </div>
@@ -419,7 +419,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
                       value={item.description}
                       onChange={(e) => handleLineChange(index, 'description', e.target.value)}
                       placeholder="Product name / size"
-                      className="w-full min-w-0 rounded border border-slate-300 px-2 py-2 text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                      className="w-full min-w-0 rounded border border-slate-300 px-2 py-2 text-base sm:text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     />
                   </label>
 
@@ -440,7 +440,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
                         )
                       }
                       placeholder="pcs"
-                      className="w-full min-w-0 rounded border border-slate-300 px-2 py-2 text-right text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                      className="w-full min-w-0 rounded border border-slate-300 px-2 py-2 text-right text-base sm:text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     />
                   </label>
 
@@ -470,7 +470,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
                           handleLineChange(index, 'weight_kg', parseFloat(e.target.value) || 0)
                         }
                         placeholder="0"
-                        className="w-full min-w-0 rounded border border-slate-300 px-2 py-2 text-right text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                        className="w-full min-w-0 rounded border border-slate-300 px-2 py-2 text-right text-base sm:text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                       />
                     )}
                   </label>
@@ -487,7 +487,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
                       value={item.price_per_kg || ''}
                       onChange={(e) => handleLineChange(index, 'price_per_kg', e.target.value)}
                       placeholder="₹/kg"
-                      className="w-full min-w-0 rounded border border-slate-300 px-2 py-2 text-right text-xs font-bold text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                      className="w-full min-w-0 rounded border border-slate-300 px-2 py-2 text-right text-base sm:text-xs font-bold text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                     />
                   </label>
 
@@ -546,7 +546,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
                 min="0"
                 value={discount}
                 onChange={(e) => setDiscount(e.target.value)}
-                className="min-h-[36px] w-24 rounded border border-slate-300 px-2 py-0.5 text-right text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                className="min-h-[36px] w-24 rounded border border-slate-300 px-2 py-0.5 text-right text-base sm:text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               />
             </div>
 
@@ -557,7 +557,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
                 min="0"
                 value={tax}
                 onChange={(e) => setTax(e.target.value)}
-                className="min-h-[36px] w-24 rounded border border-slate-300 px-2 py-0.5 text-right text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                className="min-h-[36px] w-24 rounded border border-slate-300 px-2 py-0.5 text-right text-base sm:text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               />
             </div>
 
@@ -570,7 +570,7 @@ export function CreateBillModal({ open, onClose, initialData, onCreated }: Creat
                 inputMode="decimal"
                 value={transport}
                 onChange={(e) => setTransport(e.target.value)}
-                className="min-h-[36px] w-24 rounded border border-slate-300 px-2 py-0.5 text-right text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                className="min-h-[36px] w-24 rounded border border-slate-300 px-2 py-0.5 text-right text-base sm:text-xs text-slate-900 outline-none focus:border-teal-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
               />
             </div>
 

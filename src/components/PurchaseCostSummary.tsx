@@ -1,4 +1,4 @@
-import { formatQty } from '../lib/format'
+import { formatQty, formatRupees } from '../lib/format'
 
 /**
  * The money side of a purchase, entirely derived: the rate the owner entered
@@ -23,10 +23,10 @@ export function PurchaseCostSummary({
     <div className="space-y-2 rounded-xl bg-orange-50 px-4 py-3 dark:bg-orange-950/30">
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-xs text-orange-700/80 dark:text-orange-400/80">
-          ₹{formatQty(pricePerKg)}/kg × {formatQty(quantityKg)} kg
+          {formatRupees(pricePerKg)}/kg × {formatQty(quantityKg)} kg
         </span>
         <span className="font-semibold text-orange-700 tabular-nums dark:text-orange-400">
-          ₹{formatQty(materialCost)}
+          {formatRupees(materialCost)}
         </span>
       </div>
 
@@ -36,7 +36,7 @@ export function PurchaseCostSummary({
             Transport charges
           </span>
           <span className="font-semibold text-orange-700 tabular-nums dark:text-orange-400">
-            ₹{formatQty(transport)}
+            {formatRupees(transport)}
           </span>
         </div>
       )}
@@ -46,7 +46,7 @@ export function PurchaseCostSummary({
           Total Purchase Cost
         </span>
         <span className="text-lg font-bold text-orange-700 tabular-nums dark:text-orange-400">
-          ₹{formatQty(materialCost + transport)}
+          {formatRupees(materialCost + transport)}
         </span>
       </div>
     </div>

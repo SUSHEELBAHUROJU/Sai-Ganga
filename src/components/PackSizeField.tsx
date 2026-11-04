@@ -52,7 +52,7 @@ export function PackSizeField({
             const n = Number(e.target.value)
             if (n > 0) onChange(n)
           }}
-          className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800"
+          className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800"
         />
       )}
     </div>

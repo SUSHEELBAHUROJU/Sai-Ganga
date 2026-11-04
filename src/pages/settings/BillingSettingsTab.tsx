@@ -104,7 +104,7 @@ export function BillingSettingsTab() {
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             placeholder="Factory / Office Address"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
           />
         </div>
 
@@ -170,7 +170,7 @@ export function BillingSettingsTab() {
               type="date"
               value={billStartDate}
               onChange={(e) => setBillStartDate(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-base sm:text-sm text-slate-900 outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
             />
           </div>
         </div>

@@ -17,7 +17,7 @@ import {
   validateCost,
   validateOptionalTransport,
 } from '../../lib/validate'
-import { formatQty, purchaseCost } from '../../lib/format'
+import { purchaseCost, formatRupees } from '../../lib/format'
 
 const purchaseStyle = ACTION_STYLES.purchase
 const purchaseAccentClass = `${purchaseStyle.text} ${purchaseStyle.textDark} bg-current/10 hover:bg-current/20`
@@ -71,7 +71,7 @@ export function ScrapPurchaseForm({ entryDate }: { entryDate: string }) {
           const dealer = (dealers ?? []).find((d) => d.id === dealerId)
           showToast(
             dealer
-              ? `Purchase Added — ₹${formatQty(materialCost)} added to ${dealer.name}'s ledger`
+              ? `Purchase Added — ${formatRupees(materialCost)} added to ${dealer.name}'s ledger`
               : 'Purchase Added!',
           )
           setQuantityKg('')

@@ -15,7 +15,7 @@ import { useVoidBill } from '../hooks/useBills'
 import { useBillPaymentStatuses, useCustomerLedgerBalances } from '../hooks/useLedger'
 import { generateBillPdfBlob } from '../lib/pdfGenerator'
 import { useToast } from '../lib/toast'
-import { formatQty } from '../lib/format'
+import { formatRupees } from '../lib/format'
 import { ConfirmDialog } from './ConfirmDialog'
 import { RecordPaymentModal } from './RecordPaymentModal'
 
@@ -180,9 +180,9 @@ export function BillPdfModal({ open, bill, onClose, onEditBill }: BillPdfModalPr
                       : 'DUE'}
                 </p>
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                  Bill Total: ₹{formatQty(bill.grand_total)}
+                  Bill Total: {formatRupees(bill.grand_total)}
                   {paymentStatus.payment_status !== 'paid' &&
-                    ` — ₹${formatQty(paymentStatus.due_amount)} due`}
+                    ` — ${formatRupees(paymentStatus.due_amount)} due`}
                 </p>
               </div>
               {paymentStatus.payment_status !== 'paid' && (

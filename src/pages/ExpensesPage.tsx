@@ -22,7 +22,7 @@ import {
 import { useToast } from '../lib/toast'
 import { firstError, validateCost, validateRequiredText } from '../lib/validate'
 import { todayISODate, startOfMonth, formatDateLabel } from '../lib/date'
-import { formatQty } from '../lib/format'
+import { formatRupees } from '../lib/format'
 
 const EXPENSE_CHIP_SELECTED = 'border-rose-600 bg-rose-600 text-white'
 
@@ -209,7 +209,7 @@ export function ExpensesPage() {
             This month so far
           </h3>
           <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
-            ₹{formatQty(monthTotal)}
+            {formatRupees(monthTotal)}
           </span>
         </div>
 
@@ -237,7 +237,7 @@ export function ExpensesPage() {
                 </p>
               </div>
               <span className="shrink-0 font-mono text-sm font-semibold text-slate-900 dark:text-slate-100">
-                ₹{formatQty(e.amount)}
+                {formatRupees(e.amount)}
               </span>
             </div>
           ))}

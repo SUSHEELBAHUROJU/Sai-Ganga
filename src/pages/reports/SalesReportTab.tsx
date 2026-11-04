@@ -11,7 +11,7 @@ import { useSalesReport } from '../../hooks/useSalesReport'
 import { generateSalesReportBlob } from '../../lib/pdfGenerator'
 import { useToast } from '../../lib/toast'
 import { todayISODate, formatRangeLabel, formatShortDate } from '../../lib/date'
-import { formatQty } from '../../lib/format'
+import { formatQty, formatRupees } from '../../lib/format'
 
 export function SalesReportTab() {
   const [period, setPeriod] = useState<ReportPeriod>(() => currentMonthPeriod(todayISODate()))
@@ -52,7 +52,7 @@ export function SalesReportTab() {
               Total Sales — {periodLabel}
             </p>
             <p className="mt-1 text-3xl font-bold text-green-700 dark:text-green-400">
-              ₹{formatQty(report.totals.salesAmount)}
+              {formatRupees(report.totals.salesAmount)}
             </p>
             <p className="mt-0.5 text-xs text-green-700/80 dark:text-green-400/80">
               {report.totals.billCount} bill{report.totals.billCount === 1 ? '' : 's'} ·{' '}
@@ -84,45 +84,28 @@ export function SalesReportTab() {
                 No sales billed in this period.
               </p>
             ) : (
-              <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-                <table className="w-full min-w-[32rem] text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-slate-500 dark:text-slate-400">
-                      <th className="pb-2 font-medium">#</th>
-                      <th className="pb-2 font-medium">Date</th>
-                      <th className="pb-2 font-medium">Bill</th>
-                      <th className="pb-2 font-medium">Customer</th>
-                      <th className="pb-2 text-right font-medium">Weight</th>
-                      <th className="pb-2 text-right font-medium">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.lines.map((l, i) => (
-                      <tr
-                        key={l.bill_number}
-                        className="border-t border-slate-100 dark:border-slate-800"
-                      >
-                        <td className="py-2 tabular-nums text-slate-400 dark:text-slate-500">
-                          {i + 1}
-                        </td>
-                        <td className="whitespace-nowrap py-2 text-slate-600 dark:text-slate-400">
-                          {formatShortDate(l.bill_date)}
-                        </td>
-                        <td className="whitespace-nowrap py-2 text-slate-600 dark:text-slate-400">
-                          {l.bill_number}
-                        </td>
-                        <td className="py-2 text-slate-700 dark:text-slate-300">{l.customer}</td>
-                        <td className="whitespace-nowrap py-2 text-right tabular-nums">
-                          {formatQty(l.weightKg)} kg
-                        </td>
-                        <td className="whitespace-nowrap py-2 text-right font-medium tabular-nums">
-                          ₹{formatQty(l.amount)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              // A list, not a table: a phone has no room for six columns side by side.
+              <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+                {report.lines.map((l, i) => (
+                  <li key={l.bill_number} className="flex items-start justify-between gap-3 py-2.5">
+                    <div className="min-w-0">
+                      <p className="font-medium text-slate-800 dark:text-slate-200">
+                        <span className="mr-1.5 tabular-nums text-slate-400 dark:text-slate-500">{i + 1}.</span>
+                        {l.customer}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {formatShortDate(l.bill_date)} · {l.bill_number}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                        ₹{l.amount.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                      </p>
+                      <p className="text-xs tabular-nums text-slate-500 dark:text-slate-400">{formatQty(l.weightKg)} kg</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         </>

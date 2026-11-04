@@ -16,7 +16,7 @@ import {
 import { LoadingState, EmptyNote } from './States'
 import { useToast } from '../lib/toast'
 import { formatDateLabel, formatShortDate, startOfMonth, todayISODate } from '../lib/date'
-import { formatQty } from '../lib/format'
+import { formatQty, formatRupees } from '../lib/format'
 import { generateSupplierStatementBlob } from '../lib/pdfGenerator'
 
 type SupplierPassbookModalProps = {
@@ -59,7 +59,7 @@ function entryTitle(entry: SupplierPassbookEntry): string {
 function entryDetail(entry: SupplierPassbookEntry): string | null {
   if (entry.kind === 'purchase' || entry.kind === 'return') {
     const qty = entry.quantity_kg != null ? `${formatQty(entry.quantity_kg)} kg` : null
-    const rate = entry.price_per_kg != null ? `@ ₹${formatQty(entry.price_per_kg)}/kg` : null
+    const rate = entry.price_per_kg != null ? `@ ${formatRupees(entry.price_per_kg)}/kg` : null
     return [qty, rate].filter(Boolean).join(' ') || null
   }
   const parts = [
@@ -122,10 +122,10 @@ function TransactionRow({
           <p
             className={`font-mono text-sm font-bold ${raisesBalance ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}
           >
-            ₹{formatQty(entry.amount)}
+            {formatRupees(entry.amount)}
           </p>
           <p className="text-[11px] text-slate-400 dark:text-slate-500">
-            Bal: {supplierBalanceText(entry.running_balance, formatQty)}
+            Bal: {supplierBalanceText(entry.running_balance)}
           </p>
         </div>
         {!isPurchase && !entry.id.startsWith('pending-') && (
@@ -255,7 +255,7 @@ export function SupplierPassbookModal({ open, party, onClose, initialRange }: Su
           <div className="rounded-xl bg-slate-50 p-4 text-center dark:bg-slate-800">
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Current Balance</p>
             <p className={`text-3xl font-bold ${balanceColor(balance)}`}>
-              {balance === 0 ? 'Fully Paid' : `₹${formatQty(Math.abs(balance))}`}
+              {balance === 0 ? 'Fully Paid' : `${formatRupees(Math.abs(balance))}`}
             </p>
             {balance !== 0 && (
               <p className={`text-sm font-semibold ${balanceColor(balance)}`}>
@@ -263,7 +263,7 @@ export function SupplierPassbookModal({ open, party, onClose, initialRange }: Su
               </p>
             )}
             <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
-              Purchased ₹{formatQty(party.total_purchased)} · Paid ₹{formatQty(party.total_paid)}
+              Purchased {formatRupees(party.total_purchased)} · Paid {formatRupees(party.total_paid)}
             </p>
           </div>
 
@@ -307,7 +307,7 @@ export function SupplierPassbookModal({ open, party, onClose, initialRange }: Su
               <div className="mt-3 rounded-lg border border-slate-200 bg-white p-2.5 text-xs shadow-xs dark:border-slate-750 dark:bg-slate-900">
                 <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
                   <span>
-                    Opening Balance: <strong className="font-mono text-slate-900 dark:text-slate-100">{supplierBalanceText(openingBalance, formatQty)}</strong>
+                    Opening Balance: <strong className="font-mono text-slate-900 dark:text-slate-100">{supplierBalanceText(openingBalance)}</strong>
                   </span>
                   <span className="font-medium text-slate-500">
                     {filteredEntries.length} transaction{filteredEntries.length === 1 ? '' : 's'}
@@ -315,10 +315,10 @@ export function SupplierPassbookModal({ open, party, onClose, initialRange }: Su
                 </div>
                 <div className="mt-1.5 flex items-center justify-between border-t border-slate-100 pt-1.5 dark:border-slate-800">
                   <span>
-                    Purchased: <strong className="font-mono text-red-600 dark:text-red-400">₹{formatQty(periodPurchased)}</strong>
+                    Purchased: <strong className="font-mono text-red-600 dark:text-red-400">{formatRupees(periodPurchased)}</strong>
                   </span>
                   <span>
-                    Paid: <strong className="font-mono text-green-600 dark:text-green-400">₹{formatQty(periodPaid)}</strong>
+                    Paid: <strong className="font-mono text-green-600 dark:text-green-400">{formatRupees(periodPaid)}</strong>
                   </span>
                 </div>
               </div>
@@ -409,8 +409,8 @@ export function SupplierPassbookModal({ open, party, onClose, initialRange }: Su
         message={
           deleting
             ? deleting.paid_by_customer_name
-              ? `Remove this ₹${formatQty(deleting.amount)} payment made by ${deleting.paid_by_customer_name}? It is removed from ${deleting.paid_by_customer_name}'s ledger too, and both balances are recalculated.`
-              : `Remove this ${deleting.kind} of ₹${formatQty(deleting.amount)}? The supplier's balance will be recalculated.`
+              ? `Remove this ${formatRupees(deleting.amount)} payment made by ${deleting.paid_by_customer_name}? It is removed from ${deleting.paid_by_customer_name}'s ledger too, and both balances are recalculated.`
+              : `Remove this ${deleting.kind} of ${formatRupees(deleting.amount)}? The supplier's balance will be recalculated.`
             : ''
         }
         confirmLabel="Remove"

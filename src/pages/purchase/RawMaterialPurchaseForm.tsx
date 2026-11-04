@@ -24,7 +24,7 @@ import {
   validateCost,
   validateOptionalTransport,
 } from '../../lib/validate'
-import { formatQty, purchaseCost } from '../../lib/format'
+import { formatQty, purchaseCost, formatRupees } from '../../lib/format'
 
 const purchaseStyle = ACTION_STYLES.purchase
 const purchaseAccentClass = `${purchaseStyle.text} ${purchaseStyle.textDark} bg-current/10 hover:bg-current/20`
@@ -178,7 +178,7 @@ export function RawMaterialPurchaseForm({ entryDate }: { entryDate: string }) {
         const what = rows.length > 1 ? `${rows.length} items` : 'Purchase'
         showToast(
           supplier
-            ? `${what} saved — ₹${formatQty(totalMaterial)} added to ${supplier.name}'s ledger`
+            ? `${what} saved — ${formatRupees(totalMaterial)} added to ${supplier.name}'s ledger`
             : `${what} saved!`,
         )
         resetAmounts()
@@ -218,12 +218,12 @@ export function RawMaterialPurchaseForm({ entryDate }: { entryDate: string }) {
                       {item.entryMode === 'bag' && item.numBags !== null
                         ? `${formatQty(item.numBags)} × ${formatQty(item.packKg ?? 0)} kg = `
                         : ''}
-                      {formatQty(item.totalQtyKg)} kg @ ₹{formatQty(item.pricePerKg)}/kg
+                      {formatQty(item.totalQtyKg)} kg @ {formatRupees(item.pricePerKg)}/kg
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center">
                     <span className="font-semibold tabular-nums text-orange-700 dark:text-orange-400">
-                      ₹{formatQty(item.cost)}
+                      {formatRupees(item.cost)}
                     </span>
                     <button
                       type="button"
@@ -379,7 +379,7 @@ export function RawMaterialPurchaseForm({ entryDate }: { entryDate: string }) {
                 {items.length + (editorTouched ? 1 : 0)} items · {formatQty(deliveryKg)} kg
               </span>
               <span className="font-semibold tabular-nums text-orange-700 dark:text-orange-400">
-                ₹{formatQty(deliveryMaterialCost)}
+                {formatRupees(deliveryMaterialCost)}
               </span>
             </div>
             {transportCost > 0 && (
@@ -388,14 +388,14 @@ export function RawMaterialPurchaseForm({ entryDate }: { entryDate: string }) {
                   Transport (shared by weight)
                 </span>
                 <span className="font-semibold tabular-nums text-orange-700 dark:text-orange-400">
-                  ₹{formatQty(transportCost)}
+                  {formatRupees(transportCost)}
                 </span>
               </div>
             )}
             <div className="flex items-baseline justify-between gap-3 border-t border-orange-200 pt-2 dark:border-orange-900/60">
               <span className="text-xs font-medium text-orange-700 dark:text-orange-400">Total Purchase Cost</span>
               <span className="text-lg font-bold tabular-nums text-orange-700 dark:text-orange-400">
-                ₹{formatQty(deliveryMaterialCost + transportCost)}
+                {formatRupees(deliveryMaterialCost + transportCost)}
               </span>
             </div>
           </div>

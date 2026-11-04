@@ -18,7 +18,6 @@ import {
 } from '../hooks/useSupplierLedger'
 import { useToast } from '../lib/toast'
 import { isFutureISODate, todayISODate } from '../lib/date'
-import { formatQty } from '../lib/format'
 
 type SupplierPaymentModalProps = {
   open: boolean
@@ -154,8 +153,8 @@ export function SupplierPaymentModal({
       onSuccess: () => {
         showToast(
           editing
-            ? `Entry updated — ${party.name}: ${supplierBalanceText(balanceAfter, formatQty)}`
-            : `Saved — ${party.name}: ${supplierBalanceText(balanceAfter, formatQty)}`,
+            ? `Entry updated — ${party.name}: ${supplierBalanceText(balanceAfter)}`
+            : `Saved — ${party.name}: ${supplierBalanceText(balanceAfter)}`,
         )
         onClose()
       },
@@ -177,7 +176,7 @@ export function SupplierPaymentModal({
       <div className="space-y-4">
         <p className="text-sm text-slate-500 dark:text-slate-400">
           <span className="font-semibold text-slate-900 dark:text-slate-100">{party.name}</span> ·{' '}
-          {supplierBalanceText(baseBalance, formatQty)}
+          {supplierBalanceText(baseBalance)}
         </p>
 
         <div>
@@ -203,7 +202,7 @@ export function SupplierPaymentModal({
           />
           {amountVal > 0 && (
             <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
-              After this: <span className="font-semibold">{supplierBalanceText(balanceAfter, formatQty)}</span>
+              After this: <span className="font-semibold">{supplierBalanceText(balanceAfter)}</span>
             </p>
           )}
         </div>

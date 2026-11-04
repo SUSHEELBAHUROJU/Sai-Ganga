@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { formatExpensePeriod } from '../lib/expensePeriod'
 import { formatShortDate } from '../lib/date'
-import { formatQty } from '../lib/format'
+import { formatQty, formatRupees } from '../lib/format'
 
 /**
  * cost: expenses counted in the period they pay for (August's electricity
@@ -192,7 +192,7 @@ export function useExpenseReport(fromDate: string, toDate: string, basis: Expens
         // when it was paid, meter units, and the typed note.
         const detail = [
           formatExpensePeriod(row.period_start, row.period_end, row.entry_date),
-          partial ? `${row.overlap_days} of ${row.period_days} days of ₹${formatQty(fullAmount)}` : null,
+          partial ? `${row.overlap_days} of ${row.period_days} days of ${formatRupees(fullAmount)}` : null,
           isCost && (row.entry_date < fromDate || row.entry_date > toDate)
             ? `paid ${formatShortDate(row.entry_date)}`
             : null,

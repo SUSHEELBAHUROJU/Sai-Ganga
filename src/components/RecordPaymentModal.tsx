@@ -7,7 +7,7 @@ import { useRecordPayment, type PaymentApp, type PaymentMode } from '../hooks/us
 import { useSupplierLedgerBalances, supplierBalanceText, type SupplierLedgerBalance } from '../hooks/useSupplierLedger'
 import { useToast } from '../lib/toast'
 import { isFutureISODate, todayISODate } from '../lib/date'
-import { formatQty } from '../lib/format'
+import { formatRupees } from '../lib/format'
 
 type RecordPaymentModalProps = {
   open: boolean
@@ -210,7 +210,7 @@ export function RecordPaymentModal({
                       <span
                         className={`text-xs font-semibold ${p.balance > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}
                       >
-                        {supplierBalanceText(p.balance, formatQty)}
+                        {supplierBalanceText(p.balance)}
                       </span>
                       {selected && <Check className="h-4 w-4 text-teal-600 dark:text-teal-400" />}
                     </span>
@@ -248,11 +248,11 @@ export function RecordPaymentModal({
           </div>
           {outstandingBalance > 0 && (
             <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
-              Outstanding: ₹{formatQty(outstandingBalance)}
+              Outstanding: {formatRupees(outstandingBalance)}
               {amountVal > 0 &&
                 (isOverpaying
-                  ? ` — paying ₹${formatQty(amountVal)}, ₹${formatQty(amountVal - outstandingBalance)} extra will be kept as advance credit`
-                  : ` — paying ₹${formatQty(amountVal)}, ₹${formatQty(dueAfter)} will remain due`)}
+                  ? ` — paying ${formatRupees(amountVal)}, ${formatRupees(amountVal - outstandingBalance)} extra will be kept as advance credit`
+                  : ` — paying ${formatRupees(amountVal)}, ${formatRupees(dueAfter)} will remain due`)}
             </p>
           )}
         </div>
@@ -304,13 +304,13 @@ export function RecordPaymentModal({
           <div className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2.5 text-xs text-teal-900 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-200">
             <p className="mb-1 font-semibold">This one payment updates both ledgers:</p>
             <p>
-              • {customerName} owes us ₹{formatQty(amountVal)} less
-              {outstandingBalance > 0 ? ` (₹${formatQty(outstandingBalance)} → ₹${formatQty(outstandingBalance - amountVal)})` : ''}
+              • {customerName} owes us {formatRupees(amountVal)} less
+              {outstandingBalance > 0 ? ` (${formatRupees(outstandingBalance)} → ${formatRupees(outstandingBalance - amountVal)})` : ''}
             </p>
             <p>
-              • We owe {selectedParty.name} ₹{formatQty(amountVal)} less (
-              {supplierBalanceText(selectedParty.balance, formatQty)} →{' '}
-              {supplierBalanceText(selectedParty.balance - amountVal, formatQty)})
+              • We owe {selectedParty.name} {formatRupees(amountVal)} less (
+              {supplierBalanceText(selectedParty.balance)} →{' '}
+              {supplierBalanceText(selectedParty.balance - amountVal)})
             </p>
           </div>
         )}

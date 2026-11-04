@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useCustomerLedgerBalances, useCollectionsByMode } from '../../hooks/useLedger'
-import { formatQty } from '../../lib/format'
+import { formatRupees } from '../../lib/format'
 import { LoadingState } from '../../components/States'
 
 function StatTile({ label, value, accent }: { label: string; value: string; accent?: string }) {
@@ -44,7 +44,7 @@ export function ReceivablesTab({ fromDate, toDate }: { fromDate: string; toDate:
               Total Outstanding
             </p>
             <p className="mt-1 text-3xl font-bold text-red-600 dark:text-red-400">
-              ₹{formatQty(totalOutstanding)}
+              {formatRupees(totalOutstanding)}
             </p>
             <p className="mt-0.5 text-xs text-red-600/80 dark:text-red-400/80">
               Across {customersWithDues.length} customer{customersWithDues.length === 1 ? '' : 's'}
@@ -56,11 +56,11 @@ export function ReceivablesTab({ fromDate, toDate }: { fromDate: string; toDate:
               Collections — {fromDate === toDate ? 'this day' : 'this range'}
             </h3>
             <div className="grid grid-cols-3 gap-2">
-              <StatTile label="Cash" value={`₹${formatQty(collections?.cash_total ?? 0)}`} />
-              <StatTile label="Online" value={`₹${formatQty(collections?.online_total ?? 0)}`} />
+              <StatTile label="Cash" value={`${formatRupees(collections?.cash_total ?? 0)}`} />
+              <StatTile label="Online" value={`${formatRupees(collections?.online_total ?? 0)}`} />
               <StatTile
                 label="Total"
-                value={`₹${formatQty(collections?.combined_total ?? 0)}`}
+                value={`${formatRupees(collections?.combined_total ?? 0)}`}
                 accent="text-teal-600 dark:text-teal-400"
               />
             </div>
@@ -68,7 +68,7 @@ export function ReceivablesTab({ fromDate, toDate }: { fromDate: string; toDate:
               // Settled the customer's account but never reached our cash box
               // or bank — kept out of the Cash/Online/Total above.
               <p className="mt-2 rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                Plus <span className="font-semibold">₹{formatQty(collections?.to_supplier_total ?? 0)}</span> paid by
+                Plus <span className="font-semibold">{formatRupees(collections?.to_supplier_total ?? 0)}</span> paid by
                 customers directly to suppliers — counted against what we owe those suppliers.
               </p>
             )}
@@ -98,7 +98,7 @@ export function ReceivablesTab({ fromDate, toDate }: { fromDate: string; toDate:
                       )}
                     </div>
                     <span className="shrink-0 font-mono text-sm font-bold text-red-600 dark:text-red-400">
-                      ₹{formatQty(c.balance)}
+                      {formatRupees(c.balance)}
                     </span>
                   </div>
                 ))}

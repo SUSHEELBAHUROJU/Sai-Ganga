@@ -16,7 +16,7 @@ import { useBill } from '../hooks/useBills'
 import { LoadingState, EmptyNote } from './States'
 import { useToast } from '../lib/toast'
 import { formatDateLabel, formatShortDate, startOfMonth, todayISODate } from '../lib/date'
-import { formatQty } from '../lib/format'
+import { formatQty, formatRupees } from '../lib/format'
 import { generateLedgerStatementBlob } from '../lib/pdfGenerator'
 
 type CustomerPassbookModalProps = {
@@ -86,10 +86,10 @@ function TransactionRow({
           <p
             className={`font-mono text-sm font-bold ${isDue ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}
           >
-            ₹{formatQty(entry.amount)}
+            {formatRupees(entry.amount)}
           </p>
           <p className="text-[11px] text-slate-400 dark:text-slate-500">
-            Bal: ₹{formatQty(entry.running_balance)}
+            Bal: {formatRupees(entry.running_balance)}
           </p>
         </div>
         {/* A 'pending-' row is a payment still saving — nothing to delete yet. */}
@@ -224,7 +224,7 @@ export function CustomerPassbookModal({ open, customer, onClose, initialRange }:
           <div className="rounded-xl bg-slate-50 p-4 text-center dark:bg-slate-800">
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Current Balance</p>
             <p className={`text-3xl font-bold ${balanceColor}`}>
-              {balance === 0 ? 'Fully Paid' : `₹${formatQty(Math.abs(balance))}`}
+              {balance === 0 ? 'Fully Paid' : `${formatRupees(Math.abs(balance))}`}
             </p>
             {balance !== 0 && <p className={`text-sm font-semibold ${balanceColor}`}>{balanceLabel}</p>}
           </div>
@@ -269,7 +269,7 @@ export function CustomerPassbookModal({ open, customer, onClose, initialRange }:
               <div className="mt-3 rounded-lg border border-slate-200 bg-white p-2.5 text-xs shadow-xs dark:border-slate-750 dark:bg-slate-900">
                 <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
                   <span>
-                    Opening Balance: <strong className="font-mono text-slate-900 dark:text-slate-100">₹{formatQty(openingBalance)}</strong>
+                    Opening Balance: <strong className="font-mono text-slate-900 dark:text-slate-100">{formatRupees(openingBalance)}</strong>
                   </span>
                   <span className="font-medium text-slate-500">
                     {filteredEntries.length} transaction{filteredEntries.length === 1 ? '' : 's'}
@@ -277,10 +277,10 @@ export function CustomerPassbookModal({ open, customer, onClose, initialRange }:
                 </div>
                 <div className="mt-1.5 flex items-center justify-between border-t border-slate-100 pt-1.5 dark:border-slate-800">
                   <span>
-                    Billed: <strong className="font-mono text-red-600 dark:text-red-400">₹{formatQty(periodBilled)}</strong>
+                    Billed: <strong className="font-mono text-red-600 dark:text-red-400">{formatRupees(periodBilled)}</strong>
                   </span>
                   <span>
-                    Received: <strong className="font-mono text-green-600 dark:text-green-400">₹{formatQty(periodReceived)}</strong>
+                    Received: <strong className="font-mono text-green-600 dark:text-green-400">{formatRupees(periodReceived)}</strong>
                   </span>
                 </div>
               </div>
@@ -370,8 +370,8 @@ export function CustomerPassbookModal({ open, customer, onClose, initialRange }:
         message={
           deleting
             ? deleting.paid_to_party_name
-              ? `Remove this ₹${formatQty(deleting.amount)} payment to ${deleting.paid_to_party_name}? It is removed from ${deleting.paid_to_party_name}'s ledger too, and both balances are recalculated.`
-              : `Remove this ${deleting.type === 'due' ? 'due' : 'payment'} of ₹${formatQty(deleting.amount)}? This will recalculate the customer's balance.`
+              ? `Remove this ${formatRupees(deleting.amount)} payment to ${deleting.paid_to_party_name}? It is removed from ${deleting.paid_to_party_name}'s ledger too, and both balances are recalculated.`
+              : `Remove this ${deleting.type === 'due' ? 'due' : 'payment'} of ${formatRupees(deleting.amount)}? This will recalculate the customer's balance.`
             : ''
         }
         confirmLabel="Remove"
