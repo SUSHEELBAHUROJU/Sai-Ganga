@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../lib/toast'
-import { formatQty } from '../lib/format'
+import { formatRupees } from '../lib/format'
 import {
   invalidateSupplierLedger,
   balanceEffect,
@@ -332,7 +332,7 @@ export function useRecordPayment() {
     onError: (_err, input, snapshot) => {
       for (const [queryKey, data] of snapshot ?? []) queryClient.setQueryData(queryKey, data)
       showToast(
-        `Payment of ₹${formatQty(input.amount)} was NOT saved — check your connection and record it again.`,
+        `Payment of ${formatRupees(input.amount)} was NOT saved — check your connection and record it again.`,
         'error',
       )
     },
@@ -347,15 +347,15 @@ export function useRecordPayment() {
         : null
       const who = customer?.name ?? 'customer'
       const what = supplier
-        ? `₹${formatQty(input.amount)} paid by ${who} to ${supplier.name}`
-        : `₹${formatQty(input.amount)} received from ${who}`
+        ? `${formatRupees(input.amount)} paid by ${who} to ${supplier.name}`
+        : `${formatRupees(input.amount)} received from ${who}`
       // The cached balance already includes this payment (optimistic update).
       const remaining = customer ? customer.balance : null
       showToast(
         remaining === null
           ? `${what} — saved`
           : remaining > 0
-            ? `${what} — ₹${formatQty(remaining)} still due`
+            ? `${what} — ${formatRupees(remaining)} still due`
             : `${what} — fully paid!`,
       )
     },

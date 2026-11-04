@@ -13,6 +13,7 @@ import {
   CalendarClock,
   Undo2,
   Lock,
+  SlidersHorizontal,
 } from 'lucide-react'
 import {
   useRecords,
@@ -50,9 +51,11 @@ import {
   clampRangeEnd,
   clampRangeStart,
   MAX_QUERY_RANGE_DAYS,
+  isFutureISODate,
+  FUTURE_DATE_MESSAGE,
+  formatRangeLabel,
 } from '../lib/date'
-import { formatPipeProductLabel, piecesToKg, formatQty } from '../lib/format'
-import { formatRangeLabel } from '../lib/date'
+import { formatPipeProductLabel, piecesToKg, formatQty, formatRupees } from '../lib/format'
 import { generateRecordsReportBlob } from '../lib/pdfGenerator'
 import { LoadingState, EmptyState } from '../components/States'
 
@@ -82,6 +85,8 @@ export function RecordsPage() {
   const [fromDate, setFromDate] = useState(isoDateDaysAgo(6))
   const [toDate, setToDate] = useState(today)
   const [kinds, setKinds] = useState<RecordKind[]>([])
+  // Filters fold into one summary row so the entries start near the top of the screen.
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   const [editing, setEditing] = useState<EntryRecord | null>(null)
   const [returning, setReturning] = useState<RawPurchaseRecordRow | null>(null)
@@ -193,6 +198,10 @@ export function RecordsPage() {
 
   const isSingleDay = fromDate === toDate
   const isFiltered = kinds.length > 0 || fromDate !== isoDateDaysAgo(6) || toDate !== today
+  const activePreset = RANGE_PRESETS.find((p) => fromDate === isoDateDaysAgo(p.days) && toDate === today)
+  const filterSummary = `${activePreset ? activePreset.label : formatRangeLabel(fromDate, toDate)} · ${
+    kinds.length === 0 ? 'All types' : kinds.map((k) => RECORD_KIND_LABEL[k]).join(', ')
+  }`
   const entryCount = recordsResult?.records.length ?? 0
   const pdfDisabled = isLoading || entryCount === 0
 
@@ -282,6 +291,24 @@ export function RecordsPage() {
       <h2 className="text-xl font-semibold text-slate-900 dark:text-slate-100">Records</h2>
 
       <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((v) => !v)}
+          aria-expanded={filtersOpen}
+          className="-m-1 flex min-h-[44px] w-[calc(100%+0.5rem)] items-center justify-between gap-3 rounded-lg p-1 text-left"
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <SlidersHorizontal className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" />
+            <span className="truncate text-sm font-semibold text-slate-800 dark:text-slate-200">{filterSummary}</span>
+          </span>
+          <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-teal-700 dark:text-teal-400">
+            {filtersOpen ? 'Done' : 'Filters'}
+            {filtersOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </span>
+        </button>
+
+        {filtersOpen && (
+        <>
         <div className="flex flex-wrap gap-2">
           {RANGE_PRESETS.map((preset) => (
             <Chip
@@ -316,7 +343,11 @@ export function RecordsPage() {
               min={fromDate}
               max={today}
               onChange={(e) => {
-                const next = e.target.value
+                let next = e.target.value
+                if (isFutureISODate(next)) {
+                  showToast(FUTURE_DATE_MESSAGE, 'error')
+                  next = today
+                }
                 setToDate(next)
                 setFromDate((prev) => clampRangeStart(prev, next))
               }}
@@ -327,6 +358,8 @@ export function RecordsPage() {
         <p className="text-xs text-slate-400 dark:text-slate-500">
           Ranges are limited to {MAX_QUERY_RANGE_DAYS} days at a time.
         </p>
+        </>
+        )}
         {recordsResult?.truncated && (
           <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
             This range has a lot of activity — showing the most recent 1000 entries per type. Narrow
@@ -334,6 +367,7 @@ export function RecordsPage() {
           </p>
         )}
 
+        {filtersOpen && (
         <div>
           <span className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">
             Type
@@ -350,6 +384,7 @@ export function RecordsPage() {
             ))}
           </div>
         </div>
+        )}
 
         <div className="space-y-2 border-t border-slate-100 pt-3 dark:border-slate-800">
           <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -527,7 +562,7 @@ export function RecordsPage() {
                         <div className={`text-right ${isVoided ? 'line-through decoration-slate-400' : ''}`}>
                           {group.totalAmount !== null ? (
                             <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
-                              ₹{formatQty(group.totalAmount)}
+                              {formatRupees(group.totalAmount)}
                             </span>
                           ) : group.totalPcs > 0 ? (
                             <AmountKgPcs kg={group.totalKg} pcs={group.totalPcs} />
@@ -580,17 +615,13 @@ export function RecordsPage() {
                           return (
                             <div
                               key={`${item.kind}:${item.row.id}`}
-                              className="flex items-center justify-between gap-3 rounded-lg border border-slate-200/70 bg-white px-3 py-2 text-xs dark:border-slate-800 dark:bg-slate-900"
+                              className="flex flex-wrap items-center justify-between gap-x-3 rounded-lg border border-slate-200/70 bg-white px-3 py-2 text-xs dark:border-slate-800 dark:bg-slate-900"
                             >
                               <div className="min-w-0 flex-1">
                                 <span className="font-medium text-slate-800 dark:text-slate-200">
                                   {/* Purchases always name the material — the card heading is the supplier. */}
                                   {isMultiItem || itemMoney ? itemTitle : group.subtitle || itemTitle}
                                 </span>
-
-                                {itemMoney && (
-                                  <p className="text-slate-500 dark:text-slate-400">{purchasePriceText(itemMoney)}</p>
-                                )}
 
                                 {returnedKg > 0 && (
                                   <p className="font-semibold text-orange-700 dark:text-orange-400">
@@ -608,13 +639,16 @@ export function RecordsPage() {
                               </div>
 
                               <div className="flex items-center gap-2 shrink-0">
-                                <span className="font-semibold text-slate-700 dark:text-slate-300">
-                                  {amountKgPcs ? (
-                                    <AmountKgPcs kg={amountKgPcs.kg} pcs={amountKgPcs.pcs} />
-                                  ) : (
-                                    amount
-                                  )}
-                                </span>
+                                {/* A purchase's kg is in its price line below. */}
+                                {!itemMoney && (
+                                  <span className="font-semibold text-slate-700 dark:text-slate-300">
+                                    {amountKgPcs ? (
+                                      <AmountKgPcs kg={amountKgPcs.kg} pcs={amountKgPcs.pcs} />
+                                    ) : (
+                                      amount
+                                    )}
+                                  </span>
+                                )}
 
                                 <div className="-mr-1 ml-1 flex items-center">
                                   {item.kind === 'raw_material_purchase' && (
@@ -658,6 +692,11 @@ export function RecordsPage() {
                                   )}
                                 </div>
                               </div>
+
+                              {/* Full width, so it isn't squeezed beside the buttons. */}
+                              {itemMoney && (
+                                <p className="w-full pb-0.5 text-slate-500 dark:text-slate-400">{purchasePriceText(itemMoney)}</p>
+                              )}
                             </div>
                           )
                         })}

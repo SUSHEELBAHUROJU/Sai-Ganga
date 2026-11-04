@@ -12,7 +12,7 @@ import { Chip } from '../../components/Chip'
 import { generateExpenseReportBlob } from '../../lib/pdfGenerator'
 import { useToast } from '../../lib/toast'
 import { todayISODate, formatRangeLabel, formatShortDate } from '../../lib/date'
-import { formatQty } from '../../lib/format'
+import { formatQty, formatRupees } from '../../lib/format'
 
 function SummaryRow({
   label,
@@ -111,7 +111,7 @@ export function ExpenseReportTab() {
               {basis === 'cost' ? 'Total Cost' : 'Total Money Out'} — {rangeLabel}
             </p>
             <p className="mt-1 text-3xl font-bold text-rose-600 dark:text-rose-400">
-              ₹{formatQty(report.totals.grandTotal)}
+              {formatRupees(report.totals.grandTotal)}
             </p>
           </div>
 
@@ -121,20 +121,20 @@ export function ExpenseReportTab() {
             </h3>
             <SummaryRow
               label="Purchase cost"
-              value={`₹${formatQty(report.totals.purchaseCost)}`}
+              value={`${formatRupees(report.totals.purchaseCost)}`}
             />
             <SummaryRow
               label="Transport charges"
-              value={`₹${formatQty(report.totals.transport)}`}
+              value={`${formatRupees(report.totals.transport)}`}
             />
-            <SummaryRow label="Salaries" value={`₹${formatQty(report.totals.salaries)}`} />
+            <SummaryRow label="Salaries" value={`${formatRupees(report.totals.salaries)}`} />
             <SummaryRow
               label="Other expenses"
-              value={`₹${formatQty(report.totals.otherExpenses)}`}
+              value={`${formatRupees(report.totals.otherExpenses)}`}
             />
             <SummaryRow
               label="Total expenses"
-              value={`₹${formatQty(report.totals.grandTotal)}`}
+              value={`${formatRupees(report.totals.grandTotal)}`}
               strong
             />
           </div>
@@ -171,7 +171,7 @@ export function ExpenseReportTab() {
                       <p className="font-medium text-slate-800 dark:text-slate-200">{p.supplier}</p>
                       <p className="text-xs text-slate-500 dark:text-slate-400">
                         {formatShortDate(p.entry_date)} · {p.item} · {formatQty(p.quantityKg)} kg
-                        {p.ratePerKg === null ? '' : ` @ ₹${formatQty(p.ratePerKg)}/kg`}
+                        {p.ratePerKg === null ? '' : ` @ ${formatRupees(p.ratePerKg)}/kg`}
                       </p>
                     </div>
                     <p className="shrink-0 font-semibold tabular-nums text-slate-900 dark:text-slate-100">
@@ -213,7 +213,7 @@ export function ExpenseReportTab() {
                         </p>
                       </div>
                       <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-slate-900 dark:text-slate-100">
-                        ₹{formatQty(e.amount)}
+                        {formatRupees(e.amount)}
                       </span>
                     </div>
                   ))}

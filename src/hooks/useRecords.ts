@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '../lib/supabase'
 import { formatExpensePeriod } from '../lib/expensePeriod'
 import type { Database } from '../types/database'
-import { formatQty, formatPipeProductLabel, piecesToKg, scrapUsedForGranules } from '../lib/format'
+import { formatQty, formatPipeProductLabel, piecesToKg, scrapUsedForGranules, formatRupees } from '../lib/format'
 
 type Tables = Database['public']['Tables']
 
@@ -186,7 +186,7 @@ export function describeRecord(record: EntryRecord): {
           ]
             .filter(Boolean)
             .join(' · ') || null,
-        amount: `₹${formatQty(record.row.amount)}`,
+        amount: `${formatRupees(record.row.amount)}`,
         amountKgPcs: null,
       }
   }

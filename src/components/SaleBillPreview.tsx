@@ -1,5 +1,5 @@
 import { formatDateLabel } from '../lib/date'
-import { formatQty } from '../lib/format'
+import { formatQty, formatRupees } from '../lib/format'
 import { saleLineAmount, saleLineKg, type SaleLine } from '../lib/saleBill'
 
 type SaleBillPreviewProps = {
@@ -67,7 +67,7 @@ export function SaleBillPreview({
                   {line.label}
                 </p>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {formatQty(line.quantity)} pcs · {formatQty(kg)} kg × ₹{formatQty(rate)}
+                  {formatQty(line.quantity)} pcs · {formatQty(kg)} kg × {formatRupees(rate)}
                 </p>
               </div>
               <span className="shrink-0 font-mono text-sm font-bold text-slate-900 dark:text-slate-100">

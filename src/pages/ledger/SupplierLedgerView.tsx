@@ -10,7 +10,7 @@ import { Chip } from '../../components/Chip'
 import { LoadingState, EmptyState } from '../../components/States'
 import { SupplierPassbookModal } from '../../components/SupplierPassbookModal'
 import { DateRangeField } from '../../components/DateRangeField'
-import { formatQty } from '../../lib/format'
+import { formatRupees } from '../../lib/format'
 import { formatShortDate, startOfMonth, todayISODate } from '../../lib/date'
 import { generateSupplierLedgerReportBlob } from '../../lib/pdfGenerator'
 import { useToast } from '../../lib/toast'
@@ -32,7 +32,7 @@ function BalanceTag({ balance }: { balance: number }) {
         : 'text-green-600 dark:text-green-400'
   return (
     <span className={`whitespace-nowrap font-mono text-sm font-bold ${color}`}>
-      {supplierBalanceText(balance, formatQty)}
+      {supplierBalanceText(balance)}
     </span>
   )
 }
@@ -190,7 +190,7 @@ export function SupplierLedgerView() {
             <div className="min-w-0">
               <p className="text-xs font-medium text-slate-500 dark:text-slate-400">You Owe Suppliers</p>
               <p className="truncate text-lg font-bold text-red-600 dark:text-red-400">
-                ₹{formatQty(totals.payable)}
+                {formatRupees(totals.payable)}
               </p>
             </div>
           </div>
@@ -201,7 +201,7 @@ export function SupplierLedgerView() {
             <div className="min-w-0">
               <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Advance With Them</p>
               <p className="truncate text-lg font-bold text-teal-600 dark:text-teal-400">
-                ₹{formatQty(totals.advance)}
+                {formatRupees(totals.advance)}
               </p>
             </div>
           </div>
@@ -214,7 +214,7 @@ export function SupplierLedgerView() {
               <span>Bought in These Dates</span>
             </div>
             <p className="mt-1 truncate text-lg font-bold text-red-600 dark:text-red-400">
-              ₹{formatQty(periodData?.totalPurchased ?? 0)}
+              {formatRupees(periodData?.totalPurchased ?? 0)}
             </p>
           </div>
 
@@ -224,14 +224,14 @@ export function SupplierLedgerView() {
               <span>Paid in These Dates</span>
             </div>
             <p className="mt-1 truncate text-lg font-bold text-green-600 dark:text-green-400">
-              ₹{formatQty(periodData?.totalPaid ?? 0)}
+              {formatRupees(periodData?.totalPaid ?? 0)}
             </p>
           </div>
 
           <div className="col-span-2 rounded-xl border border-slate-200 bg-white p-3 sm:col-span-1 dark:border-slate-800 dark:bg-slate-900">
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total to Pay</p>
             <p className="mt-1 truncate text-lg font-bold text-slate-900 dark:text-slate-100">
-              ₹{formatQty(totals.payable)}
+              {formatRupees(totals.payable)}
             </p>
           </div>
         </div>
@@ -317,7 +317,7 @@ export function SupplierLedgerView() {
                   {p.phone && <span>· {p.phone}</span>}
                   {act && act.count > 0 && (
                     <span className="font-medium text-slate-600 dark:text-slate-300">
-                      • Range: Purchased ₹{formatQty(act.purchased)} · Paid ₹{formatQty(act.paid)}
+                      • Range: Purchased {formatRupees(act.purchased)} · Paid {formatRupees(act.paid)}
                     </span>
                   )}
                   {!isAll && (!act || act.count === 0) && (

@@ -5,7 +5,7 @@ import { Chip } from '../../components/Chip'
 import { LoadingState, EmptyState } from '../../components/States'
 import { CustomerPassbookModal } from '../../components/CustomerPassbookModal'
 import { DateRangeField } from '../../components/DateRangeField'
-import { formatQty } from '../../lib/format'
+import { formatRupees } from '../../lib/format'
 import { formatShortDate, startOfMonth, todayISODate } from '../../lib/date'
 import { generateCustomerLedgerReportBlob } from '../../lib/pdfGenerator'
 import { useToast } from '../../lib/toast'
@@ -16,14 +16,14 @@ function BalanceTag({ balance }: { balance: number }) {
   if (balance > 0) {
     return (
       <span className="whitespace-nowrap font-mono text-sm font-bold text-red-600 dark:text-red-400">
-        ₹{formatQty(balance)} Due
+        {formatRupees(balance)} Due
       </span>
     )
   }
   if (balance < 0) {
     return (
       <span className="whitespace-nowrap font-mono text-sm font-bold text-teal-600 dark:text-teal-400">
-        ₹{formatQty(-balance)} Advance
+        {formatRupees(-balance)} Advance
       </span>
     )
   }
@@ -180,7 +180,7 @@ export function CustomerLedgerView() {
               Total Outstanding
             </p>
             <p className="text-2xl font-bold text-red-600 dark:text-red-400">
-              ₹{formatQty(totalReceivables)}
+              {formatRupees(totalReceivables)}
             </p>
           </div>
         </div>
@@ -192,7 +192,7 @@ export function CustomerLedgerView() {
               <span>Bills in These Dates</span>
             </div>
             <p className="mt-1 truncate text-lg font-bold text-red-600 dark:text-red-400">
-              ₹{formatQty(periodData?.totalDue ?? 0)}
+              {formatRupees(periodData?.totalDue ?? 0)}
             </p>
           </div>
 
@@ -202,14 +202,14 @@ export function CustomerLedgerView() {
               <span>Received in These Dates</span>
             </div>
             <p className="mt-1 truncate text-lg font-bold text-green-600 dark:text-green-400">
-              ₹{formatQty(periodData?.totalReceived ?? 0)}
+              {formatRupees(periodData?.totalReceived ?? 0)}
             </p>
           </div>
 
           <div className="col-span-2 rounded-xl border border-slate-200 bg-white p-3 sm:col-span-1 dark:border-slate-800 dark:bg-slate-900">
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Total Outstanding</p>
             <p className="mt-1 truncate text-lg font-bold text-slate-900 dark:text-slate-100">
-              ₹{formatQty(totalReceivables)}
+              {formatRupees(totalReceivables)}
             </p>
           </div>
         </div>
@@ -278,7 +278,7 @@ export function CustomerLedgerView() {
                   {c.phone && <span>{c.phone}</span>}
                   {act && act.count > 0 && (
                     <span className="font-medium text-slate-600 dark:text-slate-300">
-                      • Range: Billed ₹{formatQty(act.due)} · Recv ₹{formatQty(act.received)}
+                      • Range: Billed {formatRupees(act.due)} · Recv {formatRupees(act.received)}
                     </span>
                   )}
                   {!isAll && (!act || act.count === 0) && (

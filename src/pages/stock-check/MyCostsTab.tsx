@@ -19,12 +19,12 @@ import {
 import { generateMyCostsReportBlob, stockCheckPeriodLabel } from '../../lib/pdfGenerator'
 import { useToast } from '../../lib/toast'
 import { formatShortDate, todayISODate } from '../../lib/date'
-import { formatQty } from '../../lib/format'
+import { formatQty, formatRupees } from '../../lib/format'
 import { SectionTitle, Stat } from './weekParts'
 import { CostBreakdownBar, CostBreakdownTable } from '../../components/CostBreakdownView'
 import { threeMonthsAgo, useSharePdf, wastePercent } from './weekUtils'
 
-const rupeesPerKg = (n: number | null) => (n === null ? '—' : `₹${formatQty(n)}`)
+const rupeesPerKg = (n: number | null) => (n === null ? '—' : `${formatRupees(n)}`)
 
 /** "12.5%" — one decimal, or a dash when nothing was used. */
 const percentText = (n: number | null) => (n === null ? '—' : `${formatQty(Math.round(n * 10) / 10)}%`)
@@ -122,7 +122,7 @@ function PerKgRow({
           {kg > 0 ? `${formatQty(kg)} kg × ₹/kg` : 'None this week'}
         </p>
         {kg > 0 && detail && <p className="text-[11px] text-slate-500 dark:text-slate-400">{detail}</p>}
-        <p className="text-xs font-semibold text-purple-700 dark:text-purple-300">₹{formatQty(amount)}</p>
+        <p className="text-xs font-semibold text-purple-700 dark:text-purple-300">{formatRupees(amount)}</p>
       </div>
       <RupeeInput value={value} onChange={onChange} label={`${label} rupees per kg`} />
     </div>
@@ -248,10 +248,10 @@ function MyCostsForm({
                     {line.material.material_name}
                   </p>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    {formatQty(line.material.consumed_kg)} kg · app ₹{formatQty(line.appRate)}/kg
+                    {formatQty(line.material.consumed_kg)} kg · app {formatRupees(line.appRate)}/kg
                   </p>
                   <p className="text-xs font-semibold text-purple-700 dark:text-purple-300">
-                    ₹{formatQty(line.cost)}
+                    {formatRupees(line.cost)}
                     {line.manualRate === null && (
                       <span className="font-normal text-slate-400 dark:text-slate-500"> (app rate)</span>
                     )}
@@ -350,7 +350,7 @@ function MyCostsForm({
               className="mt-0.5 h-4 w-4 accent-purple-600"
             />
             <span className="text-xs text-slate-600 dark:text-slate-300">
-              Also add expenses recorded in the app (₹{formatQty(period.overhead_cost)}) — leave off if you've entered
+              Also add expenses recorded in the app ({formatRupees(period.overhead_cost)}) — leave off if you've entered
               salaries or electricity above.
             </span>
           </label>
@@ -367,12 +367,12 @@ function MyCostsForm({
         ].map(([label, amount]) => (
           <div key={label} className="flex justify-between">
             <span>{label}</span>
-            <span className="font-mono">₹{formatQty(Math.round(Number(amount) * 100) / 100)}</span>
+            <span className="font-mono">{formatRupees(Math.round(Number(amount) * 100) / 100)}</span>
           </div>
         ))}
         <div className="flex justify-between border-t border-purple-200 pt-1 font-bold dark:border-purple-900">
           <span>Total</span>
-          <span className="font-mono">₹{formatQty(Math.round(summary.totalCost * 100) / 100)}</span>
+          <span className="font-mono">{formatRupees(Math.round(summary.totalCost * 100) / 100)}</span>
         </div>
         <p className="text-xs text-purple-700/80 dark:text-purple-300/80">
           ÷ {formatQty(period.produced_kg)} kg pipe made
@@ -556,11 +556,11 @@ export function MyCostsTab() {
                     </span>
                     <span className="shrink-0 text-right">
                       <span className="text-sm font-bold text-purple-700 dark:text-purple-300">
-                        {yourCpk === null ? 'Your cost —' : `₹${formatQty(yourCpk)}/kg`}
+                        {yourCpk === null ? 'Your cost —' : `${formatRupees(yourCpk)}/kg`}
                       </span>
                       <span className="text-slate-500 dark:text-slate-400">
                         {' '}
-                        · app {appCpk === null ? '—' : `₹${formatQty(appCpk)}`}
+                        · app {appCpk === null ? '—' : `${formatRupees(appCpk)}`}
                       </span>
                     </span>
                   </div>

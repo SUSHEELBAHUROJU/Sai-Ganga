@@ -11,7 +11,7 @@ import { useSalesReport } from '../../hooks/useSalesReport'
 import { generateSalesReportBlob } from '../../lib/pdfGenerator'
 import { useToast } from '../../lib/toast'
 import { todayISODate, formatRangeLabel, formatShortDate } from '../../lib/date'
-import { formatQty } from '../../lib/format'
+import { formatQty, formatRupees } from '../../lib/format'
 
 export function SalesReportTab() {
   const [period, setPeriod] = useState<ReportPeriod>(() => currentMonthPeriod(todayISODate()))
@@ -52,7 +52,7 @@ export function SalesReportTab() {
               Total Sales — {periodLabel}
             </p>
             <p className="mt-1 text-3xl font-bold text-green-700 dark:text-green-400">
-              ₹{formatQty(report.totals.salesAmount)}
+              {formatRupees(report.totals.salesAmount)}
             </p>
             <p className="mt-0.5 text-xs text-green-700/80 dark:text-green-400/80">
               {report.totals.billCount} bill{report.totals.billCount === 1 ? '' : 's'} ·{' '}

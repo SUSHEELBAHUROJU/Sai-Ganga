@@ -15,7 +15,7 @@ import {
 import { rawPurchaseSupplierName, type RawPurchaseRecordRow } from '../hooks/useRecords'
 import { useToast } from '../lib/toast'
 import { formatDateLabel, todayISODate } from '../lib/date'
-import { formatQty } from '../lib/format'
+import { formatQty, formatRupees } from '../lib/format'
 
 type ReturnPurchaseModalProps = {
   purchase: RawPurchaseRecordRow | null
@@ -77,11 +77,11 @@ export function ReturnPurchaseModal({ purchase, onClose }: ReturnPurchaseModalPr
       { purchase_id: purchase.id, return_date: returnDate, quantity_kg: kgValue, reason: reason.trim() },
       {
         onSuccess: () => {
-          const value = formatQty(Math.round(kgValue * rate * 100) / 100)
+          const value = formatRupees(kgValue * rate)
           // Only a purchase linked to a supplier is on anyone's ledger.
           showToast(
             purchase.supplier_id && purchase.cost != null
-              ? `Return saved — ₹${value} off ${supplier ?? 'the supplier'}'s dues`
+              ? `Return saved — ${value} off ${supplier ?? 'the supplier'}'s dues`
               : 'Return saved',
           )
           setKg('')
@@ -114,7 +114,7 @@ export function ReturnPurchaseModal({ purchase, onClose }: ReturnPurchaseModalPr
             </p>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               Bought {formatDateLabel(purchase.entry_date)}
-              {supplier ? ` from ${supplier}` : ''} @ ₹{formatQty(rate)}/kg
+              {supplier ? ` from ${supplier}` : ''} @ {formatRupees(rate)}/kg
             </p>
             {returnedKg > 0 && (
               <p className="mt-1 text-xs font-semibold text-orange-700 dark:text-orange-400">
@@ -135,7 +135,7 @@ export function ReturnPurchaseModal({ purchase, onClose }: ReturnPurchaseModalPr
               />
               {kgValue > 0 && (
                 <p className="text-sm text-slate-600 dark:text-slate-300">
-                  Value: <span className="font-bold">₹{formatQty(Math.round(kgValue * rate * 100) / 100)}</span> — taken
+                  Value: <span className="font-bold">{formatRupees(Math.round(kgValue * rate * 100) / 100)}</span> — taken
                   out of stock{purchase.supplier_id && purchase.cost != null ? " and off the supplier's dues" : ''}.
                 </p>
               )}
@@ -164,7 +164,7 @@ export function ReturnPurchaseModal({ purchase, onClose }: ReturnPurchaseModalPr
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                      {formatQty(r.quantity_kg)} kg · ₹{formatQty(Math.round(r.quantity_kg * rate * 100) / 100)}
+                      {formatQty(r.quantity_kg)} kg · {formatRupees(Math.round(r.quantity_kg * rate * 100) / 100)}
                     </p>
                     <p className="truncate text-xs text-slate-500 dark:text-slate-400">
                       {formatDateLabel(r.return_date)} · {r.reason}
