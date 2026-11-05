@@ -85,8 +85,8 @@ export function RecordsPage() {
   const [fromDate, setFromDate] = useState(isoDateDaysAgo(6))
   const [toDate, setToDate] = useState(today)
   const [kinds, setKinds] = useState<RecordKind[]>([])
-  // Filters fold into one summary row so the entries start near the top of the screen.
-  const [filtersOpen, setFiltersOpen] = useState(false)
+  // Filters show open when Records opens; the user can still fold them away.
+  const [filtersOpen, setFiltersOpen] = useState(true)
 
   const [editing, setEditing] = useState<EntryRecord | null>(null)
   const [returning, setReturning] = useState<RawPurchaseRecordRow | null>(null)
@@ -302,7 +302,7 @@ export function RecordsPage() {
             <span className="truncate text-sm font-semibold text-slate-800 dark:text-slate-200">{filterSummary}</span>
           </span>
           <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-teal-700 dark:text-teal-400">
-            {filtersOpen ? 'Done' : 'Filters'}
+            {filtersOpen ? 'Hide' : 'Filters'}
             {filtersOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </span>
         </button>
